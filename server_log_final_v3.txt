@@ -1,0 +1,333 @@
+
+> nextn@0.1.0 dev
+> next dev -p 3001
+
+   ▲ Next.js 15.3.3
+   - Local:        http://localhost:3001
+   - Network:      http://192.168.178.63:3001
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 1022ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 2.3s (962 modules)
+ ⨯ [TypeError: localStorage.getItem is not a function] {
+  digest: '585644750'
+}
+[TypeError: localStorage.getItem is not a function]
+ ⨯ [TypeError: localStorage.getItem is not a function]
+(node:1013564) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled in 193ms (421 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 854ms (1280 modules)
+ ✓ Compiled in 110ms (655 modules)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ [TypeError: localStorage.getItem is not a function] {
+  digest: '585644750'
+}
+[TypeError: localStorage.getItem is not a function]
+ ⨯ [TypeError: localStorage.getItem is not a function] { page: '/' }
+ GET /_next/static/webpack/ba934ff22d28973f.webpack.hot-update.json 500 in 5879ms
+ GET /_next/static/webpack/ba934ff22d28973f.webpack.hot-update.json 500 in 661ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET / 500 in 1302ms
+ ⨯ [TypeError: localStorage.getItem is not a function] {
+  digest: '585644750'
+}
+[TypeError: localStorage.getItem is not a function]
+ ⨯ [TypeError: localStorage.getItem is not a function] { page: '/' }
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+[TypeError: localStorage.getItem is not a function] { page: '/' }
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+[TypeError: localStorage.getItem is not a function] { page: '/' }
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ GET / 500 in 1428ms
+ GET / 500 in 228ms
+ ⨯ [TypeError: localStorage.getItem is not a function] {
+  digest: '585644750'
+}
+[TypeError: localStorage.getItem is not a function]
+ ⨯ [TypeError: localStorage.getItem is not a function]
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ GET /.well-known/appspecific/com.chrome.devtools.json 500 in 632ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 500 in 224ms
+ ✓ Compiled /favicon.ico in 112ms (675 modules)
+ GET /favicon.ico 200 in 168ms
+ ⨯ [TypeError: localStorage.getItem is not a function] {
+  digest: '585644750'
+}
+[TypeError: localStorage.getItem is not a function]
+ ⨯ [TypeError: localStorage.getItem is not a function] { page: '/' }
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+    at Document.getInitialProps (../../src/pages/_document.tsx:1197:15)
+  1195 |    */
+  1196 |   static getInitialProps(ctx: DocumentContext): Promise<DocumentInitialProps> {
+> 1197 |     return ctx.defaultGetInitialProps(ctx)
+       |               ^
+  1198 |   }
+  1199 |
+  1200 |   render() {
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+[TypeError: localStorage.getItem is not a function] { page: '/' }
+TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection: TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ ⨯ unhandledRejection:  TypeError: localStorage.getItem is not a function
+    at new Promise (<anonymous>)
+ GET / 500 in 1220ms
+ GET / 500 in 235ms

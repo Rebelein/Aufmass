@@ -1,0 +1,22 @@
+
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCMHUNn6XnSSOCehPStKbMFJTami497AKc",
+  authDomain: "katalog-pdf-maker.firebaseapp.com",
+  projectId: "katalog-pdf-maker",
+  storageBucket: "katalog-pdf-maker.appspot.com",
+  messagingSenderId: "686573226548",
+  appId: "1:686573226548:web:5113675ce77440bf385861"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+// Initialize Cloud Firestore and get a reference to the service
+export const db = getFirestore(app);
+
+// Initialize Cloud Storage and get a reference to the service
+export const storage = getStorage(app);

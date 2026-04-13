@@ -1,0 +1,1 @@
+Hallo Gemini. Deine gesamten Anweisungen und Rollen für diese Sitzung sind in der Datei `gemini_system_prompt.md` definiert. Lies diese Datei jetzt, verinnerliche die Regeln vollständig und führe die dort beschriebenen Initialisierungsschritte aus.
