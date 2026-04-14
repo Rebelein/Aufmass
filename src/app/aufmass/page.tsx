@@ -126,6 +126,8 @@ const AufmassPage = () => {
     const newItem: ProjectSelectedItem = {
       type: 'article',
       id: crypto.randomUUID(),
+      project_id: currentProject.id,
+      order: currentProject.selectedItems.length,
       article_id: articleId,
       quantity,
     };

@@ -29,8 +29,9 @@ const QrScannerDialog: React.FC<QrScannerDialogProps> = ({ isOpen, onClose }) =>
     if (videoTrackRef.current && torchSupported) {
         try {
             const newTorchState = !isTorchOn;
+            const advanced = { torch: newTorchState } as MediaTrackConstraintSet;
             await videoTrackRef.current.applyConstraints({
-                advanced: [{ torch: newTorchState }]
+                advanced: [advanced]
             });
             setIsTorchOn(newTorchState);
         } catch (err) {
@@ -48,7 +49,8 @@ const QrScannerDialog: React.FC<QrScannerDialogProps> = ({ isOpen, onClose }) =>
       if (scannerRef.current && scannerRef.current.isScanning) {
         // Turn off torch before stopping the stream
         if (videoTrackRef.current && torchSupported) {
-            videoTrackRef.current.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+            const advanced = { torch: false } as MediaTrackConstraintSet;
+            videoTrackRef.current.applyConstraints({ advanced: [advanced] }).catch(() => {});
         }
         scannerRef.current.stop().catch(() => {});
       }
@@ -150,7 +152,7 @@ const QrScannerDialog: React.FC<QrScannerDialogProps> = ({ isOpen, onClose }) =>
               const track = videoElement.srcObject.getVideoTracks()[0];
               if (track) {
                   videoTrackRef.current = track;
-                  const capabilities = track.getCapabilities();
+                  const capabilities = track.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
                   if (capabilities.torch) {
                       setTorchSupported(true);
                   }

@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from '@/lib/utils';
-import type { ProcessedSummaryItem } from '@/app/aufmass/page';
+import type { ProcessedSummaryItem } from '@/lib/types';
 
 interface SelectionSummaryProps {
   selectedItems: ProcessedSummaryItem[];

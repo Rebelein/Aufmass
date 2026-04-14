@@ -24,7 +24,11 @@ export async function POST(req: Request) {
         await writeFile(tempPath, buffer);
 
         // Upload to Gemini
-        uploadedFile = await ai.files.upload({ file: tempPath, mimeType: file.type });
+        const fileUpload = await ai.files.upload({
+          file: tempPath,
+          config: { mimeType: file.type },
+        });
+        uploadedFile = fileUpload;
 
         // Define the expected output structure in the prompt
         const prompt = `
@@ -32,8 +36,10 @@ Du bist ein Experte für die Extraktion von Produktdaten aus Großhändler-Katal
 Analysiere die beigefügte Katalogseite (PDF oder Bild).
 
 Aufgabe:
-Extrahiere alle Artikel. Erfasse dabei sorgfältig die Zugehörigkeiten und Variationen. Oft wird ein Hauptartikel (z.B. "Bogen 90°") als Überschrift genannt und darunter stehen die verschiedenen Größen (z.B. 12mm, 15mm, 22mm) mit ihren jeweiligen Artikelnummern. 
+Extrahiere alle Artikel. Erfasse dabei sorgfältig die Zugehörigkeiten und Variationen. Oft wird ein Hauptartikel (z.B. "Bogen 90°") als Überschrift genannt und darunter stehen in einer Tabelle oder Liste die verschiedenen Größen (z.B. 12mm, 15mm, 22mm) mit ihren jeweiligen EINDEUTIGEN ARTIKELNUMMERN. 
 Gruppiere diese Variationen sinnvoll, indem du Kategorien/Unterkategorien für die Hauptartikel erstellst.
+
+ACHTUNG: Die Artikelnummer (articleNumber) ist extrem wichtig! Suche aktiv nach Nummernfolgen, EANs oder Lieferanten-Artikelnummern, die neben den Dimensionen/Namen stehen, und ordne sie zwingend dem Feld 'articleNumber' zu.
 
 Die Ausgabe MUSS zwingend als gültiges JSON formatiert sein und folgendem Schema entsprechen:
 {
@@ -41,7 +47,7 @@ Die Ausgabe MUSS zwingend als gültiges JSON formatiert sein und folgendem Schem
   "articles": [
     {
       "name": "Vollständiger Name des Artikels inkl. Größe/Variante (z.B. 'Bogen 90° 12mm')",
-      "articleNumber": "Die eindeutige Artikelnummer",
+      "articleNumber": "Die eindeutige Artikelnummer (ZWINGEND ERFORDERLICH)",
       "unit": "Einheit (z.B. 'Stück', 'm', 'kg')",
       "supplierName": "Name des Großhändlers (falls erkennbar, sonst leer lassen)"
     }
@@ -60,21 +66,33 @@ WICHTIG: Gib NUR das rohe JSON zurück, keine Markdown-Blöcke (\`\`\`), keine E
 `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-3.1-flash-lite-preview",
+            model: "gemini-3-flash-preview",
             contents: [
-                uploadedFile,
-                prompt
+                {
+                    role: 'user',
+                    parts: [
+                        {
+                            fileData: {
+                                fileUri: uploadedFile.uri,
+                                mimeType: uploadedFile.mimeType
+                            }
+                        },
+                        { text: prompt }
+                    ]
+                }
             ],
             config: {
                 responseMimeType: "application/json",
             }
         });
 
+
         let resultJson;
+        const responseText = response.text ?? '';
         try {
-            resultJson = JSON.parse(response.text());
+            resultJson = JSON.parse(responseText);
         } catch (e) {
-            console.error("Failed to parse JSON from Gemini:", response.text());
+            console.error("Failed to parse JSON from Gemini:", responseText);
             throw new Error("KI lieferte ungültiges JSON.");
         }
 

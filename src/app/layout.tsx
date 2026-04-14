@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { LayoutDashboard, ListChecks, Settings, BookMarked } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -12,7 +11,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: '#10B981',
-  manifest: '/manifest.json',
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({
