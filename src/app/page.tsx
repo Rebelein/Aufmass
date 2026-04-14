@@ -3,71 +3,101 @@ import { ListChecks, ArrowRight, Activity, Database, Sparkles } from "lucide-rea
 import Link from "next/link";
 
 export default function HomePage() {
-    return (
-        <div className="space-y-12 py-10">
-            {/* Hero Section */}
-            <div className="text-center space-y-4 animate-in fade-in slide-in-from-top duration-700">
-                <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-                    <span className="text-gradient">Willkommen bei</span><br/>
-                    <span className="text-gradient-emerald">Rebelein Aufmaß</span>
-                </h1>
-                <p className="text-white/60 text-lg max-w-xl mx-auto font-medium">
-                    Die moderne Lösung für präzise Materialerfassung und technisches Projektmanagement.
+  return (
+    <div className="space-y-10 md:space-y-16 py-4 md:py-8">
+      {/* Hero Section */}
+      <div className="text-center space-y-4 animate-in fade-in slide-in-from-top duration-700 px-4">
+        <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight">
+          <span className="text-slate-900">Willkommen bei</span><br/>
+          <span className="text-gradient-emerald">Rebelein Aufmaß</span>
+        </h1>
+        <p className="text-slate-600 text-base md:text-lg max-w-xl mx-auto">
+          Die moderne Lösung für präzise Materialerfassung und technisches Projektmanagement.
+        </p>
+      </div>
+
+      {/* Quick Stats / Info Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto px-4">
+        {[
+          { icon: Activity, label: "Echtzeit", value: "Aktiv", color: "text-emerald-600", bg: "bg-emerald-50" },
+          { icon: Database, label: "Cloud", value: "Supabase", color: "text-teal-600", bg: "bg-teal-50" },
+          { icon: Sparkles, label: "Design", value: "Modern", color: "text-cyan-600", bg: "bg-cyan-50" },
+        ].map((stat, i) => (
+          <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className={`p-2.5 rounded-lg ${stat.bg}`}>
+              <stat.icon size={20} className={stat.color} />
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">{stat.label}</p>
+              <p className="text-slate-900 font-semibold">{stat.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Action Card */}
+      <div className="max-w-2xl mx-auto px-4">
+        <Link href="/projects" className="block group">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 md:p-8 shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all duration-300">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-xl shadow-lg shrink-0">
+                <ListChecks className="h-8 w-8 text-white" />
+              </div>
+
+              <div className="flex-grow text-center sm:text-left space-y-2">
+                <h2 className="text-xl md:text-2xl font-bold text-slate-900 group-hover:text-emerald-600 transition-colors">
+                  Aufmaß starten
+                </h2>
+                <p className="text-slate-600 text-sm md:text-base leading-relaxed">
+                  Verwalten Sie Ihre Projekte und erstellen Sie professionelle Aufmaßlisten in wenigen Minuten.
                 </p>
-            </div>
+              </div>
 
-            {/* Quick Stats / Info Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-                {[
-                    { icon: Activity, label: "Echtzeit", value: "Aktiv", color: "text-emerald-400" },
-                    { icon: Database, label: "Cloud", value: "Supabase", color: "text-teal-400" },
-                    { icon: Sparkles, label: "Design", value: "Modern", color: "text-cyan-400" },
-                ].map((stat, i) => (
-                    <div key={i} className="glass-card p-4 flex items-center gap-4 border-white/5">
-                        <div className={`p-2 rounded-lg bg-white/5 ${stat.color}`}>
-                            <stat.icon size={20} />
-                        </div>
-                        <div>
-                            <p className="text-white/40 text-xs uppercase tracking-wider font-bold">{stat.label}</p>
-                            <p className="text-white font-semibold">{stat.value}</p>
-                        </div>
-                    </div>
-                ))}
+              <div className="shrink-0 hidden sm:block">
+                <div className="p-3 rounded-full bg-slate-100 border border-slate-200 group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all duration-300">
+                  <ArrowRight size={20} className="text-slate-600 group-hover:text-white transition-colors" />
+                </div>
+              </div>
             </div>
+          </div>
+        </Link>
+      </div>
 
-            {/* Main Action Card */}
-            <div className="max-w-2xl mx-auto group">
-                <Link href="/projects">
-                    <div className="glass-card p-8 relative overflow-hidden transition-all duration-500 group-hover:shadow-[0_0_50px_rgba(16,185,129,0.2)] group-hover:border-emerald-500/50">
-                        {/* Decorative background element */}
-                        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-colors"></div>
-                        
-                        <div className="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-3xl shadow-lg shadow-emerald-900/20">
-                                <ListChecks className="h-12 w-12 text-white" />
-                            </div>
-                            
-                            <div className="flex-grow text-center md:text-left space-y-2">
-                                <h2 className="text-2xl font-bold text-white group-hover:text-emerald-300 transition-colors">Aufmaß starten</h2>
-                                <p className="text-white/60 leading-relaxed">
-                                    Verwalten Sie Ihre Projekte und erstellen Sie professionelle Aufmaßlisten in wenigen Minuten.
-                                </p>
-                            </div>
-                            
-                            <div className="shrink-0">
-                                <div className="p-3 rounded-full bg-white/5 border border-white/10 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-300">
-                                    <ArrowRight size={24} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </Link>
+      {/* Secondary Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto px-4">
+        <Link href="/admin/aufmass" className="block group">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-300">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-slate-100">
+                <Sparkles size={20} className="text-slate-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-900 group-hover:text-emerald-600 transition-colors">Katalog verwalten</h3>
+                <p className="text-sm text-slate-500">Artikel und Kategorien bearbeiten</p>
+              </div>
             </div>
-
-            {/* Footer Note */}
-            <div className="text-center pt-12">
-                <p className="text-white/20 text-xs uppercase tracking-[0.2em] font-bold">Powered by Rebelein Design System</p>
+          </div>
+        </Link>
+        
+        <div className="bg-slate-100 rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-white">
+              <Activity size={20} className="text-slate-600" />
             </div>
+            <div>
+              <h3 className="font-semibold text-slate-700">Schnellzugriff</h3>
+              <p className="text-sm text-slate-500">Kürzlich bearbeitete Projekte</p>
+            </div>
+          </div>
         </div>
-    )
+      </div>
+
+      {/* Footer Note */}
+      <div className="text-center pt-8 px-4">
+        <p className="text-slate-400 text-xs uppercase tracking-wider font-medium">
+          Powered by Rebelein Aufmaß System
+        </p>
+      </div>
+    </div>
+  )
 }

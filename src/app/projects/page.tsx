@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PlusCircle, Trash2, Edit3, ListChecks, Calendar, Clock } from 'lucide-react';
-import { 
-  subscribeToProjects, 
-  addProjectToSupabase, 
-  deleteProjectFromSupabase, 
+import { PlusCircle, Trash2, Edit3, ListChecks, Calendar, ArrowRight } from 'lucide-react';
+import {
+  subscribeToProjects,
+  addProjectToSupabase,
+  deleteProjectFromSupabase,
   setCurrentProjectId,
   updateProjectName,
   getProjects,
@@ -38,11 +38,6 @@ const ProjectsPage = () => {
   const router = useRouter();
   const { toast } = useToast();
 
-  const fetchProjects = async () => {
-    const loadedProjects = await getProjects();
-    setProjects(loadedProjects);
-  };
-
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe = subscribeToProjects((loadedProjects) => {
@@ -50,7 +45,7 @@ const ProjectsPage = () => {
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); 
+    return () => unsubscribe();
   }, []);
 
   const handleAddProject = async () => {
@@ -60,7 +55,6 @@ const ProjectsPage = () => {
       if (newProject) {
         toast({ title: "Projekt erstellt", description: `Projekt "${newProjectName}" wurde hinzugefügt.` });
         setNewProjectName('');
-        await fetchProjects();
       }
     } catch (error) {
       console.error("Error adding project:", error);
@@ -77,13 +71,12 @@ const ProjectsPage = () => {
       const success = await deleteProjectFromSupabase(projectId);
       if (success) {
         toast({ title: "Projekt gelöscht" });
-        await fetchProjects();
       }
     } catch (error) {
       console.error("Error deleting project:", error);
     }
   };
-  
+
   const handleSaveEditProject = async () => {
     if (!editingProject || editingProjectName.trim() === '') return;
     try {
@@ -91,136 +84,159 @@ const ProjectsPage = () => {
       if (success) {
         toast({ title: "Projekt aktualisiert" });
         setEditingProject(null);
-        await fetchProjects();
       }
     } catch (error) {
       console.error("Error updating project:", error);
     }
   };
-  
+
   const formatDate = (dateInput: string | Date): string => {
     try {
-        if (!dateInput) return "Unbekannt";
-        const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-        return format(date, "dd.MM.yyyy", { locale: de });
+      if (!dateInput) return "Unbekannt";
+      const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+      return format(date, "dd.MM.yyyy", { locale: de });
     } catch (e) {
-        return "Ungültig";
+      return "Ungültig";
     }
   };
 
   if (isLoading) {
     return (
-        <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-emerald-500"></div>
-        </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent"></div>
+      </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+      {/* Header */}
       <header className="space-y-2">
-        <h1 className="text-4xl font-bold text-gradient-emerald">Projekte</h1>
-        <p className="text-white/50 font-medium text-lg">Verwalten Sie Ihre Aufmaß-Projekte in Echtzeit.</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Projekte</h1>
+        <p className="text-slate-600">Verwalten Sie Ihre Aufmaß-Projekte in Echtzeit.</p>
       </header>
 
       {/* New Project Input */}
-      <section className="glass-card p-6 border-white/5 shadow-xl">
-        <div className="flex flex-col sm:flex-row gap-4">
+      <section className="bg-white rounded-xl border border-slate-200 p-4 md:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-grow">
             <Input
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="Neues Projekt benennen..."
-              className="glass-input w-full pl-12 h-14"
+              className="w-full pl-10 h-11 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20"
               onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
             />
-            <PlusCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={20} />
+            <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
           </div>
-          <Button onClick={handleAddProject} className="btn-primary h-14 px-8 shrink-0 text-lg font-bold">
+          <Button 
+            onClick={handleAddProject} 
+            className="btn-primary h-11 px-6 shrink-0"
+          >
             Projekt anlegen
           </Button>
         </div>
       </section>
 
       {/* Projects List */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {projects.length === 0 ? (
-          <div className="col-span-full glass-card p-12 text-center space-y-4">
-            <ListChecks size={48} className="mx-auto text-white/10" />
-            <p className="text-white/40 text-lg font-medium">Noch keine Projekte vorhanden.</p>
+          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-12 text-center space-y-4 shadow-sm">
+            <ListChecks size={40} className="mx-auto text-slate-300" />
+            <p className="text-slate-500 font-medium">Noch keine Projekte vorhanden.</p>
+            <p className="text-sm text-slate-400">Erstellen Sie Ihr erstes Projekt oben.</p>
           </div>
         ) : (
           projects.map((project) => (
-            <div key={project.id} className="group relative">
-              <div className="glass-card p-6 h-full flex flex-col justify-between transition-all duration-300 group-hover:border-emerald-500/30 group-hover:shadow-[0_0_30px_rgba(16,185,129,0.1)]">
-                
-                <div className="space-y-4">
-                  {editingProject?.id === project.id ? (
+            <div key={project.id} className="group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+              <div className="p-5">
+                {editingProject?.id === project.id ? (
+                  <div className="space-y-3">
+                    <Input
+                      value={editingProjectName}
+                      onChange={(e) => setEditingProjectName(e.target.value)}
+                      className="border-slate-200 focus:border-emerald-500"
+                      autoFocus
+                    />
                     <div className="flex gap-2">
-                      <Input
-                        value={editingProjectName}
-                        onChange={(e) => setEditingProjectName(e.target.value)}
-                        className="glass-input flex-grow h-10"
-                        autoFocus
-                      />
-                      <Button onClick={handleSaveEditProject} size="sm" className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl">OK</Button>
-                      <Button onClick={() => setEditingProject(null)} variant="ghost" size="sm" className="text-white/50 rounded-xl">X</Button>
+                      <Button onClick={handleSaveEditProject} size="sm" className="btn-primary flex-1">
+                        Speichern
+                      </Button>
+                      <Button onClick={() => setEditingProject(null)} variant="outline" size="sm" className="flex-1">
+                        Abbrechen
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="flex justify-between items-start">
-                      <h3 className="text-xl font-bold text-white group-hover:text-emerald-300 transition-colors leading-tight">
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start gap-4 mb-4">
+                      <h3 className="text-lg font-semibold text-slate-900 leading-tight break-words">
                         {project.name}
                       </h3>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" onClick={() => { setEditingProject(project); setEditingProjectName(project.name); }} className="h-8 w-8 text-white/40 hover:text-emerald-400">
+                      <div className="flex gap-1 shrink-0">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => { setEditingProject(project); setEditingProjectName(project.name); }} 
+                          className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                          aria-label="Projekt bearbeiten"
+                        >
                           <Edit3 size={16} />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-white/40 hover:text-red-400">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              aria-label="Projekt löschen"
+                            >
                               <Trash2 size={16} />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent className="glass-card border-white/10 bg-gray-900/90 text-white">
+                          <AlertDialogContent className="bg-white border-slate-200">
                             <AlertDialogHeader>
-                              <AlertDialogTitle className="text-2xl font-bold">Projekt löschen?</AlertDialogTitle>
-                              <AlertDialogDescription className="text-white/60">
+                              <AlertDialogTitle className="text-xl font-bold text-slate-900">Projekt löschen?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-slate-600">
                                 Möchten Sie "{project.name}" wirklich unwiderruflich löschen?
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="bg-white/5 border-white/10 text-white hover:bg-white/10 rounded-xl">Abbrechen</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteProject(project.id)} className="bg-red-500/80 hover:bg-red-600 text-white rounded-xl">Löschen</AlertDialogAction>
+                            <AlertDialogFooter className="gap-2">
+                              <AlertDialogCancel className="border-slate-200">Abbrechen</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDeleteProject(project.id)} 
+                                className="bg-red-500 hover:bg-red-600 text-white"
+                              >
+                                Löschen
+                              </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
                     </div>
-                  )}
 
-                  <div className="flex flex-wrap gap-4 text-xs font-semibold text-white/40 uppercase tracking-widest">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar size={14} className="text-emerald-500/50" />
-                      {formatDate(project.created_at)}
+                    <div className="flex flex-wrap gap-3 text-xs font-medium text-slate-500 mb-4">
+                      <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-md">
+                        <Calendar size={14} className="text-emerald-600" />
+                        {formatDate(project.created_at)}
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-md">
+                        <ListChecks size={14} className="text-teal-600" />
+                        {(project.selectedItems || []).filter(item => item.type === 'article').length} Artikel
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <ListChecks size={14} className="text-teal-500/50" />
-                      {(project.selectedItems || []).filter(item => item.type === 'article').length} Artikel
-                    </div>
-                  </div>
-                </div>
 
-                <div className="mt-8">
-                  <Button 
-                    onClick={() => handleSelectProject(project.id)} 
-                    className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-xl py-6 group/btn"
-                  >
-                    <span className="flex items-center gap-2 group-hover/btn:text-emerald-400 transition-colors font-bold">
-                      Öffnen <ArrowRight size={18} className="group-hover/btn:translate-x-1 transition-transform" />
-                    </span>
-                  </Button>
-                </div>
+                    <Button
+                      onClick={() => handleSelectProject(project.id)}
+                      variant="outline"
+                      className="w-full h-11 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
+                    >
+                      Öffnen
+                      <ArrowRight size={16} className="ml-2" />
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           ))
@@ -229,11 +245,5 @@ const ProjectsPage = () => {
     </div>
   );
 };
-
-const ArrowRight = ({ size, className }: { size: number, className?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M5 12h14m-7-7 7 7-7 7" />
-  </svg>
-);
 
 export default ProjectsPage;

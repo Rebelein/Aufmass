@@ -1,51 +1,39 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Article, Category, Supplier } from '@/lib/data';
 import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers } from '@/lib/catalog-storage';
-import ArticleList from '@/components/catalog/ArticleList';
-import CategoryFilter from '@/components/catalog/CategoryFilter';
-import SelectionSummary from '@/components/catalog/SelectionSummary';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
-import jsPDF from 'jspdf';
 import { getCurrentProjectId, getProjectById, syncProjectItems, Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, PanelLeft, Search, LayoutGrid, ChevronLeft } from 'lucide-react';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
-import ArticleSearchDialog from '@/components/dialogs/ArticleSearchDialog';
+import { ChevronLeft, Search, Star, Plus, Minus, FileDown, Menu, ChevronRight, Check, Package } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import jsPDF from 'jspdf';
 
-export interface ProcessedSummaryItem {
-    type: 'article' | 'section';
-    id: string; 
-    order: number;
-    article_id?: string; 
-    article?: Partial<Omit<Article, 'price'>>; 
-    quantity?: number; 
-    text?: string;     
+interface ProcessedSummaryItem {
+  type: 'article' | 'section';
+  id: string;
+  order: number;
+  article_id?: string;
+  article?: Partial<Omit<Article, 'price'>>;
+  quantity?: number;
+  text?: string;
 }
 
 const AufmassPage = () => {
-  const [articlesData, setArticlesData] = useState<Article[]>([]); 
+  const [articlesData, setArticlesData] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [stagedQuantities, setStagedQuantities] = useState<Map<string, number>>(new Map());
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [favoriteCategories, setFavoriteCategories] = useState<Set<string>>(new Set());
+  const [recentCategories, setRecentCategories] = useState<string[]>([]);
   const { toast } = useToast();
   const router = useRouter();
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
 
   useEffect(() => {
     const projectId = getCurrentProjectId();
@@ -53,50 +41,53 @@ const AufmassPage = () => {
       router.replace('/projects');
       return;
     }
-    
+
     let isMounted = true;
     const unsubscribeCategories = subscribeToCategories((cats) => {
-        if (isMounted) setCategories(cats);
+      if (isMounted) setCategories(cats);
     });
     const unsubscribeArticles = subscribeToArticles((arts) => {
-        if (isMounted) setArticlesData(arts);
+      if (isMounted) setArticlesData(arts);
     });
     const unsubscribeSuppliers = subscribeToSuppliers((supps) => {
-        if (isMounted) setSuppliers(supps);
+      if (isMounted) setSuppliers(supps);
     });
 
     const loadProject = async () => {
-        const project = await getProjectById(projectId);
-        if (!project) {
-          router.replace('/projects');
-          return;
-        }
-        if (isMounted) {
-            setCurrentProject(project);
-            setStagedQuantities(new Map()); 
-            setIsLoadingData(false);
-        }
+      const project = await getProjectById(projectId);
+      if (!project) {
+        router.replace('/projects');
+        return;
+      }
+      if (isMounted) {
+        setCurrentProject(project);
+        setIsLoadingData(false);
+      }
     };
-    
+
     loadProject();
 
     return () => {
-        isMounted = false;
-        unsubscribeCategories();
-        unsubscribeArticles();
-        unsubscribeSuppliers();
+      isMounted = false;
+      unsubscribeCategories();
+      unsubscribeArticles();
+      unsubscribeSuppliers();
     };
-  }, [router, toast]);
-  
+  }, [router]);
+
   useEffect(() => {
     if (categories.length > 0 && !selectedCategoryId) {
       const firstTopLevelCategory = categories
         .filter(c => !c.parentId)
-        .sort((a,b) => (a.order ?? 0) - (b.order ?? 0))[0];
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
       if (firstTopLevelCategory) setSelectedCategoryId(firstTopLevelCategory.id);
     }
   }, [categories, selectedCategoryId]);
-  
+
+  const selectedCategory = useMemo(() => {
+    return categories.find(c => c.id === selectedCategoryId);
+  }, [categories, selectedCategoryId]);
+
   const filteredArticles = useMemo(() => {
     if (!selectedCategoryId) return [];
     return articlesData
@@ -104,223 +95,442 @@ const AufmassPage = () => {
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [articlesData, selectedCategoryId]);
 
-  const projectSelectedQuantitiesForArticleList = useMemo(() => {
-    const map = new Map<string, number>();
-    if (currentProject) {
-      currentProject.selectedItems.forEach(item => {
-        if (item.type === 'article' && item.article_id && item.quantity !== undefined) {
-          map.set(item.article_id, (map.get(item.article_id) || 0) + item.quantity);
-        }
-      });
-    }
-    return map;
-  }, [currentProject]);
-
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
     return currentProject.selectedItems.map(item => {
-      if (item.type === 'article') {
-        if (item.article_id) { 
-          const articleDetail = articlesData.find(a => a.id === item.article_id);
-          return { ...item, article: articleDetail };
-        } else { 
-          return { ...item, article: { id: item.id, name: item.name || '', articleNumber: item.article_number || '', unit: item.unit || '', supplierName: item.supplier_name || '', categoryId: 'manual', order: item.order } as Article };
-        }
+      if (item.type === 'article' && item.article_id) {
+        const articleDetail = articlesData.find(a => a.id === item.article_id);
+        return { ...item, article: articleDetail };
       }
       return item as ProcessedSummaryItem;
     }).filter(i => !!i).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [currentProject, articlesData]);
 
+  const articleCount = processedSummaryItems.filter(i => i.type === 'article').length;
+
   const updateProjectItems = (newItems: ProjectSelectedItem[]) => {
     if (currentProject) {
       const finalItems = newItems.map((item, index) => ({ ...item, order: index }));
       syncProjectItems(currentProject.id, finalItems).then((success) => {
-          if (success) setCurrentProject({ ...currentProject, selectedItems: finalItems });
+        if (success) setCurrentProject({ ...currentProject, selectedItems: finalItems });
       });
     }
   };
 
-  const handleStagedQuantityChange = (articleId: string, quantity: number) => {
-    setStagedQuantities((prev) => {
-      const newMap = new Map(prev);
-      if (quantity > 0) newMap.set(articleId, quantity);
-      else newMap.delete(articleId);
-      return newMap;
-    });
-  };
-
-  const handleApplyStagedToProject = () => {
-    if (!currentProject || stagedQuantities.size === 0) return;
-    let updatedSelectedItems = [...currentProject.selectedItems];
-    stagedQuantities.forEach((quantity, articleId) => {
-      if (quantity > 0) { 
-        updatedSelectedItems.push({ type: 'article', id: crypto.randomUUID(), article_id: articleId, quantity } as ProjectSelectedItem);
-      }
-    });
-    updateProjectItems(updatedSelectedItems);
-    setStagedQuantities(new Map()); 
-    toast({ title: "Zum Aufmaß hinzugefügt" });
-  };
-
-  const handleAddSection = (text: string) => {
-    if (!currentProject || !text.trim()) return;
-    updateProjectItems([...currentProject.selectedItems, { type: 'section', id: crypto.randomUUID(), text: text.trim() } as ProjectSelectedItem]);
-  };
-  
-  const handleAddManualArticle = async (data: any) => {
+  const handleDirectAddArticle = useCallback((articleId: string, quantity: number) => {
     if (!currentProject) return;
-    const newItem = { ...data, type: 'article', id: crypto.randomUUID(), quantity: parseInt(data.quantity, 10), article_number: data.articleNumber, supplier_name: data.supplierName } as ProjectSelectedItem;
+    
+    const article = articlesData.find(a => a.id === articleId);
+    if (!article) return;
+
+    const newItem: ProjectSelectedItem = {
+      type: 'article',
+      id: crypto.randomUUID(),
+      article_id: articleId,
+      quantity,
+    };
+    
     updateProjectItems([...currentProject.selectedItems, newItem]);
+    
+    if (navigator.vibrate) navigator.vibrate(50);
+    
+    toast({ 
+      title: "Hinzugefügt", 
+      description: `${quantity}x ${article.name}`
+    });
+
+    setRecentCategories(prev => {
+      const filtered = prev.filter(id => id !== selectedCategoryId);
+      return [selectedCategoryId!, ...filtered].slice(0, 5);
+    });
+  }, [currentProject, articlesData, selectedCategoryId, toast]);
+
+  const handleUpdateItemQuantity = (itemId: string, delta: number) => {
+    if (!currentProject) return;
+    updateProjectItems(
+      currentProject.selectedItems.map(item => 
+        item.id === itemId 
+          ? { ...item, quantity: Math.max(0, (item.quantity || 0) + delta) }
+          : item
+      ).filter(item => (item.quantity || 0) > 0)
+    );
   };
 
-  const handleUpdateManualArticle = (itemId: string, data: any) => {
+  const handleDeleteItem = (itemId: string) => {
     if (!currentProject) return;
-    updateProjectItems(currentProject.selectedItems.map(item => item.id === itemId ? { ...item, ...data, article_number: data.articleNumber, supplier_name: data.supplierName } : item));
+    updateProjectItems(currentProject.selectedItems.filter(i => i.id !== itemId));
   };
 
   const handleGeneratePdf = async () => {
     if (!currentProject) return;
-    setIsGeneratingPdf(true);
     try {
-        const doc = new jsPDF();
-        // ... (PDF logic remains the same, assuming it's already functional)
-        doc.text(`PROJEKT: ${currentProject.name}`, 15, 28);
-        doc.save(`aufmass_${currentProject.name}.pdf`);
-    } finally {
-        setIsGeneratingPdf(false);
+      const doc = new jsPDF();
+      doc.setFontSize(20);
+      doc.text(`Projekt: ${currentProject.name}`, 15, 20);
+      doc.setFontSize(12);
+      let y = 35;
+      processedSummaryItems.forEach((item) => {
+        if (item.type === 'article' && item.article) {
+          doc.text(`${item.quantity}x ${item.article.name} (${item.article.articleNumber})`, 15, y);
+          y += 7;
+        }
+      });
+      doc.save(`aufmass_${currentProject.name}.pdf`);
+      toast({ title: "PDF erstellt" });
+    } catch (error) {
+      console.error("PDF error:", error);
     }
   };
 
-  return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-transparent">
-        <Sidebar className="border-r border-white/5 bg-gray-900/20 backdrop-blur-xl">
-          <SidebarContent className="bg-transparent">
-            {isLoadingData ? (
-              <div className="p-6 space-y-4">
-                <Skeleton className="h-8 w-full bg-white/5" />
-                <Skeleton className="h-32 w-full bg-white/5" />
-              </div>
-            ) : (
-              <CategoryFilter
-                  articles={articlesData}
-                  categories={categories}
-                  selectedCategoryId={selectedCategoryId}
-                  onSelectCategory={setSelectedCategoryId}
-                  expandedCategories={expandedCategories}
-                  onToggleExpand={(id) => setExpandedCategories(prev => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id); else next.add(id);
-                    return next;
-                  })}
-                  onOpenSearchDialog={() => setIsSearchDialogOpen(true)}
-              />
-            )}
-          </SidebarContent>
-        </Sidebar>
+  const handleSelectCategory = (categoryId: string) => {
+    setSelectedCategoryId(categoryId);
+    setIsCategorySheetOpen(false);
+  };
 
-        <SidebarInset className="bg-transparent">
-          <div className="p-4 md:p-8 space-y-8 animate-in fade-in duration-700">
-            {isLoadingData || !currentProject ? (
-                 <div className="space-y-8">
-                    <Skeleton className="h-12 w-1/3 bg-white/5" />
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <Skeleton className="h-40 bg-white/5" /><Skeleton className="h-40 bg-white/5" /><Skeleton className="h-40 bg-white/5" />
-                    </div>
-                </div>
-            ) : (
-                <>
-                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="space-y-1">
-                            <button onClick={() => router.push('/projects')} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-sm font-bold uppercase tracking-wider mb-2">
-                                <ChevronLeft size={16} /> Projekte
-                            </button>
-                            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-                                <span className="text-white/50">Projekt:</span> <span className="text-gradient-emerald">{currentProject.name}</span>
-                            </h1>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <Button onClick={() => setIsSearchDialogOpen(true)} variant="outline" className="glass-card border-white/10 hover:bg-white/5 h-12 px-6">
-                                <Search className="mr-2 h-4 w-4 text-emerald-400" /> Suchen
-                            </Button>
-                            <SidebarTrigger className="lg:hidden glass-card border-white/10 p-3 h-12 w-12 flex items-center justify-center">
-                                <LayoutGrid size={20} />
-                            </SidebarTrigger>
-                        </div>
-                    </header>
+  const toggleFavorite = (categoryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavoriteCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
 
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-10 items-start">
-                        <div className="xl:col-span-2 space-y-8">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-bold text-white/80 flex items-center gap-2">
-                                    <LayoutGrid size={20} className="text-emerald-500" />
-                                    {categories.find(c => c.id === selectedCategoryId)?.name || 'Artikel'}
-                                </h2>
-                                {stagedQuantities.size > 0 && (
-                                    <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30 animate-pulse">
-                                        {stagedQuantities.size} bereit zum Hinzufügen
-                                    </span>
-                                )}
-                            </div>
+  const topLevelCategories = categories
+    .filter(c => !c.parentId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-                            <ArticleList
-                                articles={filteredArticles} 
-                                projectSelectedQuantities={projectSelectedQuantitiesForArticleList} 
-                                stagedQuantities={stagedQuantities} 
-                                onStagedQuantityChange={handleStagedQuantityChange}
-                            />
+  const favoriteCategoriesList = topLevelCategories.filter(c => favoriteCategories.has(c.id));
 
-                            {selectedCategoryId && ( 
-                                <Button 
-                                    onClick={handleApplyStagedToProject} 
-                                    className={cn(
-                                        "w-full btn-primary h-16 text-lg font-bold shadow-2xl transition-all duration-500",
-                                        stagedQuantities.size === 0 ? "opacity-20 grayscale pointer-events-none" : "opacity-100"
-                                    )}
-                                >
-                                    <CheckCircle className="mr-3 h-6 w-6" />
-                                    Auswahl dem Aufmaß hinzufügen
-                                </Button>
-                            )}
-                        </div>
-
-                        <aside className="space-y-6">
-                            <div className="sticky top-24">
-                                <SelectionSummary
-                                    selectedItems={processedSummaryItems}
-                                    onGeneratePdf={handleGeneratePdf}
-                                    isGeneratingPdf={isGeneratingPdf}
-                                    onClearSelection={() => updateProjectItems([])}
-                                    onAddSection={handleAddSection}
-                                    onAddManualArticle={handleAddManualArticle}
-                                    onUpdateItemsOrder={(items) => updateProjectItems(items)}
-                                    onDeleteItem={(id) => updateProjectItems(currentProject.selectedItems.filter(i => i.id !== id))}
-                                    onUpdateSectionText={(id, text) => updateProjectItems(currentProject.selectedItems.map(i => i.id === id ? { ...i, text } : i))}
-                                    onUpdateSelectedItemQuantity={(id, q) => updateProjectItems(currentProject.selectedItems.map(i => i.id === id ? { ...i, quantity: q } : i).filter(i => (i.quantity || 0) > 0))}
-                                    onUpdateManualArticle={handleUpdateManualArticle}
-                                    suppliers={suppliers}
-                                />
-                            </div>
-                        </aside>
-                    </div>
-                </>
-            )}
-          </div>
-        </SidebarInset>
+  if (isLoadingData || !currentProject) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-emerald-500 border-t-transparent"></div>
       </div>
-      <ArticleSearchDialog
-          isOpen={isSearchDialogOpen}
-          onClose={() => setIsSearchDialogOpen(false)}
-          allArticles={articlesData}
-          projectSelectedQuantities={projectSelectedQuantitiesForArticleList}
-          onApply={(items) => {
-              let updated = [...currentProject!.selectedItems];
-              items.forEach(i => updated.push({ type: 'article', id: crypto.randomUUID(), article_id: i.articleId, quantity: i.quantity } as ProjectSelectedItem));
-              updateProjectItems(updated);
-          }}
-      />
-    </SidebarProvider>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => router.push('/projects')}
+              className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
+              aria-label="Zurück zu Projekte"
+            >
+              <ChevronLeft size={24} className="text-slate-600" />
+            </button>
+            <div>
+              <h1 className="font-semibold text-slate-900 truncate max-w-[200px]">
+                {currentProject.name}
+              </h1>
+              <p className="text-xs text-slate-500">
+                {articleCount} Artikel
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="lg" className="h-12 px-4 border-slate-200">
+                  <Menu size={20} className="text-emerald-600" />
+                  <span className="ml-2 font-medium">
+                    {selectedCategory?.name || 'Kategorie'}
+                  </span>
+                  <ChevronRight size={16} className="ml-1 text-slate-400" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl px-0">
+                <SheetHeader className="px-6 pb-4">
+                  <SheetTitle className="text-left text-xl">Kategorien</SheetTitle>
+                </SheetHeader>
+                <div className="overflow-y-auto px-6 pb-6 space-y-6">
+                  {/* Favorites */}
+                  {favoriteCategoriesList.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Star size={14} className="text-amber-500" /> Favoriten
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {favoriteCategoriesList.map(category => (
+                          <button
+                            key={category.id}
+                            onClick={() => handleSelectCategory(category.id)}
+                            className={cn(
+                              "p-4 rounded-xl border-2 text-left transition-all",
+                              selectedCategoryId === category.id
+                                ? "border-emerald-500 bg-emerald-50"
+                                : "border-slate-200 bg-white hover:border-slate-300"
+                            )}
+                          >
+                            <span className="font-medium text-slate-900">{category.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent */}
+                  {recentCategories.length > 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                        Zuletzt verwendet
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {recentCategories.map(catId => {
+                          const cat = categories.find(c => c.id === catId);
+                          return cat ? (
+                            <button
+                              key={cat.id}
+                              onClick={() => handleSelectCategory(cat.id)}
+                              className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+                            >
+                              {cat.name}
+                            </button>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* All Categories */}
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                      Alle Kategorien
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {topLevelCategories.map(category => (
+                        <button
+                          key={category.id}
+                          onClick={() => handleSelectCategory(category.id)}
+                          className={cn(
+                            "p-4 rounded-xl border-2 text-left transition-all relative",
+                            selectedCategoryId === category.id
+                              ? "border-emerald-500 bg-emerald-50"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-900">{category.name}</span>
+                            <button
+                              onClick={(e) => toggleFavorite(category.id, e)}
+                              className={cn(
+                                "p-1 rounded-full transition-colors",
+                                favoriteCategories.has(category.id)
+                                  ? "text-amber-500"
+                                  : "text-slate-300 hover:text-amber-400"
+                              )}
+                              aria-label={favoriteCategories.has(category.id) ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}
+                            >
+                              <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
+                            </button>
+                          </div>
+                          {selectedCategoryId === category.id && (
+                            <Check size={16} className="absolute top-2 right-2 text-emerald-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content - Article Grid */}
+      <main className="flex-1 p-4 pb-32 overflow-y-auto">
+        {filteredArticles.length === 0 ? (
+          <div className="text-center py-12">
+            <Package size={48} className="mx-auto text-slate-300 mb-4" />
+            <p className="text-slate-500 font-medium">Keine Artikel in dieser Kategorie</p>
+            <p className="text-sm text-slate-400 mt-1">Wählen Sie eine andere Kategorie</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filteredArticles.map(article => {
+              const quantityInProject = processedSummaryItems
+                .filter(i => i.type === 'article' && i.article_id === article.id)
+                .reduce((sum, i) => sum + (i.quantity || 0), 0);
+
+              return (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  quantityInProject={quantityInProject}
+                  onAdd={handleDirectAddArticle}
+                  onUpdateQuantity={handleUpdateItemQuantity}
+                  onDelete={handleDeleteItem}
+                  itemIds={processedSummaryItems
+                    .filter(i => i.type === 'article' && i.article_id === article.id)
+                    .map(i => i.id)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      {/* Sticky Bottom Summary */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+              <Package size={20} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900">{articleCount} Artikel</p>
+              <p className="text-xs text-slate-500">im Aufmaß</p>
+            </div>
+          </div>
+          <Button
+            onClick={handleGeneratePdf}
+            disabled={articleCount === 0}
+            className="btn-primary h-12 px-6"
+          >
+            <FileDown size={20} className="mr-2" />
+            PDF
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };
+
+interface ArticleCardProps {
+  article: Article;
+  quantityInProject: number;
+  onAdd: (articleId: string, quantity: number) => void;
+  onUpdateQuantity: (itemId: string, delta: number) => void;
+  onDelete: (itemId: string) => void;
+  itemIds: string[];
+}
+
+function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDelete, itemIds }: ArticleCardProps) {
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Article Info */}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-slate-900 leading-tight line-clamp-2">
+              {article.name}
+            </h3>
+            <p className="text-xs text-slate-500 font-mono mt-1">
+              {article.articleNumber}
+            </p>
+          </div>
+          {quantityInProject > 0 && (
+            <div className="shrink-0 bg-emerald-100 text-emerald-700 text-sm font-bold px-2 py-1 rounded-lg">
+              {quantityInProject}x
+            </div>
+          )}
+        </div>
+
+        {/* Quick Add Buttons */}
+        <div className="flex gap-2 mt-3">
+          {!showQuickAdd ? (
+            <>
+              <Button
+                onClick={() => { onAdd(article.id, 1); }}
+                className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold"
+              >
+                <Plus size={20} className="mr-1" />
+                1x
+              </Button>
+              <Button
+                onClick={() => { onAdd(article.id, 5); }}
+                variant="outline"
+                className="flex-1 h-12 border-slate-200 font-semibold"
+              >
+                +5
+              </Button>
+              <Button
+                onClick={() => setShowQuickAdd(true)}
+                variant="outline"
+                className="h-12 w-12 border-slate-200"
+                aria-label="Menge eingeben"
+              >
+                <span className="text-lg">⋯</span>
+              </Button>
+            </>
+          ) : (
+            <div className="flex gap-2 w-full">
+              <Button
+                onClick={() => setShowQuickAdd(false)}
+                variant="ghost"
+                className="h-12"
+              >
+                Abbrechen
+              </Button>
+              <input
+                type="number"
+                min="1"
+                defaultValue="10"
+                className="flex-1 h-12 text-center text-lg font-semibold border-2 border-slate-200 rounded-lg focus:border-emerald-500 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const value = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (value > 0) {
+                      onAdd(article.id, value);
+                      setShowQuickAdd(false);
+                    }
+                  }
+                }}
+                autoFocus
+              />
+              <Button
+                onClick={() => {
+                  const input = document.querySelector('input[type="number"]') as HTMLInputElement;
+                  const value = parseInt(input.value, 10);
+                  if (value > 0) {
+                    onAdd(article.id, value);
+                    setShowQuickAdd(false);
+                  }
+                }}
+                className="h-12 px-4 bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                OK
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Quantity Adjustment for existing items */}
+        {quantityInProject > 0 && itemIds.length > 0 && (
+          <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-slate-100">
+            <Button
+              onClick={() => onUpdateQuantity(itemIds[0], -1)}
+              variant="outline"
+              size="sm"
+              className="h-10 w-10 p-0 rounded-full border-slate-200"
+            >
+              <Minus size={16} />
+            </Button>
+            <span className="text-sm text-slate-500">Anpassen</span>
+            <Button
+              onClick={() => onUpdateQuantity(itemIds[0], 1)}
+              variant="outline"
+              size="sm"
+              className="h-10 w-10 p-0 rounded-full border-slate-200"
+            >
+              <Plus size={16} />
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default AufmassPage;
