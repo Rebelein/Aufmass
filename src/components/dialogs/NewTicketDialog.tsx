@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Crop, Loader2, Send } from 'lucide-react';
 import { addTicket } from '@/lib/ticket-storage';
 import { useToast } from '@/hooks/use-toast';
-import Image from 'next/image';
 import ScreenshotAreaSelector from './ScreenshotAreaSelector';
 
 interface NewTicketDialogProps {
@@ -152,10 +151,10 @@ const NewTicketDialog: React.FC<NewTicketDialogProps> = ({ isOpen, onClose }) =>
                             ) : screenshotDataUrl ? (
                                 <Dialog>
                                     <DialogTrigger asChild>
-                                        <Image src={screenshotDataUrl} alt="Screenshot Vorschau" width={800} height={450} className="rounded-md object-contain cursor-zoom-in" data-ai-hint="screenshot interface" />
+                                        <img src={screenshotDataUrl} alt="Screenshot Vorschau" width={800} height={450} className="rounded-md object-contain cursor-zoom-in" data-ai-hint="screenshot interface" />
                                     </DialogTrigger>
                                     <DialogContent className="max-w-7xl h-[90vh] flex items-center justify-center">
-                                        <Image src={screenshotDataUrl} alt="Screenshot Vollansicht" fill className="object-contain" data-ai-hint="screenshot interface" />
+                                        <img src={screenshotDataUrl} alt="Screenshot Vollansicht" fill className="object-contain" data-ai-hint="screenshot interface" />
                                     </DialogContent>
                                 </Dialog>
                             ) : (

@@ -15,7 +15,6 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Minus, Plus, CheckCircle, ImageIcon, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 
 interface ArticleSearchDialogProps {
@@ -163,10 +162,10 @@ const ArticleSearchDialog: React.FC<ArticleSearchDialogProps> = ({
                   <li key={article.id} className="p-2.5 border rounded-lg shadow-sm bg-card text-card-foreground flex items-center gap-3">
                     <div className="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 relative">
                       {article.imageUrl ? (
-                          <Image src={article.imageUrl} alt={article.name} fill className="rounded-md object-cover" data-ai-hint="product item" />
+                          <img src={article.imageUrl} alt={article.name} fill className="rounded-md object-cover" data-ai-hint="product item" />
                       ) : (
                           <div className="w-full h-full bg-muted rounded-md flex items-center justify-center">
-                              <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                              <imgIcon className="h-8 w-8 text-muted-foreground" />
                           </div>
                       )}
                     </div>

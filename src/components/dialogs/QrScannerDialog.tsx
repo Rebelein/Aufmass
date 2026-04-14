@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Html5Qrcode } from 'html5-qrcode';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ interface QrScannerDialogProps {
 }
 
 const QrScannerDialog: React.FC<QrScannerDialogProps> = ({ isOpen, onClose }) => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -96,7 +96,7 @@ const QrScannerDialog: React.FC<QrScannerDialogProps> = ({ isOpen, onClose }) =>
             const anlageId = pathParts[anlageIdIndex];
             toast({ title: 'QR-Code erkannt', description: `Anlage ${anlageId} wird geladen...` });
             onClose();
-            router.push(`/anlagenbuch/${anlageId}?view=installer`);
+            navigate(`/anlagenbuch/${anlageId}?view=installer`);
           } else {
             throw new Error('Ungültiges URL-Format im QR-Code.');
           }

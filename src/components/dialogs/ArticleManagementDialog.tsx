@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { Article, Category, Supplier } from '@/lib/data';
 import { Button } from '@/components/ui/button';
@@ -91,37 +89,42 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      setIsImportingPdf(true);
-      toast({ title: "KI Analyse gestartet", description: "PDF wird verarbeitet. Bitte warten..." });
+    setIsImportingPdf(true);
+    toast({ title: "KI Analyse gestartet", description: "PDF wird verarbeitet. Bitte warten..." });
 
-      try {
-          const formData = new FormData();
-          formData.append('file', file);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
 
-          const res = await fetch('/api/analyze-pdf', {
-              method: 'POST',
-              body: formData
-          });
-
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Fehler beim Import");
-
-          if (data.result) {
-              await batchAddCatalog(data.result, allCategories, categoryId);
-              toast({ title: "Import erfolgreich", description: "Artikel & Kategorien wurden hinzugefügt." });
-          } else {
-              throw new Error("Die KI hat keine gültigen Daten zurückgegeben.");
-          }
-      } catch (error: any) {
-          console.error(error);
-          toast({ title: "Import fehlgeschlagen", description: error.message || "Unbekannter Fehler.", variant: "destructive" });
-      } finally {
-          setIsImportingPdf(false);
-          if (pdfInputRef.current) pdfInputRef.current.value = '';
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error("Supabase URL nicht konfiguriert");
       }
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/analyze-pdf`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Fehler beim Import");
+
+      if (data.result) {
+        await batchAddCatalog(data.result, allCategories, categoryId);
+        toast({ title: "Import erfolgreich", description: "Artikel & Kategorien wurden hinzugefügt." });
+      } else {
+        throw new Error("Die KI hat keine gültigen Daten zurückgegeben.");
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast({ title: "Import fehlgeschlagen", description: error.message || "Unbekannter Fehler.", variant: "destructive" });
+    } finally {
+      setIsImportingPdf(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
   };
 
   const handleArticleFormSubmit = (e: React.FormEvent) => {
@@ -223,8 +226,8 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
                                 <TableCell className="text-white/40 text-xs font-medium uppercase">{article.unit}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(article)} className="h-8 w-8 text-white/20 hover:text-blue-400 hover:bg-blue-500/10"><Edit3 size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/20 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(article)} className="h-8 w-8 text-white/50 hover:text-blue-400 hover:bg-blue-500/10"><Edit3 size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/50 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={14}/></Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -232,7 +235,7 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
                     </TableBody>
                 </Table>
                 {initialArticles.length === 0 && (
-                    <div className="py-20 text-center text-white/20 font-medium">Keine Artikel in dieser Kategorie.</div>
+                    <div className="py-20 text-center text-white/50 font-medium">Keine Artikel in dieser Kategorie.</div>
                 )}
               </ScrollArea>
             </div>

@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertTriangle, FileUp, CheckCircle } from 'lucide-react';
 import { findAnlageByNummer, addAnlage, updateAnlage } from '@/lib/anlage-storage';
@@ -18,8 +18,8 @@ type ProcessingState = 'idle' | 'processing' | 'manual_input' | 'creating_anlage
 type FileInfo = { name: string; type: string; dataUri: string };
 
 function ShareReceiverContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [state, setState] = useState<ProcessingState>('idle');
@@ -201,11 +201,11 @@ function ShareReceiverContent() {
         </CardContent>
         <CardContent>
             {anlageIdToRedirect ? (
-                <Button className="w-full" onClick={() => router.push(`/wartung/${anlageIdToRedirect}?view=installer`)}>
+                <Button className="w-full" onClick={() => navigate(`/wartung/${anlageIdToRedirect}?view=installer`)}>
                     Zur Anlage
                 </Button>
             ) : (
-                <Button className="w-full" variant="outline" onClick={() => router.push('/wartung')}>
+                <Button className="w-full" variant="outline" onClick={() => navigate('/wartung')}>
                     Zurück zur Übersicht
                 </Button>
             )}

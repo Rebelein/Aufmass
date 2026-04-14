@@ -5,7 +5,6 @@ import type { Article, Category } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChevronDown, ChevronRight, Search, LayoutGrid } from 'lucide-react';
-import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CategoryFilterProps {
@@ -69,7 +68,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 {hasChildren ? (
                     <button
                         onClick={(e) => { e.stopPropagation(); onToggleExpand(category.id); }}
-                        className="h-8 w-8 shrink-0 flex items-center justify-center text-white/20 hover:text-emerald-400 transition-colors"
+                        className="h-8 w-8 shrink-0 flex items-center justify-center text-white/50 hover:text-emerald-400 transition-colors"
                     >
                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
@@ -94,10 +93,10 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 >
                     {previewImageUrl ? (
                         <div className="relative w-6 h-6 shrink-0 rounded-lg overflow-hidden border border-white/10">
-                            <Image src={previewImageUrl} alt="" fill className="object-cover" />
+                            <img src={previewImageUrl} alt="" fill className="object-cover" />
                         </div>
                     ) : (
-                        <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-white/20")} />
+                        <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-white/50")} />
                     )}
                     <span className="truncate text-sm font-medium">{category.name}</span>
                 </button>
@@ -121,13 +120,13 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
             onClick={onOpenSearchDialog}
             className="w-full glass-input justify-start gap-3 h-12 hover:bg-white/10 transition-colors group"
         >
-            <Search size={18} className="text-white/20 group-hover:text-emerald-400 transition-colors" />
+            <Search size={18} className="text-white/50 group-hover:text-emerald-400 transition-colors" />
             <span className="text-white/40 group-hover:text-white transition-colors">Suchen...</span>
         </Button>
       </div>
 
       <div className="flex-grow flex flex-col min-h-0">
-        <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/30 mb-4 px-2">Kategorien</h3>
+        <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/50 mb-4 px-2">Kategorien</h3>
         <ScrollArea className="flex-grow -mx-2 px-2 no-scrollbar">
             <div className="space-y-1.5 pb-20" ref={scrollContainerRef}>
                 {renderCategoryButtons(null, 0)}

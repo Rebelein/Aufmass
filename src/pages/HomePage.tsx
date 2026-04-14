@@ -1,6 +1,5 @@
-'use client';
 import { ListChecks, ArrowRight, Activity, Database, Sparkles } from "lucide-react";
-import Link from "next/link";
+import { Link } from "react-router-dom";
 
 export default function HomePage() {
   return (
@@ -37,7 +36,7 @@ export default function HomePage() {
 
       {/* Main Action Card */}
       <div className="max-w-2xl mx-auto px-4">
-        <Link href="/projects" className="block group">
+        <Link to="/projects" className="block group">
           <div className="bg-white rounded-xl border border-slate-200 p-6 md:p-8 shadow-sm hover:shadow-lg hover:border-emerald-300 transition-all duration-300">
             <div className="flex flex-col sm:flex-row items-center gap-6">
               <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-xl shadow-lg shrink-0">
@@ -65,7 +64,7 @@ export default function HomePage() {
 
       {/* Secondary Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto px-4">
-        <Link href="/admin/aufmass" className="block group">
+        <Link to="/admin/aufmass" className="block group">
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-300">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-lg bg-slate-100">
@@ -94,7 +93,7 @@ export default function HomePage() {
 
       {/* Footer Note */}
       <div className="text-center pt-8 px-4">
-        <p className="text-slate-400 text-xs uppercase tracking-wider font-medium">
+        <p className="text-slate-500 text-xs uppercase tracking-wider font-medium">
           Powered by Rebelein Aufmaß System
         </p>
       </div>

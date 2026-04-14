@@ -1,7 +1,5 @@
-"use client";
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PlusCircle, Trash2, Edit3, ListChecks, Calendar, ArrowRight } from 'lucide-react';
@@ -10,10 +8,9 @@ import {
   addProjectToSupabase,
   deleteProjectFromSupabase,
   setCurrentProjectId,
-  updateProjectName,
-  getProjects,
-  Project
+  updateProjectName
 } from '@/lib/project-storage';
+import type { Project } from '@/lib/project-storage';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +32,7 @@ const ProjectsPage = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -63,7 +60,7 @@ const ProjectsPage = () => {
 
   const handleSelectProject = (projectId: string) => {
     setCurrentProjectId(projectId);
-    router.push('/aufmass');
+    navigate('/aufmass');
   };
 
   const handleDeleteProject = async (projectId: string) => {
@@ -128,7 +125,7 @@ const ProjectsPage = () => {
               className="w-full pl-10 h-11 border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20"
               onKeyDown={(e) => e.key === 'Enter' && handleAddProject()}
             />
-            <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
           </div>
           <Button 
             onClick={handleAddProject} 
@@ -143,9 +140,9 @@ const ProjectsPage = () => {
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {projects.length === 0 ? (
           <div className="col-span-full bg-white rounded-xl border border-slate-200 p-12 text-center space-y-4 shadow-sm">
-            <ListChecks size={40} className="mx-auto text-slate-300" />
+            <ListChecks size={40} className="mx-auto text-slate-500" />
             <p className="text-slate-500 font-medium">Noch keine Projekte vorhanden.</p>
-            <p className="text-sm text-slate-400">Erstellen Sie Ihr erstes Projekt oben.</p>
+            <p className="text-sm text-slate-500">Erstellen Sie Ihr erstes Projekt oben.</p>
           </div>
         ) : (
           projects.map((project) => (
@@ -179,7 +176,7 @@ const ProjectsPage = () => {
                           variant="ghost" 
                           size="icon" 
                           onClick={() => { setEditingProject(project); setEditingProjectName(project.name); }} 
-                          className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                          className="h-8 w-8 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
                           aria-label="Projekt bearbeiten"
                         >
                           <Edit3 size={16} />
@@ -189,7 +186,7 @@ const ProjectsPage = () => {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50"
                               aria-label="Projekt löschen"
                             >
                               <Trash2 size={16} />

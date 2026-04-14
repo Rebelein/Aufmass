@@ -74,7 +74,7 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
             {selectedItems.length > 0 && (
                 <button 
                     onClick={onClearSelection}
-                    className="p-2 rounded-lg hover:bg-red-500/10 text-white/20 hover:text-red-400 transition-all"
+                    className="p-2 rounded-lg hover:bg-red-500/10 text-white/50 hover:text-red-400 transition-all"
                     title="Alles löschen"
                 >
                     <Trash2 size={18} />
@@ -88,8 +88,8 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
         <div className="flex-grow overflow-y-auto p-4 space-y-3 no-scrollbar max-h-[50vh]">
           {selectedItems.length === 0 ? (
             <div className="h-40 flex flex-col items-center justify-center text-center space-y-3">
-                <PackagePlus size={32} className="text-white/10" />
-                <p className="text-white/30 text-sm font-medium">Noch keine Einträge im Aufmaß.</p>
+                <PackagePlus size={32} className="text-white/40" />
+                <p className="text-white/50 text-sm font-medium">Noch keine Einträge im Aufmaß.</p>
             </div>
           ) : (
             selectedItems.map((item, index) => (
@@ -103,7 +103,7 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                 )}
               >
                 <div className="flex items-start gap-3">
-                    <div className="mt-1 text-[10px] font-bold text-white/20 shrink-0 w-4">
+                    <div className="mt-1 text-[10px] font-bold text-white/50 shrink-0 w-4">
                         {index + 1}
                     </div>
                     
@@ -133,13 +133,13 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                     <div className="flex items-center gap-1 shrink-0">
                         {item.type === 'article' && (
                             <div className="flex flex-col gap-0.5">
-                                <button onClick={() => onUpdateSelectedItemQuantity(item.id, (item.quantity || 0) + 1)} className="p-1 hover:text-emerald-400 text-white/20 transition-colors"><ChevronUp size={12}/></button>
-                                <button onClick={() => onUpdateSelectedItemQuantity(item.id, (item.quantity || 0) - 1)} className="p-1 hover:text-emerald-400 text-white/20 transition-colors"><ChevronDown size={12}/></button>
+                                <button onClick={() => onUpdateSelectedItemQuantity(item.id, (item.quantity || 0) + 1)} className="p-1 hover:text-emerald-400 text-white/50 transition-colors"><ChevronUp size={12}/></button>
+                                <button onClick={() => onUpdateSelectedItemQuantity(item.id, (item.quantity || 0) - 1)} className="p-1 hover:text-emerald-400 text-white/50 transition-colors"><ChevronDown size={12}/></button>
                             </div>
                         )}
                         <button 
                             onClick={() => onDeleteItem(item.id)}
-                            className="p-1.5 rounded-md hover:bg-red-500/20 text-white/10 hover:text-red-400 transition-all"
+                            className="p-1.5 rounded-md hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-all"
                         >
                             <X size={14} />
                         </button>

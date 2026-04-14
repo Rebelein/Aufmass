@@ -1,11 +1,10 @@
-"use client";
-
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import type { Article, Category, Supplier } from '@/lib/data';
 import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers } from '@/lib/catalog-storage';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentProjectId, getProjectById, syncProjectItems, Project, ProjectSelectedItem } from '@/lib/project-storage';
+import { getCurrentProjectId, getProjectById, syncProjectItems } from '@/lib/project-storage';
+import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Search, Star, Plus, Minus, FileDown, Menu, ChevronRight, Check, Package } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -33,12 +32,12 @@ const AufmassPage = () => {
   const [favoriteCategories, setFavoriteCategories] = useState<Set<string>>(new Set());
   const [recentCategories, setRecentCategories] = useState<string[]>([]);
   const { toast } = useToast();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const projectId = getCurrentProjectId();
     if (!projectId) {
-      router.replace('/projects');
+      navigate.replace('/projects');
       return;
     }
 
@@ -56,7 +55,7 @@ const AufmassPage = () => {
     const loadProject = async () => {
       const project = await getProjectById(projectId);
       if (!project) {
-        router.replace('/projects');
+        navigate.replace('/projects');
         return;
       }
       if (isMounted) {
@@ -73,7 +72,7 @@ const AufmassPage = () => {
       unsubscribeArticles();
       unsubscribeSuppliers();
     };
-  }, [router]);
+  }, [navigate]);
 
   useEffect(() => {
     if (categories.length > 0 && !selectedCategoryId) {
@@ -223,7 +222,7 @@ const AufmassPage = () => {
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => router.push('/projects')}
+              onClick={() => navigate('/projects')}
               className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
               aria-label="Zurück zu Projekte"
             >
@@ -246,7 +245,7 @@ const AufmassPage = () => {
                   <span className="ml-2 font-medium">
                     {selectedCategory?.name || 'Kategorie'}
                   </span>
-                  <ChevronRight size={16} className="ml-1 text-slate-400" />
+                  <ChevronRight size={16} className="ml-1 text-slate-600" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl px-0">
@@ -327,7 +326,7 @@ const AufmassPage = () => {
                                 "p-1 rounded-full transition-colors",
                                 favoriteCategories.has(category.id)
                                   ? "text-amber-500"
-                                  : "text-slate-300 hover:text-amber-400"
+                                  : "text-slate-500 hover:text-amber-400"
                               )}
                               aria-label={favoriteCategories.has(category.id) ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen"}
                             >
@@ -352,9 +351,9 @@ const AufmassPage = () => {
       <main className="flex-1 p-4 pb-32 overflow-y-auto">
         {filteredArticles.length === 0 ? (
           <div className="text-center py-12">
-            <Package size={48} className="mx-auto text-slate-300 mb-4" />
+            <Package size={48} className="mx-auto text-slate-500 mb-4" />
             <p className="text-slate-500 font-medium">Keine Artikel in dieser Kategorie</p>
-            <p className="text-sm text-slate-400 mt-1">Wählen Sie eine andere Kategorie</p>
+            <p className="text-sm text-slate-600 mt-1">Wählen Sie eine andere Kategorie</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,13 +52,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import ArticleManagementDialog from '@/components/dialogs/ArticleManagementDialog';
 import SupplierManagementDialog from '@/components/dialogs/SupplierManagementDialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
-const AufmassAdminPage = () => {
+const AdminPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [articlesAdmin, setArticlesAdmin] = useState<Article[]>([]);
@@ -165,7 +161,6 @@ const AufmassAdminPage = () => {
     await refreshData();
   };
 
-  // Missing handlers added back
   const handleAddSupplierAdmin = async (name: string) => {
     await addSupplier({ name });
     await refreshData();
@@ -226,74 +221,74 @@ const AufmassAdminPage = () => {
         const isFirst = index === 0;
         const isLast = index === filteredArray.length - 1;
         
-        return [
-          <li key={category.id} className='group flex justify-between items-center bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-white/10 p-3 rounded-2xl transition-all duration-300 mb-2' style={{ marginLeft: `${level * 1.5}rem`}}>
-            <div className="flex items-center flex-grow gap-3 min-w-0">
-              <GripVertical className="h-5 w-5 text-white/10 shrink-0" />
-              {children.length > 0 ? (
-                <button 
-                    onClick={() => setExpandedCategories(prev => {
-                        const next = new Set(prev);
-                        if (next.has(category.id)) next.delete(category.id); else next.add(category.id);
-                        return next;
-                    })} 
-                    className="h-8 w-8 flex items-center justify-center text-emerald-500/50 hover:text-emerald-400 transition-colors"
-                >
-                  {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                </button>
-              ) : <div className="w-8"></div>}
-              <span className="font-bold text-white/80 truncate group-hover:text-white transition-colors">{category.name}</span>
-            </div>
-            
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-               <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst} className="h-8 w-8 text-white/30 hover:text-emerald-400"><ArrowUp size={16} /></Button>
-               <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast} className="h-8 w-8 text-white/30 hover:text-emerald-400"><ArrowDown size={16} /></Button>
-               <Button variant="ghost" size="icon" onClick={() => { setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }} className="h-8 w-8 text-white/30 hover:text-orange-400"><PackagePlus size={16} /></Button>
-               <Button variant="ghost" size="icon" onClick={() => { setManagingCategoryDetails({ id: category.id, name: category.name }); setIsArticleManagementDialogOpen(true); }} className="h-8 w-8 text-white/30 hover:text-green-400"><ListPlus size={16} /></Button>
-               <Button variant="ghost" size="icon" onClick={() => { setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }} className="h-8 w-8 text-white/30 hover:text-blue-400"><Edit3 size={16} /></Button>
-               <Button variant="ghost" size="icon" onClick={() => { setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-white/30 hover:text-red-400"><Trash2 size={16} /></Button>
-            </div>
-          </li>,
+       return [
+         <li key={category.id} className='group flex justify-between items-center bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 p-3 rounded-xl transition-all duration-300 mb-2 shadow-sm' style={{ marginLeft: `${level * 1.5}rem`}}>
+           <div className="flex items-center flex-grow gap-3 min-w-0">
+             <GripVertical className="h-5 w-5 text-slate-400 shrink-0" />
+             {children.length > 0 ? (
+               <button 
+                   onClick={() => setExpandedCategories(prev => {
+                       const next = new Set(prev);
+                       if (next.has(category.id)) next.delete(category.id); else next.add(category.id);
+                       return next;
+                   })} 
+                   className="h-8 w-8 flex items-center justify-center text-emerald-500 hover:text-emerald-600 transition-colors"
+               >
+                 {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+               </button>
+             ) : <div className="w-8"></div>}
+             <span className="font-semibold text-slate-900 truncate group-hover:text-emerald-600 transition-colors">{category.name}</span>
+           </div>
+
+           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+             <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst} className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-slate-100"><ArrowUp size={16} /></Button>
+             <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast} className="h-8 w-8 text-slate-400 hover:text-emerald-600 hover:bg-slate-100"><ArrowDown size={16} /></Button>
+             <Button variant="ghost" size="icon" onClick={() => { setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }} className="h-8 w-8 text-slate-400 hover:text-orange-600 hover:bg-slate-100"><PackagePlus size={16} /></Button>
+             <Button variant="ghost" size="icon" onClick={() => { setManagingCategoryDetails({ id: category.id, name: category.name }); setIsArticleManagementDialogOpen(true); }} className="h-8 w-8 text-slate-400 hover:text-green-600 hover:bg-slate-100"><ListPlus size={16} /></Button>
+             <Button variant="ghost" size="icon" onClick={() => { setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }} className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-slate-100"><Edit3 size={16} /></Button>
+             <Button variant="ghost" size="icon" onClick={() => { setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-slate-100"><Trash2 size={16} /></Button>
+           </div>
+         </li>,
           ...(isExpanded ? renderCategories(category.id, level + 1) : [])
         ];
       });
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in duration-700">
+    <div className="min-h-screen bg-slate-50 max-w-5xl mx-auto space-y-10 animate-in fade-in duration-700 p-4 md:p-8">
       <header className="space-y-2 text-center md:text-left">
         <h1 className="text-4xl font-bold text-gradient-emerald">Verwaltung</h1>
-        <p className="text-white/50 font-medium text-lg">Katalogstruktur und Stammdaten pflegen.</p>
+        <p className="text-slate-600 font-medium text-lg">Katalogstruktur und Stammdaten pflegen.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
         <div className="md:col-span-1 space-y-6">
-            <Card className="glass-card border-white/5 overflow-hidden">
-                <CardHeader className="bg-white/[0.02] border-b border-white/5">
-                    <CardTitle className="text-sm font-bold uppercase tracking-widest text-white/40 flex items-center gap-2">
-                        <Settings2 size={16} /> Aktionen
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 space-y-3">
-                    <Button onClick={() => setIsSupplierManagementDialogOpen(true)} variant="outline" className="w-full bg-white/5 border-white/10 hover:bg-white/10 text-white justify-start gap-3 h-12 rounded-xl">
-                        <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400"><FolderPlus size={16}/></div>
-                        Großhändler
-                    </Button>
-                </CardContent>
-            </Card>
+          <Card className="bg-white border-slate-200 overflow-hidden shadow-sm">
+            <CardHeader className="bg-slate-50 border-b border-slate-200">
+              <CardTitle className="text-sm font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Settings2 size={16} /> Aktionen
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3">
+              <Button onClick={() => setIsSupplierManagementDialogOpen(true)} variant="outline" className="w-full bg-white border-slate-200 hover:bg-slate-50 text-slate-700 justify-start gap-3 h-12 rounded-xl">
+                <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600"><FolderPlus size={16}/></div>
+                Großhändler
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="md:col-span-3 space-y-6">
-            <Card className="glass-card border-white/5">
-                <CardHeader className="p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <CardTitle className="text-2xl font-bold text-white">Artikelkatalog</CardTitle>
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <CardTitle className="text-2xl font-bold text-slate-900">Artikelkatalog</CardTitle>
                         <div className="flex w-full sm:w-auto gap-2">
-                            <Input 
-                                value={newMainCategoryName} 
-                                onChange={(e) => setNewMainCategoryName(e.target.value)} 
-                                placeholder="Neue Hauptkategorie..." 
-                                className="glass-input h-11 py-0 min-w-[200px]"
+                <Input
+                  value={newMainCategoryName}
+                  onChange={(e) => setNewMainCategoryName(e.target.value)}
+                  placeholder="Neue Hauptkategorie..."
+                  className="input-light h-11 py-0 min-w-[200px]"
                             />
                             <Button onClick={handleAddMainCategory} className="btn-primary h-11 px-4">
                                 <PlusCircle size={18} />
@@ -304,12 +299,12 @@ const AufmassAdminPage = () => {
                 <CardContent className="p-6 pt-0">
                     <ul className="no-scrollbar">
                         {categories.length > 0 ? renderCategories(null) : (
-                            <div className="py-20 text-center space-y-4">
-                                <div className="mx-auto w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-white/10">
-                                    <ListPlus size={32} />
-                                </div>
-                                <p className="text-white/30 font-medium">Noch keine Kategorien erstellt.</p>
-                            </div>
+              <div className="py-20 text-center space-y-4">
+                <div className="mx-auto w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400">
+                  <ListPlus size={32} />
+                </div>
+                <p className="text-slate-500 font-medium">Noch keine Kategorien erstellt.</p>
+              </div>
                         )}
                     </ul>
                 </CardContent>
@@ -317,47 +312,47 @@ const AufmassAdminPage = () => {
         </div>
       </div>
 
-      <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
-          <DialogContent className="glass-card bg-gray-900/90 border-white/10 text-white">
-              <DialogHeader><DialogTitle className="text-xl font-bold">Kategorie umbenennen</DialogTitle></DialogHeader>
-              <div className="py-4">
-                <Input value={editedCategoryName} onChange={(e) => setEditedCategoryName(e.target.value)} className="glass-input h-12" />
-              </div>
-              <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsEditCategoryDialogOpen(false)} className="text-white/50 rounded-xl">Abbrechen</Button>
-                  <Button onClick={handleSaveChangesToCategory} className="btn-primary">Speichern</Button>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
+       <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
+           <DialogContent className="bg-white border-slate-200">
+               <DialogHeader><DialogTitle className="text-xl font-bold text-slate-900">Kategorie umbenennen</DialogTitle></DialogHeader>
+               <div className="py-4">
+                 <Input value={editedCategoryName} onChange={(e) => setEditedCategoryName(e.target.value)} className="input-light h-12" />
+               </div>
+               <DialogFooter>
+                   <Button variant="ghost" onClick={() => setIsEditCategoryDialogOpen(false)} className="text-slate-600 hover:bg-slate-100 rounded-xl">Abbrechen</Button>
+                   <Button onClick={handleSaveChangesToCategory} className="btn-primary">Speichern</Button>
+               </DialogFooter>
+           </DialogContent>
+       </Dialog>
 
-      <Dialog open={isAddSubCategoryDialogOpen} onOpenChange={setIsAddSubCategoryDialogOpen}>
-          <DialogContent className="glass-card bg-gray-900/90 border-white/10 text-white">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold tracking-tight">Unterkategorie erstellen</DialogTitle>
-                <p className="text-white/40 text-sm">Neu in: <span className="text-emerald-400 font-bold">{subCategoryParent?.name}</span></p>
-              </DialogHeader>
-              <div className="py-4">
-                <Input value={newSubCategoryName} onChange={(e) => setNewSubCategoryName(e.target.value)} placeholder="Name der Unterkategorie..." className="glass-input h-12" />
-              </div>
-              <DialogFooter>
-                  <Button variant="ghost" onClick={() => setIsAddSubCategoryDialogOpen(false)} className="text-white/50 rounded-xl">Abbrechen</Button>
-                  <Button onClick={handleConfirmAddSubCategory} className="btn-primary">Erstellen</Button>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
+       <Dialog open={isAddSubCategoryDialogOpen} onOpenChange={setIsAddSubCategoryDialogOpen}>
+           <DialogContent className="bg-white border-slate-200">
+               <DialogHeader>
+                 <DialogTitle className="text-xl font-bold tracking-tight text-slate-900">Unterkategorie erstellen</DialogTitle>
+                 <p className="text-slate-500 text-sm">Neu in: <span className="text-emerald-600 font-bold">{subCategoryParent?.name}</span></p>
+               </DialogHeader>
+               <div className="py-4">
+                 <Input value={newSubCategoryName} onChange={(e) => setNewSubCategoryName(e.target.value)} placeholder="Name der Unterkategorie..." className="input-light h-12" />
+               </div>
+               <DialogFooter>
+                   <Button variant="ghost" onClick={() => setIsAddSubCategoryDialogOpen(false)} className="text-slate-600 hover:bg-slate-100 rounded-xl">Abbrechen</Button>
+                   <Button onClick={handleConfirmAddSubCategory} className="btn-primary">Erstellen</Button>
+               </DialogFooter>
+           </DialogContent>
+       </Dialog>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="glass-card bg-gray-900/90 border-white/10 text-white">
-            <AlertDialogHeader>
-                <AlertDialogTitle className="text-2xl font-bold text-red-400">Element löschen?</AlertDialogTitle>
-                <p className="text-white/60">Dieser Vorgang kann nicht rückgängig gemacht werden. Alle enthaltenen Daten gehen verloren.</p>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="mt-6">
-                <AlertDialogCancel className="bg-white/5 border-white/10 text-white hover:bg-white/10 rounded-xl">Abbrechen</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmDeleteItem} className="bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold px-6">Löschen</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+         <AlertDialogContent className="bg-white border-slate-200">
+             <AlertDialogHeader>
+                 <AlertDialogTitle className="text-2xl font-bold text-red-600">Element löschen?</AlertDialogTitle>
+                 <p className="text-slate-600">Dieser Vorgang kann nicht rückgängig gemacht werden. Alle enthaltenen Daten gehen verloren.</p>
+             </AlertDialogHeader>
+             <AlertDialogFooter className="mt-6">
+                 <AlertDialogCancel className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl">Abbrechen</AlertDialogCancel>
+                 <AlertDialogAction onClick={confirmDeleteItem} className="bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold px-6">Löschen</AlertDialogAction>
+             </AlertDialogFooter>
+         </AlertDialogContent>
+       </AlertDialog>
 
       {managingCategoryDetails && (
         <ArticleManagementDialog
@@ -390,4 +385,4 @@ const AufmassAdminPage = () => {
   );
 };
 
-export default AufmassAdminPage;
+export default AdminPage;

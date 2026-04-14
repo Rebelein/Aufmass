@@ -1,6 +1,6 @@
 "use client";
 
-import Link from 'next/link';
+import { Link } from 'react-router-dom';
 import { BookMarked, Settings, ListChecks, LayoutDashboard, Menu } from 'lucide-react';
 import { useState } from 'react';
 import { latestVersion } from '@/lib/whats-new-data';
@@ -16,7 +16,7 @@ const Header = () => {
       <header className="bg-card text-card-foreground shadow-sm border-b sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 h-16">
+            <Link to="/" className="flex items-center gap-2 h-16">
                 <BookMarked size={40} className="text-primary"/>
                 <h1 className="text-2xl font-headline font-bold text-primary">Rebelein</h1>
             </Link>
@@ -30,15 +30,15 @@ const Header = () => {
           </div>
           
           <nav className="hidden md:flex items-center gap-1">
-            <Link href="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
+            <Link to="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
                 <LayoutDashboard size={20} />
                 <span className="font-body">Dashboard</span>
             </Link>
-            <Link href="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
+            <Link to="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
                 <ListChecks size={20} />
                 <span className="font-body">Aufmaß</span>
             </Link>
-            <Link href="/admin/aufmass" prefetch={false} className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
+            <Link to="/admin/aufmass" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
               <Settings size={20} />
               <span className="font-body">Verwaltung</span>
             </Link>
@@ -59,19 +59,19 @@ const Header = () => {
                     </SheetHeader>
                     <nav className="flex flex-col gap-2 mt-8 text-lg">
                         <SheetClose asChild>
-                            <Link href="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
+                            <Link to="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
                                 <LayoutDashboard size={20} />
                                 <span className="font-body">Dashboard</span>
                             </Link>
                         </SheetClose>
                         <SheetClose asChild>
-                            <Link href="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
+                            <Link to="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
                                 <ListChecks size={20} />
                                 <span className="font-body">Aufmaß</span>
                             </Link>
                         </SheetClose>
                         <SheetClose asChild>
-                            <Link href="/admin/aufmass" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
+                            <Link to="/admin/aufmass" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
                                 <Settings size={20} />
                                 <span className="font-body">Verwaltung</span>
                             </Link>

@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Minus, Plus, ImageIcon, Clipboard } from 'lucide-react';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +27,7 @@ const ArticleList: React.FC<ArticleListProps> = ({
   if (articles.length === 0) {
     return (
         <div className="glass-card p-12 text-center border-dashed border-white/5 bg-white/[0.02]">
-            <p className="text-white/30 font-medium">Keine Artikel in dieser Kategorie.</p>
+            <p className="text-white/50 font-medium">Keine Artikel in dieser Kategorie.</p>
         </div>
     );
   }
@@ -67,10 +66,10 @@ const ArticleList: React.FC<ArticleListProps> = ({
 
             <div className="flex-shrink-0 w-20 h-20 relative rounded-xl overflow-hidden border border-white/10 bg-white/5">
               {article.imageUrl ? (
-                  <Image src={article.imageUrl} alt="" fill className="object-cover transition-transform group-hover:scale-110" />
+                  <img src={article.imageUrl} alt="" fill className="object-cover transition-transform group-hover:scale-110" />
               ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/10">
-                      <ImageIcon size={32} />
+                  <div className="w-full h-full flex items-center justify-center text-white/40">
+                      <imgIcon size={32} />
                   </div>
               )}
             </div>
@@ -87,7 +86,7 @@ const ArticleList: React.FC<ArticleListProps> = ({
                       >
                         {article.articleNumber}
                       </button>
-                      <span className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">{article.unit}</span>
+                      <span className="text-[10px] font-bold text-white/50 uppercase tracking-tighter">{article.unit}</span>
                   </div>
               </div>
 
