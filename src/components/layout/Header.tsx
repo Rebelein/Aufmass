@@ -1,7 +1,7 @@
 "use client";
 
-import { Link } from 'react-router-dom';
-import { BookMarked, Settings, ListChecks, LayoutDashboard, Menu } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { BookMarked, Settings, ListChecks, LayoutDashboard, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { latestVersion } from '@/lib/whats-new-data';
 import WhatsNewDialog from '@/components/dialogs/WhatsNewDialog';
@@ -10,83 +10,99 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTr
 
 const Header = () => {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const location = useLocation();
+
+  const navItems = [
+    { to: '/', icon: LayoutDashboard, label: 'Home' },
+    { to: '/projects', icon: ListChecks, label: 'Aufmaß' },
+    { to: '/admin/aufmass', icon: Settings, label: 'Verwaltung' },
+  ];
+
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <>
-      <header className="bg-card text-card-foreground shadow-sm border-b sticky top-0 z-40">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2 h-16">
-                <BookMarked size={40} className="text-primary"/>
-                <h1 className="text-2xl font-headline font-bold text-primary">Rebelein</h1>
+      <header className="glass-nav sticky top-0 z-50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 md:h-20">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg transform group-hover:scale-105 transition-transform duration-300">
+                <BookMarked size={24} className="text-white" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-xl font-bold text-gradient-emerald">Rebelein</span>
+                <span className="text-xs text-white/40 font-medium tracking-wide">Aufmaß</span>
+              </div>
             </Link>
-             <button
+
+            {/* Version Badge */}
+            <button
               onClick={() => setIsWhatsNewOpen(true)}
-              className="text-xs font-mono bg-muted hover:bg-muted/80 text-muted-foreground px-2 py-1 rounded-md transition-colors"
-              title="Was ist neu? anzeigen"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-white/60 hover:text-white hover:bg-white/10 transition-all duration-300"
             >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               v{latestVersion}
             </button>
-          </div>
-          
-          <nav className="hidden md:flex items-center gap-1">
-            <Link to="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
-                <LayoutDashboard size={20} />
-                <span className="font-body">Dashboard</span>
-            </Link>
-            <Link to="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
-                <ListChecks size={20} />
-                <span className="font-body">Aufmaß</span>
-            </Link>
-            <Link to="/admin/aufmass" className="text-foreground hover:bg-muted transition-colors flex items-center gap-1 p-2 rounded-md">
-              <Settings size={20} />
-              <span className="font-body">Verwaltung</span>
-            </Link>
-          </nav>
-          
-          <div className="md:hidden">
-            <Sheet>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-1">
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 ${
+                    isActive(item.to)
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'text-white/70 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+
+            {/* Mobile Menu */}
+            <div className="md:hidden">
+              <Sheet>
                 <SheetTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                        <Menu className="h-6 w-6" />
-                        <span className="sr-only">Menü öffnen</span>
-                    </Button>
+                  <Button variant="ghost" size="icon" className="text-white/80 hover:text-white hover:bg-white/10 rounded-xl">
+                    <Menu className="h-6 w-6" />
+                    <span className="sr-only">Menü öffnen</span>
+                  </Button>
                 </SheetTrigger>
-                <SheetContent>
-                    <SheetHeader>
-                        <SheetTitle className="sr-only">Hauptmenü</SheetTitle>
-                        <SheetDescription className="sr-only">Wählen Sie einen Bereich aus, um dorthin zu navigieren.</SheetDescription>
-                    </SheetHeader>
-                    <nav className="flex flex-col gap-2 mt-8 text-lg">
-                        <SheetClose asChild>
-                            <Link to="/" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
-                                <LayoutDashboard size={20} />
-                                <span className="font-body">Dashboard</span>
-                            </Link>
-                        </SheetClose>
-                        <SheetClose asChild>
-                            <Link to="/projects" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
-                                <ListChecks size={20} />
-                                <span className="font-body">Aufmaß</span>
-                            </Link>
-                        </SheetClose>
-                        <SheetClose asChild>
-                            <Link to="/admin/aufmass" className="text-foreground hover:bg-muted transition-colors flex items-center gap-2 p-3 rounded-md text-base">
-                                <Settings size={20} />
-                                <span className="font-body">Verwaltung</span>
-                            </Link>
-                        </SheetClose>
-                    </nav>
+                <SheetContent className="glass-card border-l border-white/10 bg-slate-900/95">
+                  <SheetHeader>
+                    <SheetTitle className="text-gradient-emerald text-left">Navigation</SheetTitle>
+                    <SheetDescription className="text-white/50 text-left">
+                      Wählen Sie einen Bereich aus
+                    </SheetDescription>
+                  </SheetHeader>
+                  <nav className="flex flex-col gap-2 mt-6">
+                    {navItems.map((item) => (
+                      <SheetClose key={item.to} asChild>
+                        <Link
+                          to={item.to}
+                          className={`flex items-center gap-3 p-4 rounded-xl font-medium transition-all duration-300 ${
+                            isActive(item.to)
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'text-white/70 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <item.icon size={22} />
+                          <span className="text-lg">{item.label}</span>
+                        </Link>
+                      </SheetClose>
+                    ))}
+                  </nav>
                 </SheetContent>
-            </Sheet>
+              </Sheet>
+            </div>
           </div>
         </div>
       </header>
-      <div className="bg-card shadow-sm -mt-px">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 64" className="block w-full text-primary -mb-1">
-            <path fill="currentColor" d="M0,32L120,37.3C240,43,480,53,720,53.3C960,53,1200,43,1320,37.3L1440,32L1440,0L1320,0C1200,0,960,0,720,0C480,0,240,0,120,0L0,0Z"></path>
-        </svg>
-      </div>
+
       <WhatsNewDialog isOpen={isWhatsNewOpen} onClose={() => setIsWhatsNewOpen(false)} />
     </>
   );

@@ -9,15 +9,14 @@ import AdminPage from '@/pages/AdminPage'
 
 function App() {
   const location = useLocation()
-  
+
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
   return (
-    <div className="bg-slate-50 min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col gradient-mesh-bg">
       <Header />
-      
       <main className="flex-1 pb-20 md:pb-8">
         <div className="container mx-auto px-4 py-6 md:py-8">
           <Routes>
@@ -28,7 +27,6 @@ function App() {
           </Routes>
         </div>
       </main>
-
       <Toaster />
     </div>
   )
