@@ -135,7 +135,7 @@ const AdminPage = () => {
       const isFirst = index === 0;
       const isLast = index === filteredArray.length - 1;
       return [
-        <li key={category.id} className='ios-card flex justify-between items-center p-4 mb-2'
+        <li key={category.id} className='ios-card flex justify-between items-center p-4 mb-2 group'
           style={{ marginLeft: `${level * 1.5}rem`}}>
           <div className="flex items-center flex-grow gap-3 min-w-0">
             <GripVertical className="h-5 w-5 text-white/30 shrink-0" />
@@ -150,7 +150,7 @@ const AdminPage = () => {
             ) : <div className="w-9"></div>}
             <span className="font-semibold text-white truncate group-hover:text-emerald-300 transition-colors">{category.name}</span>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex gap-1 transition-opacity">
             <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst}
               className="h-9 w-9 text-white/40 hover:text-emerald-400 hover:bg-white/10 rounded-lg"><ArrowUp size={16} /></Button>
             <Button variant="ghost" size="icon" onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast}
@@ -178,7 +178,7 @@ const AdminPage = () => {
         <div className="orb orb-teal w-64 h-64 bottom-40 right-10" style={{ animationDelay: '-2s' }} />
       </div>
 
-      <div className="relative z-10 max-w-5xl mx-auto space-y-8 py-6 px-4 animate-in fade-in duration-500">
+      <div className="relative z-10 w-full space-y-8 py-6 px-4 animate-in fade-in duration-500">
         <header className="text-center md:text-left space-y-3">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-white/70">
             <Settings2 className="w-4 h-4 text-emerald-400" />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Article, Category, Supplier } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,7 +38,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+interface ProposedArticle {
+  name: string;
+  articleNumber: string;
+  unit: string;
+  supplierName?: string;
+}
+
+interface ProposedCategory {
+  categoryName: string;
+  articles: ProposedArticle[];
+  subCategories: ProposedCategory[];
+}
+
 export interface NewArticleFormData {
+// ... (rest of the interface)
   name: string;
   articleNumber: string;
   unit: string;
@@ -83,6 +98,7 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [selectedArticleIds, setSelectedArticleIds] = useState(new Set<string>());
   const [itemsPendingDelete, setItemsPendingDelete] = useState<string[]>([]);
+  const [importPreview, setImportPreview] = useState<ProposedCategory[] | null>(null);
   const { toast } = useToast();
 
   const [isImportingPdf, setIsImportingPdf] = useState(false);
@@ -93,38 +109,114 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
     if (!file) return;
 
     setIsImportingPdf(true);
-    toast({ title: "KI Analyse gestartet", description: "PDF wird verarbeitet. Bitte warten..." });
+    toast({ title: "KI Analyse gestartet", description: "Datei wird lokal verarbeitet..." });
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error("Supabase URL nicht konfiguriert");
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      
+      if (!apiKey || apiKey.trim() === "") {
+        throw new Error("Gemini API Key nicht konfiguriert oder leer");
       }
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/analyze-pdf`, {
-        method: 'POST',
-        body: formData
+      const cleanApiKey = apiKey.trim();
+
+      // Datei in Base64 umwandeln
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Fehler beim Import");
+      const base64Data = await base64Promise;
 
-      if (data.result) {
-        await batchAddCatalog(data.result, allCategories, categoryId);
-        toast({ title: "Import erfolgreich", description: "Artikel & Kategorien wurden hinzugefügt." });
+      // Initialisierung mit der offiziellen Bibliothek
+      const genAI = new GoogleGenerativeAI(cleanApiKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+      const prompt = `
+        Du bist ein Experte für die Extraktion von Produktdaten aus Großhändler-Katalogen.
+        Analysiere die beigefügte Katalogseite.
+        Extrahiere alle Artikel. Gruppiere Variationen (z.B. verschiedene Größen eines Produkts) sinnvoll.
+        Die Ausgabe MUSS zwingend als gültiges JSON erfolgen:
+        {
+          "categoryName": "Name der Hauptkategorie",
+          "articles": [
+            {
+              "name": "Vollständiger Name inkl. Größe",
+              "articleNumber": "Artikelnummer",
+              "unit": "Stück/m/etc",
+              "supplierName": "Großhändler"
+            }
+          ],
+          "subCategories": []
+        }
+        Gib NUR das JSON zurück, keine Markdown-Formatierung.
+      `;
+
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
+        },
+        { text: prompt }
+      ]);
+
+      const response = await result.response;
+      const text = response.text();
+      
+      // JSON extrahieren (falls die KI doch Markdown-Boxen nutzt)
+      let jsonStr = text.trim();
+      if (jsonStr.includes('```')) {
+        jsonStr = jsonStr.replace(/```json|```/g, '').trim();
+      }
+
+      const data = JSON.parse(jsonStr);
+
+      if (data) {
+        const catalogArray = Array.isArray(data) ? data : [data];
+        setImportPreview(catalogArray);
+        toast({ title: "Analyse abgeschlossen", description: "Bitte prüfen Sie die erfassten Daten." });
       } else {
         throw new Error("Die KI hat keine gültigen Daten zurückgegeben.");
       }
     } catch (error: any) {
-      console.error(error);
+      console.error("KI Fehler:", error);
       toast({ title: "Import fehlgeschlagen", description: error.message || "Unbekannter Fehler.", variant: "destructive" });
     } finally {
       setIsImportingPdf(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    try {
+      await batchAddCatalog(importPreview as any, allCategories, categoryId);
+      setImportPreview(null);
+      toast({ title: "Import erfolgreich", description: "Artikel & Kategorien wurden hinzugefügt." });
+    } catch (error) {
+      toast({ title: "Fehler beim Speichern", variant: "destructive" });
+    }
+  };
+
+  const updatePreviewItem = (catIdx: number, artIdx: number, field: keyof ProposedArticle, value: string) => {
+    if (!importPreview) return;
+    const next = [...importPreview];
+    next[catIdx].articles[artIdx] = { ...next[catIdx].articles[artIdx], [field]: value };
+    setImportPreview(next);
+  };
+
+  const updatePreviewCategoryName = (catIdx: number, value: string) => {
+    if (!importPreview) return;
+    const next = [...importPreview];
+    next[catIdx] = { ...next[catIdx], categoryName: value };
+    setImportPreview(next);
   };
 
   const handleArticleFormSubmit = (e: React.FormEvent) => {
@@ -162,83 +254,165 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
           </DialogHeader>
 
           <div className="p-6 space-y-6">
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => { setEditingArticle(null); setArticleFormData({name:'', articleNumber:'', unit:''}); setIsArticleFormDialogOpen(true); }} className="btn-primary">
-                <PlusCircle className="mr-2 h-4 w-4" /> Artikel hinzufügen
-              </Button>
-              
-              <Button 
-                onClick={() => pdfInputRef.current?.click()} 
-                disabled={isImportingPdf}
-                variant="outline" 
-                className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
-              >
-                {isImportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
-                {isImportingPdf ? "Analysiere..." : "PDF Katalog einlesen (KI)"}
-              </Button>
-              <input 
-                  type="file" 
-                  ref={pdfInputRef} 
-                  onChange={handlePdfImport} 
-                  accept="application/pdf,image/*" 
-                  className="hidden" 
-              />
+            {!importPreview ? (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  <Button onClick={() => { setEditingArticle(null); setArticleFormData({name:'', articleNumber:'', unit:''}); setIsArticleFormDialogOpen(true); }} className="btn-primary">
+                    <PlusCircle className="mr-2 h-4 w-4" /> Artikel hinzufügen
+                  </Button>
+                  
+                  <Button 
+                    onClick={() => pdfInputRef.current?.click()} 
+                    disabled={isImportingPdf}
+                    variant="outline" 
+                    className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
+                  >
+                    {isImportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+                    {isImportingPdf ? "Analysiere..." : "PDF Katalog einlesen (KI)"}
+                  </Button>
+                  <input 
+                      type="file" 
+                      ref={pdfInputRef} 
+                      onChange={handlePdfImport} 
+                      accept="application/pdf,image/*" 
+                      className="hidden" 
+                  />
 
-              {selectedArticleIds.size > 0 && (
-                <Button variant="destructive" onClick={() => setItemsPendingDelete(Array.from(selectedArticleIds))} className="bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 rounded-xl">
-                    <Trash2 className="mr-2 h-4 w-4" /> ({selectedArticleIds.size}) Löschen
-                </Button>
-              )}
-            </div>
+                  {selectedArticleIds.size > 0 && (
+                    <Button variant="destructive" onClick={() => setItemsPendingDelete(Array.from(selectedArticleIds))} className="bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30 rounded-xl">
+                        <Trash2 className="mr-2 h-4 w-4" /> ({selectedArticleIds.size}) Löschen
+                    </Button>
+                  )}
+                </div>
 
-            <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.01]">
-              <ScrollArea className="h-[50vh]">
-                <Table>
-                    <TableHeader className="bg-white/[0.03] sticky top-0 z-10">
-                        <TableRow className="border-white/5 hover:bg-transparent">
-                            <TableHead className="w-12 text-center">
-                                <Checkbox 
-                                    checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} 
-                                    onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}
-                                />
-                            </TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Nummer</TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Einheit</TableHead>
-                            <TableHead className="text-right text-white/40 font-bold uppercase text-[10px] tracking-wider">Aktionen</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {initialArticles.map(article => (
-                            <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] transition-colors group">
-                                <TableCell className="text-center">
+                <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.01]">
+                  <ScrollArea className="h-[50vh]">
+                    <Table>
+                        <TableHeader className="bg-white/[0.03] sticky top-0 z-10">
+                            <TableRow className="border-white/5 hover:bg-transparent">
+                                <TableHead className="w-12 text-center">
                                     <Checkbox 
-                                        checked={selectedArticleIds.has(article.id)} 
-                                        onCheckedChange={(checked) => {
-                                            const next = new Set(selectedArticleIds);
-                                            if (checked) next.add(article.id); else next.delete(article.id);
-                                            setSelectedArticleIds(next);
-                                        }}
+                                        checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} 
+                                        onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}
                                     />
-                                </TableCell>
-                                <TableCell className="font-bold text-white/80 group-hover:text-emerald-300 transition-colors">{article.name}</TableCell>
-                                <TableCell><Badge variant="outline" className="font-mono text-[10px] bg-white/5 border-white/10 text-white/60">{article.articleNumber}</Badge></TableCell>
-                                <TableCell className="text-white/40 text-xs font-medium uppercase">{article.unit}</TableCell>
-                                <TableCell className="text-right">
-                                    <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(article)} className="h-8 w-8 text-white/50 hover:text-blue-400 hover:bg-blue-500/10"><Edit3 size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/50 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={14}/></Button>
-                                    </div>
-                                </TableCell>
+                                </TableHead>
+                                <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
+                                <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Nummer</TableHead>
+                                <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Einheit</TableHead>
+                                <TableHead className="text-right text-white/40 font-bold uppercase text-[10px] tracking-wider">Aktionen</TableHead>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-                {initialArticles.length === 0 && (
-                    <div className="py-20 text-center text-white/50 font-medium">Keine Artikel in dieser Kategorie.</div>
-                )}
-              </ScrollArea>
-            </div>
+                        </TableHeader>
+                        <TableBody>
+                            {initialArticles.map(article => (
+                                <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] transition-colors group">
+                                    <TableCell className="text-center">
+                                        <Checkbox 
+                                            checked={selectedArticleIds.has(article.id)} 
+                                            onCheckedChange={(checked) => {
+                                                const next = new Set(selectedArticleIds);
+                                                if (checked) next.add(article.id); else next.delete(article.id);
+                                                setSelectedArticleIds(next);
+                                            }}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="font-bold text-white/80 group-hover:text-emerald-300 transition-colors">{article.name}</TableCell>
+                                    <TableCell><Badge variant="outline" className="font-mono text-[10px] bg-white/5 border-white/10 text-white/60">{article.articleNumber}</Badge></TableCell>
+                                    <TableCell className="text-white/40 text-xs font-medium uppercase">{article.unit}</TableCell>
+                                    <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(article)} className="h-8 w-8 text-white/50 hover:text-blue-400 hover:bg-blue-500/10"><Edit3 size={14}/></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/50 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={14}/></Button>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {initialArticles.length === 0 && (
+                        <div className="py-20 text-center text-white/50 font-medium">Keine Artikel in dieser Kategorie.</div>
+                    )}
+                  </ScrollArea>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                      <FileUp className="text-emerald-400" size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-emerald-400">KI Vorschau</h3>
+                      <p className="text-white/40 text-xs">Bitte prüfen und korrigieren Sie die Daten vor dem Speichern.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" onClick={() => setImportPreview(null)} className="text-white/50 hover:text-white hover:bg-white/10 rounded-xl">Abbrechen</Button>
+                    <Button onClick={handleConfirmImport} className="btn-primary">Alles Speichern</Button>
+                  </div>
+                </div>
+
+                <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.01]">
+                  <ScrollArea className="h-[55vh]">
+                    <div className="p-4 space-y-8">
+                      {importPreview.map((category, catIdx) => (
+                        <div key={catIdx} className="space-y-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
+                          <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+                            <LayoutGrid size={18} className="text-emerald-400 shrink-0" />
+                            <div className="flex-1 space-y-1">
+                              <Label className="text-[10px] uppercase text-white/30 font-bold ml-1">Kategorie Name</Label>
+                              <input 
+                                value={category.categoryName} 
+                                onChange={(e) => updatePreviewCategoryName(catIdx, e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:border-emerald-400/50 outline-none transition-colors"
+                                placeholder="Name der Kategorie..."
+                              />
+                            </div>
+                          </div>
+                          
+                          <Table>
+                            <TableHeader className="bg-transparent">
+                              <TableRow className="border-none hover:bg-transparent">
+                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1">Bezeichnung</TableHead>
+                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-32">Nummer</TableHead>
+                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-24">Einheit</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {category.articles.map((article, artIdx) => (
+                                <TableRow key={artIdx} className="border-white/5 hover:bg-white/[0.02]">
+                                  <TableCell className="p-1">
+                                    <input 
+                                      value={article.name} 
+                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'name', e.target.value)}
+                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500/50 outline-none transition-colors"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="p-1">
+                                    <input 
+                                      value={article.articleNumber} 
+                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'articleNumber', e.target.value)}
+                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-colors"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="p-1">
+                                    <input 
+                                      value={article.unit} 
+                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'unit', e.target.value)}
+                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/60 focus:border-emerald-500/50 outline-none transition-colors"
+                                    />
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="p-6 bg-white/[0.02] border-t border-white/5">

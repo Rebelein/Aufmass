@@ -18,7 +18,7 @@ function App() {
     <div className="min-h-screen flex flex-col gradient-mesh-bg">
       <Header />
       <main className="flex-1 pb-20 md:pb-8">
-        <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="w-full py-6 md:py-8">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/projects" element={<ProjectsPage />} />
