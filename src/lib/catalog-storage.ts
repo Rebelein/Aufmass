@@ -165,6 +165,7 @@ export async function getArticlesList(): Promise<Article[]> {
 
   return (data as any[]).map(art => ({
     ...art,
+    articleNumber: art.article_number,
     categoryId: art.category_id,
     supplierId: art.supplier_id,
     categoryName: art.categories?.name || '',
@@ -267,7 +268,8 @@ export async function addAliasToArticle(articleId: string, newAlias: string): Pr
 export async function batchAddCatalog(
   catalogData: ProposedCategory[],
   existingCategories: Category[],
-  rootParentId: string | null = null
+  rootParentId: string | null = null,
+  defaultSupplierId: string | null = null
 ): Promise<boolean> {
     
     const processCategory = async (category: ProposedCategory, parentId: string | null, order: number) => {
@@ -286,6 +288,7 @@ export async function batchAddCatalog(
         article_number: art.articleNumber,
         unit: art.unit,
         category_id: newCat.id,
+        supplier_id: defaultSupplierId,
         order: idx
       }));
 

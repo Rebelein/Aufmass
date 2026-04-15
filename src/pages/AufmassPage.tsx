@@ -29,6 +29,7 @@ const AufmassPage = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [sheetViewCategoryId, setSheetViewCategoryId] = useState<string | null>(null);
   const [favoriteCategories, setFavoriteCategories] = useState<Set<string>>(new Set());
   const [recentCategories, setRecentCategories] = useState<string[]>([]);
   const { toast } = useToast();
@@ -67,10 +68,21 @@ const AufmassPage = () => {
 
   const selectedCategory = useMemo(() => categories.find(c => c.id === selectedCategoryId), [categories, selectedCategoryId]);
 
-  const filteredArticles = useMemo(() => {
+const filteredArticles = useMemo(() => {
     if (!selectedCategoryId) return [];
+    
+    // Check if selected category has subcategories
+    const subcategories = categories.filter(cat => cat.parentId === selectedCategoryId);
+    
+    // If it has subcategories, show articles from those subcategories
+    if (subcategories.length > 0) {
+        const subcategoryIds = subcategories.map(subcat => subcat.id);
+        return articlesData.filter((article) => subcategoryIds.includes(article.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    }
+    
+    // Otherwise show articles directly in this category
     return articlesData.filter((article) => article.categoryId === selectedCategoryId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [articlesData, selectedCategoryId]);
+}, [articlesData, selectedCategoryId]);
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
@@ -137,7 +149,11 @@ const AufmassPage = () => {
     } catch (error) { console.error("PDF error:", error); }
   };
 
-  const handleSelectCategory = (categoryId: string) => { setSelectedCategoryId(categoryId); setIsCategorySheetOpen(false); };
+  const handleSelectCategory = (categoryId: string) => { 
+    setSelectedCategoryId(categoryId); 
+    setIsCategorySheetOpen(false); 
+    setSheetViewCategoryId(null);
+  };
 
   const toggleFavorite = (categoryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -194,67 +210,122 @@ const AufmassPage = () => {
                   <ChevronRight size={16} className="text-white/50" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-white/10 bg-slate-900/95 backdrop-blur-xl">
-                <SheetHeader className="px-6 pb-4">
-                  <SheetTitle className="text-left text-xl text-gradient-emerald">Kategorien</SheetTitle>
+              <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+                <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+                  <div className="flex items-center gap-3">
+                    {sheetViewCategoryId && (
+                      <button onClick={() => {
+                        const parent = categories.find(c => c.id === sheetViewCategoryId)?.parentId;
+                        setSheetViewCategoryId(parent || null);
+                      }} className="p-2 -ml-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all">
+                        <ChevronLeft size={20} />
+                      </button>
+                    )}
+                    <SheetTitle className="text-left text-xl text-gradient-emerald">
+                      {sheetViewCategoryId ? categories.find(c => c.id === sheetViewCategoryId)?.name : 'Kategorien'}
+                    </SheetTitle>
+                  </div>
                 </SheetHeader>
-                <div className="overflow-y-auto px-6 pb-6 space-y-6">
-                  {/* Favorites */}
-                  {favoriteCategoriesList.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <Star size={14} className="text-amber-400" /> Favoriten
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2">
-                        {favoriteCategoriesList.map(category => (
-                          <button key={category.id} onClick={() => handleSelectCategory(category.id)}
-                            className={cn("p-4 rounded-xl border text-left transition-all",
-                              selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
-                            <span className="font-medium text-white">{category.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="overflow-y-auto p-6 flex-1 space-y-6">
+{/* Favorites */}
+                   {!sheetViewCategoryId && favoriteCategoriesList.length > 0 && (
+                     <div>
+                       <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3 flex items-center gap-2">
+                         <Star size={14} className="text-amber-400" /> Favoriten
+                       </h3>
+                       <div className="grid grid-cols-2 gap-2">
+                         {favoriteCategoriesList.map(category => {
+                           const subcategories = categories.filter(cat => cat.parentId === category.id);
+                           const hasSubcategories = subcategories.length > 0;
+                           return (
+                           <div key={category.id} className="relative">
+                             <button onClick={() => {
+                               if (hasSubcategories) {
+                                 setSheetViewCategoryId(category.id);
+                               } else {
+                                 handleSelectCategory(category.id);
+                               }
+                             }}
+                               className={cn("p-4 rounded-xl border text-left transition-all w-full",
+                                 selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
+                               <span className="font-medium text-white">{category.name}</span>
+                             </button>
+                             <button onClick={(e) => {
+                                   e.stopPropagation();
+                                   toggleFavorite(category.id, e);
+                                 }}
+                                 className={cn("absolute top-3 right-3 p-1 rounded-full", favoriteCategories.has(category.id) ? "text-amber-400" : "text-white/30 hover:text-amber-400")}>
+                                 <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
+                               </button>
+                           </div>
+                           );
+                         })}
+                       </div>
+                     </div>
+                   )}
 
                   {/* Recent */}
-                  {recentCategories.length > 0 && (
+                  {!sheetViewCategoryId && recentCategories.length > 0 && (
                     <div>
                       <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Zuletzt verwendet</h3>
                       <div className="flex flex-wrap gap-2">
-                        {recentCategories.map(catId => {
-                          const cat = categories.find(c => c.id === catId);
-                          return cat ? (
-                            <button key={cat.id} onClick={() => handleSelectCategory(cat.id)}
-                              className="px-4 py-2 rounded-full bg-white/10 text-white/70 text-sm font-medium hover:bg-white/20">
-                              {cat.name}
-                            </button>
-                          ) : null;
-                        })}
+{recentCategories.map(catId => {
+  const cat = categories.find(c => c.id === catId);
+  return cat ? (
+    <div key={cat.id} onClick={() => {
+      const subs = categories.filter(c => c.parentId === cat.id);
+      if (subs.length > 0) setSheetViewCategoryId(cat.id);
+      else handleSelectCategory(cat.id);
+    }}
+      className="px-4 py-2 rounded-full bg-white/10 text-white/70 text-sm font-medium hover:bg-white/20 cursor-pointer">
+      {cat.name}
+    </div>
+  ) : null;
+})}
                       </div>
                     </div>
                   )}
 
-                  {/* All Categories */}
-                  <div>
-                    <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Alle Kategorien</h3>
-                    <div className="grid grid-cols-2 gap-2">
-                      {topLevelCategories.map(category => (
-                        <button key={category.id} onClick={() => handleSelectCategory(category.id)}
-                          className={cn("p-4 rounded-xl border text-left transition-all relative",
-                            selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-white">{category.name}</span>
-                            <button onClick={(e) => toggleFavorite(category.id, e)}
-                              className={cn("p-1 rounded-full", favoriteCategories.has(category.id) ? "text-amber-400" : "text-white/30 hover:text-amber-400")}>
-                              <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
-                            </button>
-                          </div>
-                          {selectedCategoryId === category.id && <Check size={16} className="absolute top-2 right-2 text-emerald-400" />}
-                        </button>
-                      ))}
+{/* Categories List */}
+                    <div>
+                      <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
+                        {sheetViewCategoryId ? 'Unterkategorien' : 'Alle Kategorien'}
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(sheetViewCategoryId ? categories.filter(c => c.parentId === sheetViewCategoryId).sort((a,b)=>(a.order??0)-(b.order??0)) : topLevelCategories).map(category => {
+                          const subcategories = categories.filter(cat => cat.parentId === category.id);
+                          const hasSubcategories = subcategories.length > 0;
+                          
+                          return (
+                            <div key={category.id} className="relative">
+                              <button onClick={() => {
+                                    if (hasSubcategories) {
+                                      setSheetViewCategoryId(category.id);
+                                    } else {
+                                      handleSelectCategory(category.id);
+                                    }
+                                  }}
+                                className={cn("p-4 rounded-xl border text-left transition-all relative w-full",
+                                  selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium text-white">{category.name}</span>
+                                  {hasSubcategories && (
+                                    <ChevronRight size={14} className="text-white/40" />
+                                  )}
+                                </div>
+                              </button>
+                              <button onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(category.id, e);
+                                }}
+                                className={cn("absolute top-3 right-3 p-1 rounded-full", favoriteCategories.has(category.id) ? "text-amber-400" : "text-white/30 hover:text-amber-400")}>
+                                <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
                 </div>
               </SheetContent>
             </Sheet>
@@ -326,7 +397,9 @@ function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDe
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-white leading-tight line-clamp-2">{article.name}</h3>
-            <p className="text-xs text-white/40 font-mono mt-1">{article.articleNumber}</p>
+            {article.articleNumber && (
+               <p className="text-xs text-white/40 font-mono mt-1">Art.-Nr: {article.articleNumber}</p>
+            )}
           </div>
           {quantityInProject > 0 && (
             <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg">

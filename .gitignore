@@ -42,6 +42,7 @@ next-env.d.ts
 
 # firebase
 firebase-debug.log
-firestore-debug.logdist/
+firestore-debug.log
+dist/
 vite_dev.log
 supabase/.temp/

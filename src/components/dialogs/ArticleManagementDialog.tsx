@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PlusCircle, GripVertical, Edit3, Trash2, LayoutGrid, PackagePlus, Store, X, ChevronLeft, ChevronRight, FileUp, Loader2 } from 'lucide-react';
+import { PlusCircle, GripVertical, Edit3, Trash2, LayoutGrid, PackagePlus, Store, X, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, FileUp, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -99,6 +99,8 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
   const [selectedArticleIds, setSelectedArticleIds] = useState(new Set<string>());
   const [itemsPendingDelete, setItemsPendingDelete] = useState<string[]>([]);
   const [importPreview, setImportPreview] = useState<ProposedCategory[] | null>(null);
+  const [isSyncEditing, setIsSyncEditing] = useState(true);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('none');
   const { toast } = useToast();
 
   const [isImportingPdf, setIsImportingPdf] = useState(false);
@@ -138,23 +140,43 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
       const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
       const prompt = `
-        Du bist ein Experte für die Extraktion von Produktdaten aus Großhändler-Katalogen.
-        Analysiere die beigefügte Katalogseite.
-        Extrahiere alle Artikel. Gruppiere Variationen (z.B. verschiedene Größen eines Produkts) sinnvoll.
-        Die Ausgabe MUSS zwingend als gültiges JSON erfolgen:
-        {
-          "categoryName": "Name der Hauptkategorie",
-          "articles": [
-            {
-              "name": "Vollständiger Name inkl. Größe",
-              "articleNumber": "Artikelnummer",
-              "unit": "Stück/m/etc",
-              "supplierName": "Großhändler"
-            }
-          ],
-          "subCategories": []
-        }
-        Gib NUR das JSON zurück, keine Markdown-Formatierung.
+        Du bist ein Experte für die präzise Extraktion von Produktdaten aus technischen Großhändler-Katalogen.
+        Analysiere die beigefügte Katalogseite mit höchster Sorgfalt.
+        
+        STRENGE REGELN FÜR DIE STRUKTUR:
+        1. Die Seite enthält verschiedene Produktgruppen/Bauformen (z.B. "Bogen 90°", "Bogen 45°").
+        2. Erstelle für JEDE Bauform eine eigene Kategorie.
+        3. Ignoriere die allgemeine Seitenüberschrift (z.B. "Formteile Mapress C-Stahl"), da diese bereits vom Nutzer festgelegt wurde.
+        4. Der Name der Kategorie ist exakt die Überschrift der jeweiligen Tabelle (z.B. "Bogen 90°").
+        5. Innerhalb dieser Kategorie ist JEDE Tabellenzeile ein Artikel.
+        6. Der Artikelname setzt sich aus der Gruppenüberschrift und der Dimension zusammen (z.B. "Bogen 90° - 15 mm").
+        
+        FORMATIERUNG:
+        Die Ausgabe MUSS zwingend als JSON-Array erfolgen:
+        [
+           {
+             "categoryName": "Bogen 90°",
+             "articles": [
+               {
+                 "name": "Bogen 90° - 12 mm",
+                 "articleNumber": "MMVB12",
+                 "unit": "Stück"
+               },
+               ...
+             ],
+             "subCategories": []
+           },
+           {
+             "categoryName": "Bogen 45°",
+             "articles": [ ... ],
+             "subCategories": []
+           }
+        ]
+        
+        WICHTIG:
+        - Die höchste Ebene der JSON-Antwort muss ein Array [] sein.
+        - Extrahiere ALLE Zeilen jeder Tabelle.
+        - Gib NUR das reine JSON-Array zurück, keine Markdown-Formatierung.
       `;
 
       const result = await model.generateContent([
@@ -197,7 +219,8 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
   const handleConfirmImport = async () => {
     if (!importPreview) return;
     try {
-      await batchAddCatalog(importPreview as any, allCategories, categoryId);
+      const supplierId = selectedSupplierId !== 'none' ? selectedSupplierId : null;
+      await batchAddCatalog(importPreview as any, allCategories, categoryId, supplierId);
       setImportPreview(null);
       toast({ title: "Import erfolgreich", description: "Artikel & Kategorien wurden hinzugefügt." });
     } catch (error) {
@@ -205,18 +228,183 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
     }
   };
 
-  const updatePreviewItem = (catIdx: number, artIdx: number, field: keyof ProposedArticle, value: string) => {
+  const updatePreviewItem = (catIdx: number, subCatIdx: number | null, artIdx: number, field: keyof ProposedArticle, value: string) => {
     if (!importPreview) return;
-    const next = [...importPreview];
-    next[catIdx].articles[artIdx] = { ...next[catIdx].articles[artIdx], [field]: value };
+    const next = JSON.parse(JSON.stringify(importPreview)) as ProposedCategory[];
+    
+    if (field === 'name' && isSyncEditing) {
+        let currentArticles = subCatIdx === null 
+            ? next[catIdx].articles 
+            : next[catIdx].subCategories[subCatIdx].articles;
+            
+        const oldStr = currentArticles[artIdx].name || '';
+        const newStr = value || '';
+        
+        let start = 0;
+        while (start < oldStr.length && start < newStr.length && oldStr[start] === newStr[start]) start++;
+        let oldEnd = oldStr.length - 1;
+        let newEnd = newStr.length - 1;
+        while (oldEnd >= start && newEnd >= start && oldStr[oldEnd] === newStr[newEnd]) { oldEnd--; newEnd--; }
+        
+        const removed = oldStr.substring(start, oldEnd + 1);
+        const added = newStr.substring(start, newEnd + 1);
+        
+        currentArticles.forEach((art, i) => {
+            if (i === artIdx) {
+                art.name = newStr;
+            } else {
+                const oName = art.name || '';
+                if (oName.length >= start && oName.substring(start, start + removed.length) === removed) {
+                    art.name = oName.substring(0, start) + added + oName.substring(start + removed.length);
+                }
+            }
+        });
+    } else {
+        if (subCatIdx === null) {
+          next[catIdx].articles[artIdx][field] = value;
+        } else {
+          next[catIdx].subCategories[subCatIdx].articles[artIdx][field] = value;
+        }
+    }
+    
     setImportPreview(next);
   };
 
-  const updatePreviewCategoryName = (catIdx: number, value: string) => {
+  const updatePreviewCategoryName = (catIdx: number, subCatIdx: number | null, value: string) => {
     if (!importPreview) return;
-    const next = [...importPreview];
-    next[catIdx] = { ...next[catIdx], categoryName: value };
+    const next = JSON.parse(JSON.stringify(importPreview)) as ProposedCategory[];
+    if (subCatIdx === null) {
+      next[catIdx].categoryName = value;
+    } else {
+      next[catIdx].subCategories[subCatIdx].categoryName = value;
+    }
     setImportPreview(next);
+  };
+
+  const removePreviewItem = (catIdx: number, subCatIdx: number | null, artIdx: number) => {
+    if (!importPreview) return;
+    const next = JSON.parse(JSON.stringify(importPreview)) as ProposedCategory[];
+    if (subCatIdx === null) {
+      next[catIdx].articles.splice(artIdx, 1);
+    } else {
+      next[catIdx].subCategories[subCatIdx].articles.splice(artIdx, 1);
+    }
+    setImportPreview(next);
+  };
+
+  const removePreviewCategory = (catIdx: number, subCatIdx: number | null) => {
+    if (!importPreview) return;
+    const next = JSON.parse(JSON.stringify(importPreview)) as ProposedCategory[];
+    if (subCatIdx === null) {
+      next.splice(catIdx, 1);
+      if (next.length === 0) {
+        setImportPreview(null);
+        return;
+      }
+    } else {
+      next[catIdx].subCategories.splice(subCatIdx, 1);
+    }
+    setImportPreview(next);
+  };
+
+  const movePreviewItem = (catIdx: number, subCatIdx: number | null, artIdx: number, direction: 'up' | 'down') => {
+    if (!importPreview) return;
+    const next = JSON.parse(JSON.stringify(importPreview)) as ProposedCategory[];
+    const list = subCatIdx === null ? next[catIdx].articles : next[catIdx].subCategories[subCatIdx].articles;
+    
+    if (direction === 'up' && artIdx > 0) {
+      const temp = list[artIdx];
+      list[artIdx] = list[artIdx - 1];
+      list[artIdx - 1] = temp;
+    } else if (direction === 'down' && artIdx < list.length - 1) {
+      const temp = list[artIdx];
+      list[artIdx] = list[artIdx + 1];
+      list[artIdx + 1] = temp;
+    }
+    setImportPreview(next);
+  };
+
+  const renderPreviewCategory = (category: ProposedCategory, catIdx: number, subCatIdx: number | null = null) => {
+    return (
+      <div key={subCatIdx !== null ? `${catIdx}-${subCatIdx}` : catIdx} className="space-y-4 bg-white/[0.02] p-4 rounded-xl border border-white/5 mb-6">
+        <div className="flex items-center gap-3 border-b border-white/5 pb-3">
+          <LayoutGrid size={18} className="text-emerald-400 shrink-0" />
+          <div className="flex-1 space-y-1">
+            <Label className="text-[10px] uppercase text-white/30 font-bold ml-1">
+              {subCatIdx !== null ? 'Unterkategorie' : 'Hauptkategorie'} Name
+            </Label>
+            <input 
+              value={category.categoryName} 
+              onChange={(e) => updatePreviewCategoryName(catIdx, subCatIdx, e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:border-emerald-400/50 outline-none transition-colors"
+              placeholder="Name..."
+            />
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => removePreviewCategory(catIdx, subCatIdx)} className="h-8 w-8 text-white/30 hover:text-red-400 hover:bg-red-500/10 shrink-0 rounded-lg">
+            <Trash2 size={16} />
+          </Button>
+        </div>
+        
+        {category.articles.length > 0 && (
+          <Table>
+            <TableHeader className="bg-transparent">
+              <TableRow className="border-none hover:bg-transparent">
+                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1">Bezeichnung</TableHead>
+                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-32">Nummer</TableHead>
+                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-24">Einheit</TableHead>
+                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-16 text-center">Aktionen</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {category.articles.map((article, artIdx) => (
+                <TableRow key={artIdx} className="border-white/5 hover:bg-white/[0.02]">
+                  <TableCell className="p-1">
+                    <input 
+                      value={article.name} 
+                      onChange={(e) => updatePreviewItem(catIdx, subCatIdx, artIdx, 'name', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500/50 outline-none transition-colors"
+                    />
+                  </TableCell>
+                  <TableCell className="p-1">
+                    <input 
+                      value={article.articleNumber} 
+                      onChange={(e) => updatePreviewItem(catIdx, subCatIdx, artIdx, 'articleNumber', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-colors"
+                    />
+                  </TableCell>
+                  <TableCell className="p-1">
+                    <input 
+                      value={article.unit} 
+                      onChange={(e) => updatePreviewItem(catIdx, subCatIdx, artIdx, 'unit', e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/60 focus:border-emerald-500/50 outline-none transition-colors"
+                    />
+                  </TableCell>
+                  <TableCell className="p-1 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => movePreviewItem(catIdx, subCatIdx, artIdx, 'up')} disabled={artIdx === 0} className="h-6 w-6 text-white/30 hover:text-white disabled:opacity-30 rounded-md">
+                        <ChevronUp size={14} />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => movePreviewItem(catIdx, subCatIdx, artIdx, 'down')} disabled={artIdx === category.articles.length - 1} className="h-6 w-6 text-white/30 hover:text-white disabled:opacity-30 rounded-md">
+                        <ChevronDown size={14} />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => removePreviewItem(catIdx, subCatIdx, artIdx)} className="h-6 w-6 text-white/30 hover:text-red-400 hover:bg-red-500/10 rounded-md">
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        {category.subCategories && category.subCategories.length > 0 && (
+          <div className="pl-6 border-l border-white/5 space-y-4 mt-4">
+            {category.subCategories.map((sub, sIdx) => renderPreviewCategory(sub, catIdx, sIdx))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleArticleFormSubmit = (e: React.FormEvent) => {
@@ -256,20 +444,32 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
           <div className="p-6 space-y-6">
             {!importPreview ? (
               <>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Button onClick={() => { setEditingArticle(null); setArticleFormData({name:'', articleNumber:'', unit:''}); setIsArticleFormDialogOpen(true); }} className="btn-primary">
                     <PlusCircle className="mr-2 h-4 w-4" /> Artikel hinzufügen
                   </Button>
                   
-                  <Button 
-                    onClick={() => pdfInputRef.current?.click()} 
-                    disabled={isImportingPdf}
-                    variant="outline" 
-                    className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
-                  >
-                    {isImportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
-                    {isImportingPdf ? "Analysiere..." : "PDF Katalog einlesen (KI)"}
-                  </Button>
+                  <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10">
+                    <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+                      <SelectTrigger className="w-[200px] border-none bg-transparent text-white focus:ring-0 focus:ring-offset-0 h-9">
+                        <SelectValue placeholder="Großhändler (Optional)" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/10 text-white">
+                        <SelectItem value="none" className="text-white/50">Kein Großhändler</SelectItem>
+                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <div className="w-[1px] h-6 bg-white/10"></div>
+                    <Button 
+                      onClick={() => pdfInputRef.current?.click()} 
+                      disabled={isImportingPdf}
+                      variant="ghost" 
+                      className="hover:bg-white/10 text-emerald-400 hover:text-emerald-300 rounded-lg h-9 px-3"
+                    >
+                      {isImportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="mr-2 h-4 w-4" />}
+                      {isImportingPdf ? "Analysiere..." : "PDF Katalog (KI)"}
+                    </Button>
+                  </div>
                   <input 
                       type="file" 
                       ref={pdfInputRef} 
@@ -336,17 +536,28 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
               </>
             ) : (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
                       <FileUp className="text-emerald-400" size={20} />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-emerald-400">KI Vorschau</h3>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-emerald-400 leading-none">KI Vorschau</h3>
                       <p className="text-white/40 text-xs">Bitte prüfen und korrigieren Sie die Daten vor dem Speichern.</p>
+                      <div className="flex items-center gap-2 pt-1">
+                         <Checkbox 
+                           id="sync-edit" 
+                           checked={isSyncEditing} 
+                           onCheckedChange={(checked) => setIsSyncEditing(checked as boolean)}
+                           className="h-3 w-3 border-emerald-500/50 data-[state=checked]:bg-emerald-500 data-[state=checked]:text-white"
+                         />
+                         <Label htmlFor="sync-edit" className="text-[10px] text-emerald-400/80 cursor-pointer">
+                           Synchrones Bearbeiten (Textänderungen auf alle Artikel der Gruppe anwenden)
+                         </Label>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 shrink-0">
                     <Button variant="ghost" onClick={() => setImportPreview(null)} className="text-white/50 hover:text-white hover:bg-white/10 rounded-xl">Abbrechen</Button>
                     <Button onClick={handleConfirmImport} className="btn-primary">Alles Speichern</Button>
                   </div>
@@ -355,59 +566,7 @@ const ArticleManagementDialog: React.FC<ArticleManagementDialogProps> = ({
                 <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.01]">
                   <ScrollArea className="h-[55vh]">
                     <div className="p-4 space-y-8">
-                      {importPreview.map((category, catIdx) => (
-                        <div key={catIdx} className="space-y-4 bg-white/[0.02] p-4 rounded-xl border border-white/5">
-                          <div className="flex items-center gap-3 border-b border-white/5 pb-3">
-                            <LayoutGrid size={18} className="text-emerald-400 shrink-0" />
-                            <div className="flex-1 space-y-1">
-                              <Label className="text-[10px] uppercase text-white/30 font-bold ml-1">Kategorie Name</Label>
-                              <input 
-                                value={category.categoryName} 
-                                onChange={(e) => updatePreviewCategoryName(catIdx, e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:border-emerald-400/50 outline-none transition-colors"
-                                placeholder="Name der Kategorie..."
-                              />
-                            </div>
-                          </div>
-                          
-                          <Table>
-                            <TableHeader className="bg-transparent">
-                              <TableRow className="border-none hover:bg-transparent">
-                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1">Bezeichnung</TableHead>
-                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-32">Nummer</TableHead>
-                                <TableHead className="text-[10px] uppercase text-white/30 font-bold p-1 w-24">Einheit</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {category.articles.map((article, artIdx) => (
-                                <TableRow key={artIdx} className="border-white/5 hover:bg-white/[0.02]">
-                                  <TableCell className="p-1">
-                                    <input 
-                                      value={article.name} 
-                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'name', e.target.value)}
-                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-emerald-500/50 outline-none transition-colors"
-                                    />
-                                  </TableCell>
-                                  <TableCell className="p-1">
-                                    <input 
-                                      value={article.articleNumber} 
-                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'articleNumber', e.target.value)}
-                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-colors"
-                                    />
-                                  </TableCell>
-                                  <TableCell className="p-1">
-                                    <input 
-                                      value={article.unit} 
-                                      onChange={(e) => updatePreviewItem(catIdx, artIdx, 'unit', e.target.value)}
-                                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/60 focus:border-emerald-500/50 outline-none transition-colors"
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ))}
+                      {importPreview.map((category, catIdx) => renderPreviewCategory(category, catIdx))}
                     </div>
                   </ScrollArea>
                 </div>
