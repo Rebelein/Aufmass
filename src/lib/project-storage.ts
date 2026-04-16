@@ -1,20 +1,28 @@
 import { supabase } from './supabase';
 
+export interface ProjectSection {
+  id: string;
+  project_id: string;
+  name: string; // stored in the 'text' column
+  order: number;
+}
+
 export interface ProjectSelectedItem {
-  id: string; // Supabase UUID
+  id: string;
   project_id: string;
   type: 'article' | 'section';
-  order: number; 
-  
+  order: number;
+  section_id?: string | null;
+
   // For catalog articles
-  article_id?: string; 
-  
+  article_id?: string | null;
+
   // For all articles
   quantity?: number;
 
   // For sections
   text?: string;
-  
+
   // For manual articles
   name?: string;
   article_number?: string;
@@ -23,7 +31,7 @@ export interface ProjectSelectedItem {
 }
 
 export interface Project {
-  id: string; // UUID from Supabase
+  id: string;
   name: string;
   selectedItems: ProjectSelectedItem[];
   created_at: string;
@@ -32,10 +40,6 @@ export interface Project {
 
 const CURRENT_PROJECT_ID_KEY = 'catalogAppCurrentProjectId';
 
-/**
- * Fetches all projects from Supabase.
- * Real-time updates can be added via supabase.channel if needed.
- */
 export async function getProjects(): Promise<Project[]> {
   const { data, error } = await supabase
     .from('projects')
@@ -43,15 +47,12 @@ export async function getProjects(): Promise<Project[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error("Error fetching projects from Supabase:", error);
+    console.error('Error fetching projects from Supabase:', error);
     return [];
   }
-  return data as Project[];
+  return (data as Project[]).map(p => ({ ...p, selectedItems: [] }));
 }
 
-/**
- * Subscribes to projects for real-time updates.
- */
 export function subscribeToProjects(callback: (projects: Project[]) => void) {
   const channel = supabase
     .channel('public:projects')
@@ -61,12 +62,8 @@ export function subscribeToProjects(callback: (projects: Project[]) => void) {
     })
     .subscribe();
 
-  // Initial fetch
   getProjects().then(callback);
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  return () => { supabase.removeChannel(channel); };
 }
 
 export function getCurrentProjectId(): string | null {
@@ -86,7 +83,6 @@ export function setCurrentProjectId(projectId: string | null): void {
 export async function getProjectById(projectId: string): Promise<Project | undefined> {
   if (!projectId) return undefined;
 
-  // Fetch project AND its items in one go
   const { data, error } = await supabase
     .from('projects')
     .select('*, project_items(*)')
@@ -94,13 +90,15 @@ export async function getProjectById(projectId: string): Promise<Project | undef
     .single();
 
   if (error) {
-    console.error("Fehler beim Abrufen des Projekts:", error);
+    console.error('Fehler beim Abrufen des Projekts:', error);
     return undefined;
   }
 
   return {
     ...data,
-    selectedItems: (data.project_items || []).sort((a: any, b: any) => a.order - b.order)
+    selectedItems: ((data.project_items as ProjectSelectedItem[]) || []).sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0)
+    ),
   } as Project;
 }
 
@@ -112,7 +110,7 @@ export async function addProjectToSupabase(projectName: string): Promise<Project
     .single();
 
   if (error) {
-    console.error("Projekt konnte nicht erstellt werden:", error);
+    console.error('Projekt konnte nicht erstellt werden:', error);
     return null;
   }
   return { ...data, selectedItems: [] } as Project;
@@ -123,7 +121,6 @@ export async function updateProjectName(projectId: string, name: string): Promis
     .from('projects')
     .update({ name: name.trim() })
     .eq('id', projectId);
-
   return !error;
 }
 
@@ -140,26 +137,129 @@ export async function deleteProjectFromSupabase(projectId: string): Promise<bool
 }
 
 /**
- * Syncs project items. For simplicity, we delete and re-insert or use a more complex upsert.
- * Given the typical size of an Aufmaß list, deleting and re-inserting is often acceptable.
+ * Upsert a single project item. Uses the item's id for conflict resolution.
+ * Sends ONLY the columns that exist in the DB (no extra fields).
+ */
+export async function upsertProjectItem(item: ProjectSelectedItem): Promise<ProjectSelectedItem | null> {
+  const payload: Record<string, unknown> = {
+    id: item.id,
+    project_id: item.project_id,
+    type: item.type,
+    order: item.order,
+    section_id: item.section_id ?? null,
+    quantity: item.quantity ?? null,
+    text: item.text ?? null,
+    name: item.name ?? null,
+    article_number: item.article_number ?? null,
+    unit: item.unit ?? null,
+    supplier_name: item.supplier_name ?? null,
+  };
+
+  // Only include article_id if present and not null
+  if (item.article_id) {
+    payload.article_id = item.article_id;
+  }
+
+  const { data, error } = await supabase
+    .from('project_items')
+    .upsert(payload, { onConflict: 'id' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Fehler beim Speichern des Items:', error);
+    return null;
+  }
+  return data as ProjectSelectedItem;
+}
+
+/**
+ * Delete a single project item by id.
+ */
+export async function deleteProjectItem(itemId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_items')
+    .delete()
+    .eq('id', itemId);
+
+  if (error) {
+    console.error('Fehler beim Löschen des Items:', error);
+  }
+  return !error;
+}
+
+/**
+ * Update only the quantity of an existing project item.
+ */
+export async function updateProjectItemQuantity(itemId: string, quantity: number): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_items')
+    .update({ quantity })
+    .eq('id', itemId);
+
+  if (error) {
+    console.error('Fehler beim Aktualisieren der Menge:', error);
+  }
+  return !error;
+}
+
+/**
+ * Add a new section to a project.
+ */
+export async function addSection(
+  projectId: string,
+  sectionName: string,
+  order: number
+): Promise<ProjectSelectedItem | null> {
+  const newSection: Record<string, unknown> = {
+    id: crypto.randomUUID(),
+    project_id: projectId,
+    type: 'section',
+    text: sectionName.trim(),
+    order,
+    quantity: null,
+    section_id: null,
+    article_id: null,
+  };
+
+  const { data, error } = await supabase
+    .from('project_items')
+    .insert([newSection])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Fehler beim Erstellen des Abschnitts:', error);
+    return null;
+  }
+  return data as ProjectSelectedItem;
+}
+
+/**
+ * Legacy: kept for compatibility if needed elsewhere. 
+ * Prefer upsertProjectItem + deleteProjectItem going forward.
  */
 export async function syncProjectItems(projectId: string, items: ProjectSelectedItem[]): Promise<boolean> {
-  // 1. Delete existing items
   const { error: deleteError } = await supabase
     .from('project_items')
     .delete()
     .eq('project_id', projectId);
 
   if (deleteError) return false;
-
   if (items.length === 0) return true;
 
-  // 2. Insert new items
   const itemsToInsert = items.map((item, index) => ({
-    ...item,
     project_id: projectId,
+    type: item.type,
     order: index,
-    id: undefined // Let Supabase generate new IDs or keep them if they are valid UUIDs
+    article_id: item.article_id ?? null,
+    quantity: item.quantity ?? null,
+    text: item.text ?? null,
+    name: item.name ?? null,
+    article_number: item.article_number ?? null,
+    unit: item.unit ?? null,
+    supplier_name: item.supplier_name ?? null,
+    section_id: item.section_id ?? null,
   }));
 
   const { error: insertError } = await supabase

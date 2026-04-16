@@ -9,6 +9,7 @@ import AdminPage from '@/pages/AdminPage'
 
 function App() {
   const location = useLocation()
+  const isAufmass = location.pathname === '/aufmass'
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -17,16 +18,22 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col gradient-mesh-bg">
       <Header />
-      <main className="flex-1 pb-20 md:pb-8">
-        <div className="w-full py-6 md:py-8">
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/aufmass" element={<AufmassPage />} />
-            <Route path="/admin/aufmass" element={<AdminPage />} />
-          </Routes>
+      {/* AufmassPage gets full remaining height, no extra padding */}
+      {isAufmass ? (
+        <div className="flex-1 overflow-hidden">
+          <AufmassPage />
         </div>
-      </main>
+      ) : (
+        <main className="flex-1 pb-20 md:pb-8">
+          <div className="w-full py-6 md:py-8">
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/admin/aufmass" element={<AdminPage />} />
+            </Routes>
+          </div>
+        </main>
+      )}
       <Toaster />
     </div>
   )

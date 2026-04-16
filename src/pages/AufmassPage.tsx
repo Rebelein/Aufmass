@@ -1,55 +1,68 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Article, Category, Supplier } from '@/lib/data';
+import type { Article, Category } from '@/lib/data';
 import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers } from '@/lib/catalog-storage';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentProjectId, getProjectById, syncProjectItems } from '@/lib/project-storage';
+import {
+  getCurrentProjectId, getProjectById,
+  upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection
+} from '@/lib/project-storage';
 import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Star, Plus, Minus, FileDown, Menu, ChevronRight, Check, Package, Sparkles, Copy, FileSpreadsheet, BookMarked } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import {
+  ChevronLeft, Plus, Minus, FileDown, Menu, Check, Package, Sparkles,
+  Copy, FileSpreadsheet, BookMarked, Search, X as CloseIcon, Trash2,
+  FolderOpen, PenLine, ChevronRight, FolderPlus
+} from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { SwipeableItem } from '@/components/catalog/SwipeableItem';
 import Fuse from 'fuse.js';
-import { Search, X as CloseIcon } from 'lucide-react';
-import { Input } from '@/components/ui/input';
 
-interface ProcessedSummaryItem {
-  type: 'article' | 'section';
-  id: string;
-  order: number;
-  article_id?: string;
+// --- Types ---
+
+interface ProcessedSummaryItem extends ProjectSelectedItem {
   article?: Partial<Omit<Article, 'price'>>;
-  quantity?: number;
-  text?: string;
 }
+
+// --- Main Page ---
 
 const AufmassPage = () => {
   const [articlesData, setArticlesData] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isCatalogDrawerOpen, setIsCatalogDrawerOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
-  const [sheetViewCategoryId, setSheetViewCategoryId] = useState<string | null>(null);
-  const [favoriteCategories, setFavoriteCategories] = useState<Set<string>>(new Set());
-  const [recentCategories, setRecentCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState<string | null>(null);
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string | null>(null);
+  const activeCategoryId = selectedSubCategoryId || selectedMainCategoryId;
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [isAddingSectionOpen, setIsAddingSectionOpen] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [manualName, setManualName] = useState('');
+  const [manualQty, setManualQty] = useState('1');
+  const [manualUnit, setManualUnit] = useState('');
+  const [manualArticleNumber, setManualArticleNumber] = useState('');
+
   const { toast } = useToast();
   const navigate = useNavigate();
   const { impactMedium, impactLight } = useHapticFeedback();
 
-  // Fuzzy Search Index
+  // Fuzzy search
   const fuse = useMemo(() => new Fuse(articlesData, {
     keys: ['name', 'articleNumber'],
     threshold: 0.35,
     distance: 100,
-    ignoreLocation: true
+    ignoreLocation: true,
   }), [articlesData]);
 
   const searchResults = useMemo(() => {
@@ -57,60 +70,70 @@ const AufmassPage = () => {
     return fuse.search(searchQuery).map(r => r.item);
   }, [searchQuery, fuse]);
 
+  // Load project & catalog
   useEffect(() => {
     const projectId = getCurrentProjectId();
-    if (!projectId) { navigate.replace('/projects'); return; }
+    if (!projectId) { navigate('/projects'); return; }
 
     let isMounted = true;
-    const unsubscribeCategories = subscribeToCategories((cats) => { if (isMounted) setCategories(cats); });
-    const unsubscribeArticles = subscribeToArticles((arts) => { if (isMounted) setArticlesData(arts); });
-    const unsubscribeSuppliers = subscribeToSuppliers((supps) => { if (isMounted) setSuppliers(supps); });
+    const unsubCats = subscribeToCategories(cats => { if (isMounted) setCategories(cats); });
+    const unsubArts = subscribeToArticles(arts => { if (isMounted) setArticlesData(arts); });
+    const unsubSupps = subscribeToSuppliers(() => {});
 
-    const loadProject = async () => {
+    const load = async () => {
       const project = await getProjectById(projectId);
-      if (!project) { navigate.replace('/projects'); return; }
+      if (!project) { navigate('/projects'); return; }
       if (isMounted) { setCurrentProject(project); setIsLoadingData(false); }
     };
-    loadProject();
+    load();
 
     return () => {
       isMounted = false;
-      unsubscribeCategories();
-      unsubscribeArticles();
-      unsubscribeSuppliers();
+      unsubCats(); unsubArts(); unsubSupps();
     };
   }, [navigate]);
 
+  // Auto-select first category
   useEffect(() => {
-    if (categories.length > 0 && !selectedCategoryId) {
-      const firstTopLevelCategory = categories.filter(c => !c.parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
-      if (firstTopLevelCategory) setSelectedCategoryId(firstTopLevelCategory.id);
+    if (categories.length > 0 && !selectedMainCategoryId) {
+      setSelectedMainCategoryId(categories.find(c => c.parentId === null)?.id || null);
     }
-  }, [categories, selectedCategoryId]);
+  }, [categories, selectedMainCategoryId]);
 
-  const selectedCategory = useMemo(() => categories.find(c => c.id === selectedCategoryId), [categories, selectedCategoryId]);
+  const activeCategory = useMemo(() =>
+    categories.find(c => c.id === activeCategoryId), [categories, activeCategoryId]);
 
-const filteredArticles = useMemo(() => {
-    // Priority 1: Fuzzy Search Results
-    if (searchQuery.trim()) {
-        return searchResults;
-    }
+  // Expand category hierarchy logic mostly handles finding subsets based on search.
+  const expandedCategoryIds = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const ids = new Set<string>();
+    searchResults.forEach(art => {
+      let currentId = art.categoryId;
+      while (currentId) {
+        ids.add(currentId);
+        const parentId = categories.find(c => c.id === currentId)?.parentId;
+        if (parentId) ids.add(parentId);
+        currentId = parentId || null;
+      }
+    });
+    return Array.from(ids);
+  }, [searchResults, categories, searchQuery]);
 
-    // Priority 2: Category Filtering
-    if (!selectedCategoryId) return [];
+  const viewArticles = useMemo(() => {
+    if (searchQuery.trim().length > 0) return searchResults;
+    if (!activeCategoryId) return [];
     
-    // Check if selected category has subcategories
-    const subcategories = categories.filter(cat => cat.parentId === selectedCategoryId);
+    // Get current cat + subcats
+    const subcats = categories.filter(c => c.parentId === activeCategoryId);
+    const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
     
-    // If it has subcategories, show articles from those subcategories
-    if (subcategories.length > 0) {
-        const subcategoryIds = subcategories.map(subcat => subcat.id);
-        return articlesData.filter((article) => subcategoryIds.includes(article.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    }
-    
-    // Otherwise show articles directly in this category
-    return articlesData.filter((article) => article.categoryId === selectedCategoryId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-}, [articlesData, selectedCategoryId, searchQuery, searchResults, categories]);
+    return articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [articlesData, activeCategoryId, searchQuery, searchResults, categories]);
+
+  const sections = useMemo(() =>
+    (currentProject?.selectedItems ?? []).filter(i => i.type === 'section')
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [currentProject]);
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
@@ -120,170 +143,496 @@ const filteredArticles = useMemo(() => {
         return { ...item, article: articleDetail };
       }
       return item as ProcessedSummaryItem;
-    }).filter(i => !!i).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   }, [currentProject, articlesData]);
 
-  const articleCount = processedSummaryItems.filter(i => i.type === 'article').length;
+  const totalArticleCount = useMemo(() =>
+    processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0),
+    [processedSummaryItems]);
 
-  const updateProjectItems = (newItems: ProjectSelectedItem[]) => {
-    if (currentProject) {
-      const finalItems = newItems.map((item, index) => ({ ...item, order: index }));
-      syncProjectItems(currentProject.id, finalItems).then((success) => {
-        if (success) setCurrentProject({ ...currentProject, selectedItems: finalItems });
-      });
-    }
-  };
+  // Returns quantity of an article in the ACTIVE section
+  const getQuantityInSection = useCallback((articleId: string): number => {
+    if (!currentProject) return 0;
+    return currentProject.selectedItems
+      .filter(i => i.type === 'article' && i.article_id === articleId && i.section_id === activeSectionId)
+      .reduce((s, i) => s + (i.quantity ?? 0), 0);
+  }, [currentProject, activeSectionId]);
 
-  const handleDirectAddArticle = useCallback((articleId: string, quantity: number) => {
-    if (!currentProject) return;
-    const article = articlesData.find(a => a.id === articleId);
-    if (!article) return;
-    const newItem: ProjectSelectedItem = {
-      type: 'article', id: crypto.randomUUID(), project_id: currentProject.id,
-      order: currentProject.selectedItems.length, article_id: articleId, quantity,
-    };
-    updateProjectItems([...currentProject.selectedItems, newItem]);
-    impactMedium();
-    toast({ title: "Hinzugefügt", description: `${quantity}x ${article.name}` });
-    setRecentCategories(prev => { const filtered = prev.filter(id => id !== selectedCategoryId); return [selectedCategoryId!, ...filtered].slice(0, 5); });
-  }, [currentProject, articlesData, selectedCategoryId, toast]);
+  // Returns the item (if any) for an article in the ACTIVE section
+  const getItemInSection = useCallback((articleId: string): ProjectSelectedItem | undefined => {
+    if (!currentProject) return undefined;
+    return currentProject.selectedItems.find(
+      i => i.type === 'article' && i.article_id === articleId && i.section_id === activeSectionId
+    );
+  }, [currentProject, activeSectionId]);
 
-  const handleUpdateItemQuantity = (itemId: string, delta: number) => {
-    if (!currentProject) return;
-    impactMedium();
-    updateProjectItems(currentProject.selectedItems.map(item => item.id === itemId ? { ...item, quantity: Math.max(0, (item.quantity || 0) + delta) } : item).filter(item => (item.quantity || 0) > 0));
-  };
-
-  const handleDeleteItem = (itemId: string) => {
-    if (!currentProject) return;
-    updateProjectItems(currentProject.selectedItems.filter(i => i.id !== itemId));
-  };
-
-  const handleExportCsv = () => {
-    if (!currentProject || processedSummaryItems.length === 0) return;
-    
-    // Header
-    let csvContent = "Menge;Artikelnummer;Bezeichnung\n";
-    
-    // Items
-    processedSummaryItems.forEach(item => {
-      if (item.type === 'article') {
-        const qty = item.quantity || 0;
-        const artNum = item.article?.articleNumber || "";
-        const name = item.article?.name || "";
-        // Excel-friendly CSV with semicolon
-        csvContent += `${qty};${artNum};${name}\n`;
+  // Update local state optimistically
+  const updateLocalItem = useCallback((updatedItem: ProjectSelectedItem) => {
+    setCurrentProject(prev => {
+      if (!prev) return prev;
+      const exists = prev.selectedItems.find(i => i.id === updatedItem.id);
+      if (exists) {
+        return { ...prev, selectedItems: prev.selectedItems.map(i => i.id === updatedItem.id ? updatedItem : i) };
       }
+      return { ...prev, selectedItems: [...prev.selectedItems, updatedItem] };
     });
+  }, []);
 
-    // Create Blob and Download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `aufmass_${currentProject.name}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
+  const removeLocalItem = useCallback((itemId: string) => {
+    setCurrentProject(prev => {
+      if (!prev) return prev;
+      return { ...prev, selectedItems: prev.selectedItems.filter(i => i.id !== itemId) };
+    });
+  }, []);
+
+  // Increment article in active section
+  const handleIncrement = useCallback(async (article: Article) => {
+    if (!currentProject) return;
     impactMedium();
-    toast({ title: "CSV exportiert", description: `Datei wurde gespeichert.` });
+
+    const existing = getItemInSection(article.id);
+
+    if (existing) {
+      const newQty = (existing.quantity ?? 0) + 1;
+      // Optimistic update
+      updateLocalItem({ ...existing, quantity: newQty });
+      const ok = await updateProjectItemQuantity(existing.id, newQty);
+      if (!ok) {
+        updateLocalItem(existing); // rollback
+        toast({ title: 'Fehler', description: 'Menge konnte nicht gespeichert werden.', variant: 'destructive' });
+      }
+    } else {
+      const newItem: ProjectSelectedItem = {
+        id: crypto.randomUUID(),
+        project_id: currentProject.id,
+        type: 'article',
+        order: currentProject.selectedItems.length,
+        article_id: article.id,
+        quantity: 1,
+        section_id: activeSectionId ?? null,
+      };
+      // Optimistic update
+      updateLocalItem(newItem);
+      const saved = await upsertProjectItem(newItem);
+      if (!saved) {
+        removeLocalItem(newItem.id);
+        toast({ title: 'Fehler', description: 'Artikel konnte nicht hinzugefügt werden.', variant: 'destructive' });
+      }
+    }
+  }, [currentProject, activeSectionId, getItemInSection, updateLocalItem, removeLocalItem, impactMedium, toast]);
+
+  // Decrement article in active section
+  const handleDecrement = useCallback(async (article: Article) => {
+    if (!currentProject) return;
+    impactMedium();
+
+    const existing = getItemInSection(article.id);
+    if (!existing) return;
+
+    if ((existing.quantity ?? 0) <= 1) {
+      removeLocalItem(existing.id);
+      const ok = await deleteProjectItem(existing.id);
+      if (!ok) {
+        updateLocalItem(existing);
+        toast({ title: 'Fehler', description: 'Artikel konnte nicht entfernt werden.', variant: 'destructive' });
+      }
+    } else {
+      const newQty = (existing.quantity ?? 0) - 1;
+      updateLocalItem({ ...existing, quantity: newQty });
+      const ok = await updateProjectItemQuantity(existing.id, newQty);
+      if (!ok) {
+        updateLocalItem(existing);
+        toast({ title: 'Fehler', description: 'Menge konnte nicht gespeichert werden.', variant: 'destructive' });
+      }
+    }
+  }, [currentProject, activeSectionId, getItemInSection, updateLocalItem, removeLocalItem, impactMedium, toast]);
+
+  // Reset article in active section
+  const handleResetArticle = useCallback(async (article: Article) => {
+    if (!currentProject) return;
+    const existing = getItemInSection(article.id);
+    if (!existing) return;
+    removeLocalItem(existing.id);
+    const ok = await deleteProjectItem(existing.id);
+    if (!ok) {
+      updateLocalItem(existing);
+      toast({ title: 'Fehler', description: 'Konnte nicht zurückgesetzt werden.', variant: 'destructive' });
+    }
+  }, [currentProject, getItemInSection, removeLocalItem, updateLocalItem, toast]);
+
+  // Delete item from summary list
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    removeLocalItem(itemId);
+    await deleteProjectItem(itemId);
+  }, [removeLocalItem]);
+
+  // Add section
+  const handleAddSection = async () => {
+    if (!currentProject || !newSectionName.trim()) return;
+    const order = currentProject.selectedItems.length;
+    const newSec = await addSection(currentProject.id, newSectionName, order);
+    if (newSec) {
+      updateLocalItem(newSec);
+      setActiveSectionId(newSec.id);
+      toast({ title: 'Abschnitt erstellt', description: newSectionName });
+    }
+    setNewSectionName('');
+    setIsAddingSectionOpen(false);
   };
 
-  const handleGeneratePdf = async () => {
+  // Add manual position
+  const handleAddManualPosition = async () => {
+    if (!currentProject || !manualName.trim()) return;
+    const newItem: ProjectSelectedItem = {
+      id: crypto.randomUUID(),
+      project_id: currentProject.id,
+      type: 'article',
+      order: currentProject.selectedItems.length,
+      article_id: null,
+      quantity: parseFloat(manualQty) || 1,
+      name: manualName.trim(),
+      unit: manualUnit.trim() || undefined,
+      article_number: manualArticleNumber.trim() || undefined,
+      section_id: activeSectionId ?? null,
+    };
+    updateLocalItem(newItem);
+    const saved = await upsertProjectItem(newItem);
+    if (!saved) {
+      removeLocalItem(newItem.id);
+      toast({ title: 'Fehler', description: 'Position konnte nicht gespeichert werden.', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Manuelle Position hinzugefügt', description: newItem.name });
+    setManualName(''); setManualQty('1'); setManualUnit(''); setManualArticleNumber('');
+    setIsManualDialogOpen(false);
+  };
+
+  // Export CSV
+  const handleExportCsv = () => {
     if (!currentProject) return;
-    try {
-      const doc = new jsPDF();
-      doc.setFontSize(20);
-      doc.text(`Projekt: ${currentProject.name}`, 15, 20);
-      doc.setFontSize(12);
-      let y = 35;
-      processedSummaryItems.forEach((item) => {
-        if (item.type === 'article' && item.article) {
-          doc.text(`${item.quantity}x ${item.article.name} (${item.article.articleNumber})`, 15, y);
-          y += 7;
+    const sectionItems = currentProject.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order);
+    const articleItems = processedSummaryItems.filter(i => i.type === 'article');
+
+    let csv = '';
+    const exportSection = (sId: string | null, label: string) => {
+      const items = articleItems.filter(i => i.section_id === sId);
+      if (items.length === 0) return;
+      csv += `"${label}"\n`;
+      csv += 'Menge;Artikelnummer;Bezeichnung\n';
+      items.forEach(i => {
+        const qty = i.quantity ?? 0;
+        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
+        const name = i.article?.name ?? i.name ?? '';
+        csv += `${qty};"${artNum}";"${name}"\n`;
+      });
+      csv += '\n';
+    };
+
+    // Per-section breakdown
+    exportSection(null, 'Allgemein');
+    sectionItems.forEach(s => exportSection(s.id, s.text ?? 'Abschnitt'));
+
+    // Total summary (aggregated across all sections)
+    if (sectionItems.length > 0) {
+      csv += `"=== GESAMTÜBERSICHT ==="\n`;
+      csv += 'Menge Gesamt;Artikelnummer;Bezeichnung\n';
+      const totals = new Map<string, { name: string; artNum: string; qty: number }>();
+      articleItems.forEach(i => {
+        const key = i.article?.articleNumber ?? i.article_number ?? i.article?.name ?? i.name ?? i.id;
+        const existing = totals.get(key);
+        const qty = i.quantity ?? 0;
+        const name = i.article?.name ?? i.name ?? 'Manuell';
+        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
+        if (existing) {
+          totals.set(key, { ...existing, qty: existing.qty + qty });
+        } else {
+          totals.set(key, { name, artNum, qty });
         }
       });
-      doc.save(`aufmass_${currentProject.name}.pdf`);
-      toast({ title: "PDF erstellt" });
-    } catch (error) { console.error("PDF error:", error); }
+      totals.forEach(v => {
+        csv += `${v.qty};"${v.artNum}";"${v.name}"\n`;
+      });
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.setAttribute('href', URL.createObjectURL(blob));
+    link.setAttribute('download', `aufmass_${currentProject.name}.csv`);
+    link.click();
+    impactMedium();
+    toast({ title: 'CSV exportiert' });
   };
 
-  const handleSelectCategory = (categoryId: string) => { 
-    setSelectedCategoryId(categoryId); 
-    setIsCategorySheetOpen(false); 
-    setSheetViewCategoryId(null);
+  // Export PDF
+  const handleGeneratePdf = async () => {
+    if (!currentProject) return;
+    const sectionItems = currentProject.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order);
+    const articleItems = processedSummaryItems.filter(i => i.type === 'article');
+
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Projekt: ${currentProject.name}`, 15, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150);
+    doc.text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, 15, 28);
+    doc.setTextColor(0);
+    let y = 40;
+
+    const checkNewPage = () => { if (y > 270) { doc.addPage(); y = 20; } };
+
+    const renderSection = (sId: string | null, label: string) => {
+      const items = articleItems.filter(i => i.section_id === sId);
+      if (items.length === 0) return;
+      checkNewPage();
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, 15, y); y += 7;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      items.forEach(i => {
+        checkNewPage();
+        const name = i.article?.name ?? i.name ?? 'Manuell';
+        const qty = i.quantity ?? 0;
+        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
+        const unit = i.article?.unit ?? i.unit ?? '';
+        doc.text(`${qty}${unit ? ' ' + unit : 'x'}`, 20, y);
+        doc.text(`${name}${artNum ? '  (' + artNum + ')' : ''}`, 45, y);
+        y += 6;
+      });
+      y += 4;
+    };
+
+    // Per-section breakdown
+    renderSection(null, 'Allgemein');
+    sectionItems.forEach(s => renderSection(s.id, s.text ?? 'Abschnitt'));
+
+    // Total summary page (only if there are sections)
+    if (sectionItems.length > 0 && articleItems.length > 0) {
+      doc.addPage();
+      y = 20;
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Gesamtübersicht', 15, y); y += 10;
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(120);
+      doc.text('Alle Abschnitte aufsummiert – für die Bestellung', 15, y); y += 8;
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+
+      const totals = new Map<string, { name: string; artNum: string; unit: string; qty: number }>();
+      articleItems.forEach(i => {
+        const key = i.article?.articleNumber ?? i.article_number ?? i.article?.name ?? i.name ?? i.id;
+        const existing = totals.get(key);
+        const qty = i.quantity ?? 0;
+        if (existing) {
+          totals.set(key, { ...existing, qty: existing.qty + qty });
+        } else {
+          totals.set(key, {
+            name: i.article?.name ?? i.name ?? 'Manuell',
+            artNum: i.article?.articleNumber ?? i.article_number ?? '',
+            unit: i.article?.unit ?? i.unit ?? '',
+            qty,
+          });
+        }
+      });
+
+      totals.forEach(v => {
+        checkNewPage();
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${v.qty}${v.unit ? ' ' + v.unit : 'x'}`, 20, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${v.name}${v.artNum ? '  (' + v.artNum + ')' : ''}`, 45, y);
+        y += 6;
+      });
+    }
+
+    doc.save(`aufmass_${currentProject.name}.pdf`);
+    toast({ title: 'PDF erstellt' });
   };
 
-  const toggleFavorite = (categoryId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavoriteCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(categoryId)) { next.delete(categoryId); } else { next.add(categoryId); }
-      return next;
-    });
-  };
-
-  const topLevelCategories = categories.filter(c => !c.parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  const renderCategoryTree = (parentId: string | null = null, level = 0) => {
-    const currentCategories = categories
-      .filter(c => c.parentId === parentId)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-    if (currentCategories.length === 0) return null;
+  // Category column rendering for sidebar
+  const renderCategoryColumn = (parentId: string | null = null, isSubColumn = false): JSX.Element => {
+    const columnCategories = categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    
+    if (columnCategories.length === 0) {
+      if (parentId === null) {
+        return (
+          <div className="py-16 text-center space-y-4">
+            <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
+          </div>
+        );
+      } else {
+        return (
+           <div className="py-6 text-center px-4">
+             <p className="text-white/40 text-[10px] font-medium mb-3">Keine Unterkategorien</p>
+           </div>
+        );
+      }
+    }
 
     return (
-      <Accordion type="single" collapsible className="w-full space-y-1">
-        {currentCategories.map(category => {
-          const subCategories = categories.filter(c => c.parentId === category.id);
-          const hasSubCategories = subCategories.length > 0;
-
-          const content = (
-            <div className={cn(
-              "flex-1 flex items-center gap-3 py-3 px-4 rounded-xl transition-all text-left",
-              selectedCategoryId === category.id 
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
-                : "hover:bg-white/5 text-white/70 hover:text-white"
-            )}>
-              <div className={cn(
-                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-inner",
-                selectedCategoryId === category.id ? "bg-emerald-500/20" : "bg-white/5"
-              )}>
-                {category.imageUrl ? (
-                  <img src={category.imageUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  hasSubCategories ? <Menu size={16} className={selectedCategoryId === category.id ? "text-emerald-400" : "text-white/30"} /> : <Package size={16} className={selectedCategoryId === category.id ? "text-emerald-400" : "text-white/30"} />
-                )}
-              </div>
-              <span className="font-medium truncate flex-1">{category.name}</span>
-              {hasSubCategories && <ChevronRight size={14} className="text-white/20 group-data-[state=open]:rotate-90 transition-transform" />}
-            </div>
-          );
-
+      <ul className="space-y-1.5 px-2">
+        {columnCategories.map((category) => {
+          const hasChildren = categories.some(subCat => subCat.parentId === category.id);
+          const isSelected = isSubColumn ? category.id === selectedSubCategoryId : category.id === selectedMainCategoryId;
+          
           return (
-            <AccordionItem key={category.id} value={category.id} className="border-none">
-              {hasSubCategories ? (
-                <AccordionTrigger className="w-full p-0 hover:no-underline group">
-                  {content}
-                </AccordionTrigger>
-              ) : (
-                <div onClick={() => handleSelectCategory(category.id)} className="cursor-pointer">
-                  {content}
+            <li key={category.id} className="group/item">
+              <div 
+                className={cn(
+                  "flex justify-between items-center p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
+                  isSelected 
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
+                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white"
+                )}
+                onClick={() => {
+                  if (isSubColumn) {
+                    setSelectedSubCategoryId(category.id);
+                  } else {
+                    setSelectedMainCategoryId(category.id);
+                    setSelectedSubCategoryId(null);
+                  }
+                  if (window.innerWidth < 1024 && (!hasChildren || isSubColumn)) {
+                    // Mobile dismiss logic, we can keep using original states
+                    // Actually, we don't need 'setIsCatalogDrawerOpen' here as we removed it for desktop
+                  }
+                }}
+              >
+                <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
+                  <div className={cn(
+                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                      isSelected ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
+                  )}>
+                      {hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
+                  </div>
+                  <span className={cn(
+                      "font-semibold truncate transition-colors text-sm"
+                  )}>
+                      {category.name}
+                  </span>
+                  {!isSubColumn && hasChildren && (
+                    <ChevronRight size={14} className={cn("ml-auto shrink-0", isSelected ? "text-emerald-400" : "text-white/20")} />
+                  )}
                 </div>
-              )}
-              {hasSubCategories && (
-                <AccordionContent className="pt-1 pb-1 ml-4 border-l border-white/10 pl-2">
-                  {renderCategoryTree(category.id, level + 1)}
-                </AccordionContent>
-              )}
-            </AccordionItem>
+              </div>
+            </li>
           );
         })}
-      </Accordion>
+      </ul>
     );
   };
+
+  // Summary list component (shared between bottom sheet + right panel)
+  const SummaryList = () => {
+    const sectionItems = currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? [];
+    const articleItems = processedSummaryItems.filter(i => i.type === 'article');
+
+    const renderSectionGroup = (sId: string | null, label: string) => {
+      const items = articleItems.filter(i => i.section_id === sId);
+      if (items.length === 0 && sId !== null) return null;
+      return (
+        <div key={sId ?? 'general'} className="mb-4">
+          <button
+            onClick={() => setActiveSectionId(sId)}
+            className={cn(
+              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left mb-2 transition-colors',
+              activeSectionId === sId ? 'bg-emerald-500/15 text-emerald-400' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+            )}
+          >
+            <FolderOpen size={14} />
+            <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
+          </button>
+          {items.length === 0 ? (
+            <p className="text-xs text-white/20 px-3 mb-2">Keine Positionen</p>
+          ) : (
+            <div className="space-y-1">
+              {items.map(item => (
+                <SwipeableItem key={item.id} id={item.id} onDelete={() => handleDeleteItem(item.id)}>
+                  <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{item.article?.name ?? item.name ?? 'Manuell'}</p>
+                      <p className="text-xs text-white/30 font-mono">{item.article?.articleNumber ?? item.article_number ?? '—'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button onClick={() => handleDeleteItem(item.id)} variant="ghost" size="icon" className="h-7 w-7 text-white/20 hover:text-red-400">
+                        <Trash2 size={13} />
+                      </Button>
+                      <span className="text-white font-bold text-sm min-w-[2rem] text-center">{item.quantity}</span>
+                    </div>
+                  </div>
+                </SwipeableItem>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="overflow-y-auto flex-1 p-4 space-y-1">
+        {renderSectionGroup(null, 'Allgemein')}
+        {sectionItems.map(s => renderSectionGroup(s.id, s.text ?? 'Abschnitt'))}
+        {articleItems.length === 0 && (
+          <div className="text-center py-12 text-white/30 text-sm">Keine Artikel im Aufmaß</div>
+        )}
+      </div>
+    );
+  };
+
+  // Section selector bar
+  const SectionBar = () => (
+    <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto border-b border-white/5 shrink-0">
+      <button
+        onClick={() => setActiveSectionId(null)}
+        className={cn(
+          'shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
+          activeSectionId === null
+            ? 'bg-emerald-500 text-white shadow-lg'
+            : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+        )}
+      >
+        Allgemein
+      </button>
+      {sections.map(sec => (
+        <button
+          key={sec.id}
+          onClick={() => setActiveSectionId(sec.id)}
+          className={cn(
+            'shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
+            activeSectionId === sec.id
+              ? 'bg-emerald-500 text-white shadow-lg'
+              : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+          )}
+        >
+          {sec.text}
+        </button>
+      ))}
+      {isAddingSectionOpen ? (
+        <div className="flex items-center gap-2 shrink-0">
+          <Input
+            value={newSectionName}
+            onChange={e => setNewSectionName(e.target.value)}
+            placeholder="Abschnitt Name..."
+            className="h-8 w-36 glass-input text-sm"
+            autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') setIsAddingSectionOpen(false); }}
+          />
+          <Button onClick={handleAddSection} size="sm" className="h-8 glass-button px-3">OK</Button>
+          <Button onClick={() => setIsAddingSectionOpen(false)} size="sm" variant="ghost" className="h-8 px-2 text-white/50">✕</Button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setIsAddingSectionOpen(true)}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-white/5 text-emerald-400 hover:bg-emerald-500/10 transition-all whitespace-nowrap border border-emerald-500/20"
+        >
+          <Plus size={14} /> Abschnitt
+        </button>
+      )}
+    </div>
+  );
 
   if (isLoadingData || !currentProject) {
     return (
@@ -299,33 +648,76 @@ const filteredArticles = useMemo(() => {
   }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="flex h-[calc(100vh-3rem)] overflow-hidden relative">
       {/* Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <div className="orb orb-emerald w-64 h-64 -top-10 right-20" style={{ animationDelay: '0s' }} />
         <div className="orb orb-teal w-48 h-48 bottom-40 -left-10" style={{ animationDelay: '-2s' }} />
       </div>
 
-      <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Sticky Header */}
-        <header className="glass-nav sticky top-0 z-40">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <button onClick={() => navigate('/projects')} className="p-2.5 -ml-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                <ChevronLeft size={24} />
+      {/* ===== STAGGERED DRAWER CONTAINER (Desktop/Tablet Landscape) ===== */}
+      <div className={cn(
+        "hidden lg:block relative shrink-0 transition-[width] duration-300 h-full",
+        selectedMainCategoryId ? "w-[344px] xl:w-[364px]" : "w-[288px] xl:w-[308px]" // 56px offset
+      )}>
+        
+        {/* Drawer 1: HAUPTGRUPPEN */}
+        <aside className={cn(
+          "absolute top-0 bottom-0 left-0 w-[288px] xl:w-[308px] flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] transition-[z-index] duration-0 delay-75",
+          "hover:z-50 hover:delay-0 group/haupt",
+          selectedMainCategoryId ? "z-10" : "z-20"
+        )}>
+          <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
+             <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+               <BookMarked size={14} /> Artikelkatalog
+             </h2>
+          </div>
+          <div className="flex-1 overflow-y-auto py-3">
+             {renderCategoryColumn(null, false)}
+          </div>
+        </aside>
+
+        {/* Drawer 2: UNTERGRUPPEN */}
+        {selectedMainCategoryId && (
+          <aside className={cn(
+            "absolute top-0 bottom-0 left-[56px] w-[288px] xl:w-[308px] flex flex-col border-l border-r border-teal-500/30 bg-slate-900/95 backdrop-blur shadow-[-20px_0_40px_rgba(0,0,0,0.6)] transition-[z-index] duration-0 delay-75 animate-in slide-in-from-left-4 fade-in duration-300",
+            "hover:z-50 z-20 hover:delay-0 group/unter"
+          )}>
+            <div className="px-4 py-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0 h-[53px]">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400/80">Untergruppen</p>
+            </div>
+            <div className="flex-1 overflow-y-auto py-3">
+              {renderCategoryColumn(selectedMainCategoryId, true)}
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* ===== CENTER: Main Content ===== */}
+      <div className="flex-1 flex flex-col overflow-hidden z-20 min-w-0">
+        {/* Page header – slim, no duplicate back-button on desktop */}
+        <header className="shrink-0 border-b border-white/5 bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 h-12 gap-3">
+            {/* Left: back (mobile only) + project name */}
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                onClick={() => navigate('/projects')}
+                className="xl:hidden p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+              >
+                <ChevronLeft size={18} />
               </button>
-              <div>
-                <h1 className="font-semibold text-white truncate max-w-[150px] sm:max-w-[300px]">{currentProject.name}</h1>
-                <p className="text-xs text-white/50">{articleCount} Artikel erfasst</p>
+              <div className="min-w-0">
+                <h1 className="font-semibold text-white text-sm truncate">{currentProject.name}</h1>
+                <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel erfasst</p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
+            {/* Right: catalog (mobile/tablet) + manual position button */}
+            <div className="flex items-center gap-1.5">
               <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="secondary" className="ios-button-secondary gap-2 px-4">
-                    <Menu size={18} className="text-emerald-400" />
-                    <span className="hidden sm:inline">Katalog</span>
+                  <Button variant="ghost" size="sm" className="xl:hidden h-8 px-2.5 text-white/50 hover:text-white hover:bg-white/10 gap-1.5">
+                    <Menu size={15} className="text-emerald-400" />
+                    <span className="hidden sm:inline text-xs">Katalog</span>
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
@@ -334,236 +726,206 @@ const filteredArticles = useMemo(() => {
                       <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
                     </SheetTitle>
                   </SheetHeader>
-                  <div className="overflow-y-auto p-4 flex-1">
-                    <div className="space-y-4">
-                      <div className="px-2">
-                        <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Struktur</h3>
-                        {renderCategoryTree()}
-                      </div>
+                  <div className="overflow-y-auto p-4 flex-1 space-y-6">
+                    <div>
+                      {renderCategoryColumn(null, false)}
                     </div>
+                    {selectedMainCategoryId && (
+                      <div className="pt-4 border-t border-white/10 relative">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400/80 mb-3 ml-2">Untergruppen</p>
+                        {renderCategoryColumn(selectedMainCategoryId, true)}
+                      </div>
+                    )}
                   </div>
                   <div className="p-6 border-t border-white/5 bg-white/[0.02]">
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => { setSelectedCategoryId(null); setIsCategorySheetOpen(false); }}
-                      className="w-full text-white/50 hover:text-white"
-                    >
+                    <Button variant="ghost" onClick={() => { setSelectedMainCategoryId(null); setSelectedSubCategoryId(null); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
                       Filter zurücksetzen
                     </Button>
                   </div>
                 </SheetContent>
               </Sheet>
+              <Button
+                onClick={() => setIsManualDialogOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2.5 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
+                title="Manuelle Position"
+              >
+                <PenLine size={15} />
+                <span className="hidden sm:inline text-xs">Manuell</span>
+              </Button>
             </div>
           </div>
         </header>
 
+        {/* Section Bar */}
+        <SectionBar />
+
         {/* Search Bar */}
-        <div className="p-4 bg-white/5 border-b border-white/10 shrink-0">
-          <div className="relative group max-w-2xl mx-auto">
-            <Search className={cn(
-              "absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300",
-              searchQuery ? "text-emerald-400" : "text-white/30"
-            )} size={22} />
+        <div className="px-4 py-3 border-b border-white/5 shrink-0">
+          <div className="relative group max-w-full">
+            <Search className={cn('absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={18} />
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               placeholder="Artikel oder Nummer suchen..."
-              className="h-14 pl-12 pr-12 glass-input text-lg border-white/5 group-hover:border-emerald-500/30 transition-all duration-300"
+              className="h-11 pl-11 pr-10 glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
             />
             {searchQuery && (
-              <button 
-                onClick={() => { setSearchQuery(''); impactLight(); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all"
-              >
-                <CloseIcon size={20} />
+              <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                <CloseIcon size={16} />
               </button>
             )}
           </div>
+          {activeCategory && !searchQuery && (
+            <p className="text-xs text-white/40 mt-2 px-1 uppercase tracking-wider">{activeCategory.name}</p>
+          )}
         </div>
 
-        {/* Main Content */}
-        <main className="flex-1 p-4 pb-28 overflow-y-auto">
-          <div className="max-w-3xl mx-auto space-y-6">
-            {searchQuery ? (
-              // Search Results View
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em]">Suchergebnisse ({filteredArticles.length})</h3>
-                </div>
-                {filteredArticles.length === 0 ? (
-                  <div className="text-center py-16 ios-card">
-                    <Search size={36} className="text-white/20 mx-auto mb-4" />
-                    <p className="text-white/40 font-medium">Kein Material gefunden</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {filteredArticles.map(article => {
-                      const quantityInProject = processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).reduce((sum, i) => sum + (i.quantity || 0), 0);
-                      const cat = categories.find(c => c.id === article.categoryId);
-                      return (
-                        <ArticleCard key={article.id} article={article} quantityInProject={quantityInProject}
-                          onAdd={handleDirectAddArticle} onUpdateQuantity={handleUpdateItemQuantity}
-                          onDelete={handleDeleteItem} itemIds={processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).map(i => i.id)}
-                          categoryImageUrl={cat?.imageUrl} />
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : selectedCategoryId ? (
-              // Category View
-              <div className="space-y-4">
-                <div className="px-1">
-                  <div className="space-y-1">
-                    <h2 className="text-2xl font-bold text-white">{selectedCategory?.name}</h2>
-                    <p className="text-xs text-white/40 uppercase tracking-widest">Kategorie</p>
-                  </div>
-                </div>
-                
-                {filteredArticles.length === 0 ? (
-                  <div className="text-center py-16 ios-card">
-                    <Package size={36} className="text-white/20 mx-auto mb-4" />
-                    <p className="text-white/40 font-medium">Kein Material in dieser Kategorie</p>
-                    <Button variant="link" onClick={() => setIsCategorySheetOpen(true)} className="text-emerald-400 mt-2">
-                      Katalog öffnen
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {filteredArticles.map(article => {
-                      const quantityInProject = processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).reduce((sum, i) => sum + (i.quantity || 0), 0);
-                      const cat = categories.find(c => c.id === article.categoryId);
-                      return (
-                        <ArticleCard key={article.id} article={article} quantityInProject={quantityInProject}
-                          onAdd={handleDirectAddArticle} onUpdateQuantity={handleUpdateItemQuantity}
-                          onDelete={handleDeleteItem} itemIds={processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).map(i => i.id)}
-                          categoryImageUrl={cat?.imageUrl} />
-                      );
-                    })}
-                  </div>
+        {/* Article List */}
+        <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-none">
+            {viewArticles.length === 0 ? (
+              <div className="col-span-full text-center py-20 ios-card">
+                {searchQuery
+                  ? <Search size={36} className="text-white/20 mx-auto mb-4" />
+                  : <Package size={36} className="text-white/20 mx-auto mb-4" />}
+                <p className="text-white/40 font-medium">
+                  {searchQuery ? 'Kein Material gefunden' : 'Kein Material in dieser Kategorie'}
+                </p>
+                {!searchQuery && (
+                  <Button variant="link" onClick={() => setIsCategorySheetOpen(true)} className="text-emerald-400 mt-2 xl:hidden">
+                    Katalog öffnen
+                  </Button>
                 )}
               </div>
             ) : (
-              // Empty State (No Category Selected)
-              <div className="text-center py-20">
-                <div className="w-24 h-24 mx-auto rounded-3xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 flex items-center justify-center mb-6 border border-white/5">
-                  <BookMarked size={40} className="text-emerald-400/50" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Bereit zum Erfassen</h2>
-                <p className="text-white/40 max-w-[280px] mx-auto mb-8">
-                  Wählen Sie eine Kategorie aus dem Katalog, um Material hinzuzufügen.
-                </p>
-                <Button onClick={() => setIsCategorySheetOpen(true)} className="glass-button px-8 h-14 text-lg">
-                  Katalog öffnen
-                </Button>
-              </div>
+              viewArticles.map(article => {
+                const qty = getQuantityInSection(article.id);
+                const cat = categories.find(c => c.id === article.categoryId);
+                return (
+                  <ArticleCard
+                    key={article.id}
+                    article={article}
+                    quantity={qty}
+                    onIncrement={() => handleIncrement(article)}
+                    onDecrement={() => handleDecrement(article)}
+                    onReset={() => handleResetArticle(article)}
+                    categoryImageUrl={cat?.imageUrl}
+                  />
+                );
+              })
             )}
           </div>
         </main>
+      </div>
 
-        {/* Sticky Bottom Summary */}
-        <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-          <div className="fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10">
-            <div className="flex items-center justify-between p-4">
-              <SheetTrigger asChild>
-                <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
-                    <Package size={22} className="text-white" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-white text-lg">{articleCount}</p>
-                    <p className="text-xs text-white/50">Artikel im Aufmaß</p>
-                  </div>
+      {/* ===== RIGHT PANEL: Summary (Tablet landscape+ = permanent, Mobile = BottomSheet) ===== */}
+      {/* Desktop/Tablet permanent panel */}
+      <aside className="hidden lg:flex flex-col w-80 xl:w-96 shrink-0 border-l border-white/10 bg-slate-900/60 backdrop-blur-xl z-10">
+        <div className="p-4 border-b border-white/5 shrink-0">
+          <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider">Aufmaß</h2>
+          <p className="text-2xl font-bold text-emerald-400 mt-1">{totalArticleCount} <span className="text-sm font-normal text-white/40">Artikel</span></p>
+        </div>
+        <SummaryList />
+        <div className="p-4 border-t border-white/5 bg-white/[0.02] space-y-2 shrink-0">
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full glass-button">
+              <FileDown size={16} className="mr-2" /> PDF
+            </Button>
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full ios-button-secondary border-emerald-500/30 text-emerald-400">
+              <FileSpreadsheet size={16} className="mr-2" /> CSV
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Bottom Summary Sheet */}
+      <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10">
+          <div className="flex items-center justify-between p-4">
+            <SheetTrigger asChild>
+              <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
+                  <Package size={22} className="text-white" />
                 </div>
-              </SheetTrigger>
-              <Button onClick={handleGeneratePdf} disabled={articleCount === 0} className="glass-button text-lg">
-                <FileDown size={20} className="mr-2" /> PDF
-              </Button>
+                <div>
+                  <p className="font-semibold text-white text-lg">{totalArticleCount}</p>
+                  <p className="text-xs text-white/50">Artikel im Aufmaß</p>
+                </div>
+              </div>
+            </SheetTrigger>
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="glass-button">
+              <FileDown size={18} className="mr-2" /> PDF
+            </Button>
+          </div>
+        </div>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+            <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
+          </SheetHeader>
+          <SummaryList />
+          <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] grid grid-cols-2 gap-3">
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="h-14 text-lg glass-button">
+              <FileDown size={20} className="mr-2" /> PDF
+            </Button>
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg ios-button-secondary border-emerald-500/30 text-emerald-400">
+              <FileSpreadsheet size={20} className="mr-2" /> CSV
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Manual Position Dialog */}
+      <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
+        <DialogContent className="ios-card border border-white/10 bg-slate-900/95 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl font-bold flex items-center gap-2">
+              <PenLine size={18} className="text-emerald-400" /> Manuelle Position
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Bezeichnung *</label>
+              <Input value={manualName} onChange={e => setManualName(e.target.value)} className="glass-input" placeholder="z.B. Sonderteil Bogen 90°" autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Menge *</label>
+                <Input value={manualQty} onChange={e => setManualQty(e.target.value)} type="number" min="1" className="glass-input" inputMode="numeric" />
+              </div>
+              <div>
+                <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Einheit</label>
+                <Input value={manualUnit} onChange={e => setManualUnit(e.target.value)} className="glass-input" placeholder="Stk, m, kg..." />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Artikelnummer (optional)</label>
+              <Input value={manualArticleNumber} onChange={e => setManualArticleNumber(e.target.value)} className="glass-input" placeholder="z.B. ART-001" />
             </div>
           </div>
-
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
-            <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
-              <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
-            </SheetHeader>
-            <div className="overflow-y-auto p-4 flex-1">
-              {processedSummaryItems.length === 0 ? (
-                <div className="text-center py-20 text-white/40">Keine Artikel im Aufmaß</div>
-              ) : (
-                <div className="space-y-1">
-                  {processedSummaryItems.map((item) => (
-                    <SwipeableItem key={item.id} id={item.id} onDelete={() => handleDeleteItem(item.id)}>
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-medium truncate">{item.article?.name || item.text || 'Unbekannt'}</p>
-                          <div className="flex items-center gap-2">
-                             <p className="text-xs text-white/40 font-mono">{item.article?.articleNumber || 'Keine Art.-Nr.'}</p>
-                             {item.article?.articleNumber && (
-                               <button 
-                                 onClick={async (e) => { 
-                                   e.stopPropagation(); 
-                                   await navigator.clipboard.writeText(item.article!.articleNumber!);
-                                   impactLight();
-                                   toast({ title: "Kopiert", description: item.article!.articleNumber });
-                                 }}
-                                 className="text-white/20 hover:text-white p-1"
-                               >
-                                 <Copy size={12} />
-                               </button>
-                             )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Button 
-                            onClick={(e) => { e.stopPropagation(); handleUpdateItemQuantity(item.id, -1); }} 
-                            variant="ghost" size="icon" className="h-9 w-9 bg-white/5 hover:bg-white/10"
-                          >
-                            <Minus size={16} />
-                          </Button>
-                          <span className="text-white font-bold w-8 text-center">{item.quantity}</span>
-                          <Button 
-                            onClick={(e) => { e.stopPropagation(); handleUpdateItemQuantity(item.id, 1); }} 
-                            variant="ghost" size="icon" className="h-9 w-9 bg-white/5 hover:bg-white/10"
-                          >
-                            <Plus size={16} />
-                          </Button>
-                        </div>
-                      </div>
-                    </SwipeableItem>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] space-y-3">
-               <div className="grid grid-cols-2 gap-3">
-                 <Button onClick={handleGeneratePdf} disabled={articleCount === 0} className="w-full h-16 text-lg glass-button">
-                   <FileDown size={22} className="mr-2" /> PDF
-                 </Button>
-                 <Button onClick={handleExportCsv} disabled={articleCount === 0} className="w-full h-16 text-lg ios-button-secondary border-emerald-500/30 text-emerald-400">
-                   <FileSpreadsheet size={22} className="mr-2" /> CSV
-                 </Button>
-               </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-      </div>
+          <DialogFooter className="gap-2">
+            <Button onClick={() => setIsManualDialogOpen(false)} variant="ghost" className="text-white/50">Abbrechen</Button>
+            <Button onClick={handleAddManualPosition} disabled={!manualName.trim()} className="glass-button">Hinzufügen</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-// Article Card Component
+// --- ArticleCard Component ---
+
 interface ArticleCardProps {
   article: Article;
-  quantityInProject: number;
-  onAdd: (articleId: string, quantity: number) => void;
-  onUpdateQuantity: (itemId: string, delta: number) => void;
-  onDelete: (itemId: string) => void;
-  itemIds: string[];
+  quantity: number;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onReset: () => void;
   categoryImageUrl?: string;
 }
 
-function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDelete, itemIds, categoryImageUrl }: ArticleCardProps) {
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
+function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl }: ArticleCardProps) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const { impactLight } = useHapticFeedback();
@@ -571,97 +933,81 @@ function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDe
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!article.articleNumber) return;
-    try {
-      await navigator.clipboard.writeText(article.articleNumber);
-      setCopied(true);
-      impactLight();
-      toast({ title: "Artikelnummer kopiert", description: article.articleNumber });
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Copy failed', err);
-    }
+    await navigator.clipboard.writeText(article.articleNumber);
+    setCopied(true);
+    impactLight();
+    toast({ title: 'Artikelnummer kopiert', description: article.articleNumber });
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="ios-card overflow-hidden">
-      <div className="p-5">
+      <div className="p-4">
         <div className="flex items-start gap-4">
-          {/* Article Image (from Category) */}
-          <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
-            {categoryImageUrl ? (
-              <img src={categoryImageUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Package size={24} className="text-white/10" />
-            )}
+          {/* Image */}
+          <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            {categoryImageUrl
+              ? <img src={categoryImageUrl} alt="" className="w-full h-full object-cover" />
+              : <Package size={20} className="text-white/10" />}
           </div>
-
+          {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2 mb-1">
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-white leading-tight line-clamp-2">{article.name}</h3>
-                {article.articleNumber && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-xs text-white/40 font-mono">Art.-Nr: {article.articleNumber}</p>
-                    <button 
-                      onClick={handleCopy}
-                      className={cn(
-                        "p-1 rounded-md transition-all",
-                        copied ? "text-emerald-400 bg-emerald-500/10" : "text-white/20 hover:text-white hover:bg-white/10"
-                      )}
-                    >
-                      {copied ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-                  </div>
-                )}
-              </div>
-              {quantityInProject > 0 && (
-                <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg">
-                  {quantityInProject}x
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="font-semibold text-white leading-tight line-clamp-2 flex-1">{article.name}</h3>
+              {quantity > 0 && (
+                <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-2.5 py-1 rounded-lg shadow-lg">
+                  {quantity}×
                 </div>
               )}
             </div>
+            {article.articleNumber && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <p className="text-xs text-white/40 font-mono">Art.-Nr: {article.articleNumber}</p>
+                <button
+                  onClick={handleCopy}
+                  className={cn('p-1 rounded-md transition-all', copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/20 hover:text-white hover:bg-white/10')}
+                >
+                  {copied ? <Check size={11} /> : <Copy size={11} />}
+                </button>
+              </div>
+            )}
+            {article.unit && <p className="text-xs text-white/30 mt-0.5">Einheit: {article.unit}</p>}
           </div>
         </div>
 
-        {/* Quick Add Buttons */}
-        <div className="flex gap-2 mt-4">
-          {!showQuickAdd ? (
-            <>
-              <Button size="lg" onClick={() => onAdd(article.id, 1)} className="flex-1 ios-button text-lg font-bold">
-                <Plus size={22} className="mr-1" /> 1x
-              </Button>
-              <Button size="lg" onClick={() => onAdd(article.id, 5)} className="flex-1 ios-button-secondary text-lg font-semibold">
-                +5
-              </Button>
-              <Button size="icon" onClick={() => setShowQuickAdd(true)} className="ios-button-secondary" aria-label="Menge eingeben">
-                <span className="text-xl">⋯</span>
-              </Button>
-            </>
-          ) : (
-            <div className="flex gap-2 w-full">
-              <Button size="lg" onClick={() => setShowQuickAdd(false)} className="ios-button-secondary">Abbr.</Button>
-              <input type="number" min="1" defaultValue="10"
-                className="flex-1 h-14 text-center text-lg font-bold glass-input"
-                onKeyDown={(e) => { if (e.key === 'Enter') { const value = parseInt((e.target as HTMLInputElement).value, 10); if (value > 0) { onAdd(article.id, value); setShowQuickAdd(false); } }}}
-                autoFocus />
-              <Button size="lg" onClick={() => { const input = document.querySelector('input[type="number"]') as HTMLInputElement; const value = parseInt(input.value, 10); if (value > 0) { onAdd(article.id, value); setShowQuickAdd(false); }}}
-                className="glass-button px-6">OK</Button>
-            </div>
-          )}
-        </div>
-
-        {/* Quantity Adjustment */}
-        {quantityInProject > 0 && itemIds.length > 0 && (
-          <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-white/10">
-            <Button size="icon" onClick={() => onUpdateQuantity(itemIds[0], -1)} className="rounded-xl ios-button-secondary">
-              <Minus size={20} />
-            </Button>
-            <span className="text-sm font-bold text-white/50 uppercase tracking-widest">Anpassen</span>
-            <Button size="icon" onClick={() => onUpdateQuantity(itemIds[0], 1)} className="rounded-xl ios-button-secondary">
-              <Plus size={20} />
-            </Button>
+        {/* Action Row */}
+        <div className="flex items-center gap-2 mt-4">
+          <Button
+            onClick={onDecrement}
+            size="icon"
+            disabled={quantity <= 0}
+            className="h-11 w-11 rounded-xl ios-button-secondary shrink-0 disabled:opacity-50"
+            aria-label="Minus"
+          >
+            <Minus size={20} />
+          </Button>
+          <div className="flex-1 flex items-center justify-center h-11 glass-input rounded-xl font-bold text-white text-xl">
+            {quantity}
           </div>
-        )}
+          <Button
+            onClick={onIncrement}
+            size="icon"
+            className="h-11 w-11 rounded-xl ios-button shrink-0"
+            aria-label="Plus"
+          >
+            <Plus size={20} />
+          </Button>
+          <Button
+            onClick={onReset}
+            size="icon"
+            variant="ghost"
+            disabled={quantity <= 0}
+            className="h-11 w-11 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white/20"
+            aria-label="Entfernen"
+          >
+            <Trash2 size={16} />
+          </Button>
+        </div>
       </div>
     </div>
   );
