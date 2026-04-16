@@ -9,6 +9,7 @@ export interface Category {
   name: string;
   parentId?: string | null;
   order?: number; // Reihenfolge innerhalb der Ebene
+  imageUrl?: string;
 }
 
 export interface Article {

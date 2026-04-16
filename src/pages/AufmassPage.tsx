@@ -6,10 +6,16 @@ import { useToast } from '@/hooks/use-toast';
 import { getCurrentProjectId, getProjectById, syncProjectItems } from '@/lib/project-storage';
 import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Star, Plus, Minus, FileDown, Menu, ChevronRight, Check, Package, Sparkles } from 'lucide-react';
+import { ChevronLeft, Star, Plus, Minus, FileDown, Menu, ChevronRight, Check, Package, Sparkles, Copy, FileSpreadsheet, BookMarked } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
+import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
+import { SwipeableItem } from '@/components/catalog/SwipeableItem';
+import Fuse from 'fuse.js';
+import { Search, X as CloseIcon } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface ProcessedSummaryItem {
   type: 'article' | 'section';
@@ -29,11 +35,27 @@ const AufmassPage = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [sheetViewCategoryId, setSheetViewCategoryId] = useState<string | null>(null);
   const [favoriteCategories, setFavoriteCategories] = useState<Set<string>>(new Set());
   const [recentCategories, setRecentCategories] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { impactMedium, impactLight } = useHapticFeedback();
+
+  // Fuzzy Search Index
+  const fuse = useMemo(() => new Fuse(articlesData, {
+    keys: ['name', 'articleNumber'],
+    threshold: 0.35,
+    distance: 100,
+    ignoreLocation: true
+  }), [articlesData]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return fuse.search(searchQuery).map(r => r.item);
+  }, [searchQuery, fuse]);
 
   useEffect(() => {
     const projectId = getCurrentProjectId();
@@ -69,6 +91,12 @@ const AufmassPage = () => {
   const selectedCategory = useMemo(() => categories.find(c => c.id === selectedCategoryId), [categories, selectedCategoryId]);
 
 const filteredArticles = useMemo(() => {
+    // Priority 1: Fuzzy Search Results
+    if (searchQuery.trim()) {
+        return searchResults;
+    }
+
+    // Priority 2: Category Filtering
     if (!selectedCategoryId) return [];
     
     // Check if selected category has subcategories
@@ -82,7 +110,7 @@ const filteredArticles = useMemo(() => {
     
     // Otherwise show articles directly in this category
     return articlesData.filter((article) => article.categoryId === selectedCategoryId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-}, [articlesData, selectedCategoryId]);
+}, [articlesData, selectedCategoryId, searchQuery, searchResults, categories]);
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
@@ -115,19 +143,52 @@ const filteredArticles = useMemo(() => {
       order: currentProject.selectedItems.length, article_id: articleId, quantity,
     };
     updateProjectItems([...currentProject.selectedItems, newItem]);
-    if (navigator.vibrate) navigator.vibrate(50);
+    impactMedium();
     toast({ title: "Hinzugefügt", description: `${quantity}x ${article.name}` });
     setRecentCategories(prev => { const filtered = prev.filter(id => id !== selectedCategoryId); return [selectedCategoryId!, ...filtered].slice(0, 5); });
   }, [currentProject, articlesData, selectedCategoryId, toast]);
 
   const handleUpdateItemQuantity = (itemId: string, delta: number) => {
     if (!currentProject) return;
+    impactMedium();
     updateProjectItems(currentProject.selectedItems.map(item => item.id === itemId ? { ...item, quantity: Math.max(0, (item.quantity || 0) + delta) } : item).filter(item => (item.quantity || 0) > 0));
   };
 
   const handleDeleteItem = (itemId: string) => {
     if (!currentProject) return;
     updateProjectItems(currentProject.selectedItems.filter(i => i.id !== itemId));
+  };
+
+  const handleExportCsv = () => {
+    if (!currentProject || processedSummaryItems.length === 0) return;
+    
+    // Header
+    let csvContent = "Menge;Artikelnummer;Bezeichnung\n";
+    
+    // Items
+    processedSummaryItems.forEach(item => {
+      if (item.type === 'article') {
+        const qty = item.quantity || 0;
+        const artNum = item.article?.articleNumber || "";
+        const name = item.article?.name || "";
+        // Excel-friendly CSV with semicolon
+        csvContent += `${qty};${artNum};${name}\n`;
+      }
+    });
+
+    // Create Blob and Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `aufmass_${currentProject.name}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    impactMedium();
+    toast({ title: "CSV exportiert", description: `Datei wurde gespeichert.` });
   };
 
   const handleGeneratePdf = async () => {
@@ -165,7 +226,64 @@ const filteredArticles = useMemo(() => {
   };
 
   const topLevelCategories = categories.filter(c => !c.parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const favoriteCategoriesList = topLevelCategories.filter(c => favoriteCategories.has(c.id));
+
+  const renderCategoryTree = (parentId: string | null = null, level = 0) => {
+    const currentCategories = categories
+      .filter(c => c.parentId === parentId)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    if (currentCategories.length === 0) return null;
+
+    return (
+      <Accordion type="single" collapsible className="w-full space-y-1">
+        {currentCategories.map(category => {
+          const subCategories = categories.filter(c => c.parentId === category.id);
+          const hasSubCategories = subCategories.length > 0;
+
+          const content = (
+            <div className={cn(
+              "flex-1 flex items-center gap-3 py-3 px-4 rounded-xl transition-all text-left",
+              selectedCategoryId === category.id 
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                : "hover:bg-white/5 text-white/70 hover:text-white"
+            )}>
+              <div className={cn(
+                "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-inner",
+                selectedCategoryId === category.id ? "bg-emerald-500/20" : "bg-white/5"
+              )}>
+                {category.imageUrl ? (
+                  <img src={category.imageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  hasSubCategories ? <Menu size={16} className={selectedCategoryId === category.id ? "text-emerald-400" : "text-white/30"} /> : <Package size={16} className={selectedCategoryId === category.id ? "text-emerald-400" : "text-white/30"} />
+                )}
+              </div>
+              <span className="font-medium truncate flex-1">{category.name}</span>
+              {hasSubCategories && <ChevronRight size={14} className="text-white/20 group-data-[state=open]:rotate-90 transition-transform" />}
+            </div>
+          );
+
+          return (
+            <AccordionItem key={category.id} value={category.id} className="border-none">
+              {hasSubCategories ? (
+                <AccordionTrigger className="w-full p-0 hover:no-underline group">
+                  {content}
+                </AccordionTrigger>
+              ) : (
+                <div onClick={() => handleSelectCategory(category.id)} className="cursor-pointer">
+                  {content}
+                </div>
+              )}
+              {hasSubCategories && (
+                <AccordionContent className="pt-1 pb-1 ml-4 border-l border-white/10 pl-2">
+                  {renderCategoryTree(category.id, level + 1)}
+                </AccordionContent>
+              )}
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    );
+  };
 
   if (isLoadingData || !currentProject) {
     return (
@@ -197,182 +315,237 @@ const filteredArticles = useMemo(() => {
                 <ChevronLeft size={24} />
               </button>
               <div>
-                <h1 className="font-semibold text-white truncate max-w-[200px]">{currentProject.name}</h1>
-                <p className="text-xs text-white/50">{articleCount} Artikel</p>
+                <h1 className="font-semibold text-white truncate max-w-[150px] sm:max-w-[300px]">{currentProject.name}</h1>
+                <p className="text-xs text-white/50">{articleCount} Artikel erfasst</p>
               </div>
             </div>
-
-            <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-              <SheetTrigger asChild>
-                <Button className="ios-button-secondary gap-2">
-                  <Menu size={18} className="text-emerald-400" />
-                  <span className="font-medium">{selectedCategory?.name || 'Kategorie'}</span>
-                  <ChevronRight size={16} className="text-white/50" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
-                <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
-                  <div className="flex items-center gap-3">
-                    {sheetViewCategoryId && (
-                      <button onClick={() => {
-                        const parent = categories.find(c => c.id === sheetViewCategoryId)?.parentId;
-                        setSheetViewCategoryId(parent || null);
-                      }} className="p-2 -ml-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                        <ChevronLeft size={20} />
-                      </button>
-                    )}
-                    <SheetTitle className="text-left text-xl text-gradient-emerald">
-                      {sheetViewCategoryId ? categories.find(c => c.id === sheetViewCategoryId)?.name : 'Kategorien'}
+            
+            <div className="flex items-center gap-2">
+              <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="secondary" className="ios-button-secondary gap-2 px-4">
+                    <Menu size={18} className="text-emerald-400" />
+                    <span className="hidden sm:inline">Katalog</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+                  <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+                    <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
+                      <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
                     </SheetTitle>
+                  </SheetHeader>
+                  <div className="overflow-y-auto p-4 flex-1">
+                    <div className="space-y-4">
+                      <div className="px-2">
+                        <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] mb-4">Struktur</h3>
+                        {renderCategoryTree()}
+                      </div>
+                    </div>
                   </div>
-                </SheetHeader>
-                <div className="overflow-y-auto p-6 flex-1 space-y-6">
-{/* Favorites */}
-                   {!sheetViewCategoryId && favoriteCategoriesList.length > 0 && (
-                     <div>
-                       <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3 flex items-center gap-2">
-                         <Star size={14} className="text-amber-400" /> Favoriten
-                       </h3>
-                       <div className="grid grid-cols-2 gap-2">
-                         {favoriteCategoriesList.map(category => {
-                           const subcategories = categories.filter(cat => cat.parentId === category.id);
-                           const hasSubcategories = subcategories.length > 0;
-                           return (
-                           <div key={category.id} className="relative">
-                             <button onClick={() => {
-                               if (hasSubcategories) {
-                                 setSheetViewCategoryId(category.id);
-                               } else {
-                                 handleSelectCategory(category.id);
-                               }
-                             }}
-                               className={cn("p-4 rounded-xl border text-left transition-all w-full",
-                                 selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
-                               <span className="font-medium text-white">{category.name}</span>
-                             </button>
-                             <button onClick={(e) => {
-                                   e.stopPropagation();
-                                   toggleFavorite(category.id, e);
-                                 }}
-                                 className={cn("absolute top-3 right-3 p-1 rounded-full", favoriteCategories.has(category.id) ? "text-amber-400" : "text-white/30 hover:text-amber-400")}>
-                                 <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
-                               </button>
-                           </div>
-                           );
-                         })}
-                       </div>
-                     </div>
-                   )}
-
-                  {/* Recent */}
-                  {!sheetViewCategoryId && recentCategories.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">Zuletzt verwendet</h3>
-                      <div className="flex flex-wrap gap-2">
-{recentCategories.map(catId => {
-  const cat = categories.find(c => c.id === catId);
-  return cat ? (
-    <div key={cat.id} onClick={() => {
-      const subs = categories.filter(c => c.parentId === cat.id);
-      if (subs.length > 0) setSheetViewCategoryId(cat.id);
-      else handleSelectCategory(cat.id);
-    }}
-      className="px-4 py-2 rounded-full bg-white/10 text-white/70 text-sm font-medium hover:bg-white/20 cursor-pointer">
-      {cat.name}
-    </div>
-  ) : null;
-})}
-                      </div>
-                    </div>
-                  )}
-
-{/* Categories List */}
-                    <div>
-                      <h3 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-3">
-                        {sheetViewCategoryId ? 'Unterkategorien' : 'Alle Kategorien'}
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(sheetViewCategoryId ? categories.filter(c => c.parentId === sheetViewCategoryId).sort((a,b)=>(a.order??0)-(b.order??0)) : topLevelCategories).map(category => {
-                          const subcategories = categories.filter(cat => cat.parentId === category.id);
-                          const hasSubcategories = subcategories.length > 0;
-                          
-                          return (
-                            <div key={category.id} className="relative">
-                              <button onClick={() => {
-                                    if (hasSubcategories) {
-                                      setSheetViewCategoryId(category.id);
-                                    } else {
-                                      handleSelectCategory(category.id);
-                                    }
-                                  }}
-                                className={cn("p-4 rounded-xl border text-left transition-all relative w-full",
-                                  selectedCategoryId === category.id ? "border-emerald-500 bg-emerald-500/20" : "border-white/10 bg-white/5 hover:bg-white/10")}>
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-white">{category.name}</span>
-                                  {hasSubcategories && (
-                                    <ChevronRight size={14} className="text-white/40" />
-                                  )}
-                                </div>
-                              </button>
-                              <button onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleFavorite(category.id, e);
-                                }}
-                                className={cn("absolute top-3 right-3 p-1 rounded-full", favoriteCategories.has(category.id) ? "text-amber-400" : "text-white/30 hover:text-amber-400")}>
-                                <Star size={16} fill={favoriteCategories.has(category.id) ? "currentColor" : "none"} />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+                  <div className="p-6 border-t border-white/5 bg-white/[0.02]">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => { setSelectedCategoryId(null); setIsCategorySheetOpen(false); }}
+                      className="w-full text-white/50 hover:text-white"
+                    >
+                      Filter zurücksetzen
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         </header>
 
+        {/* Search Bar */}
+        <div className="p-4 bg-white/5 border-b border-white/10 shrink-0">
+          <div className="relative group max-w-2xl mx-auto">
+            <Search className={cn(
+              "absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300",
+              searchQuery ? "text-emerald-400" : "text-white/30"
+            )} size={22} />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Artikel oder Nummer suchen..."
+              className="h-14 pl-12 pr-12 glass-input text-lg border-white/5 group-hover:border-emerald-500/30 transition-all duration-300"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => { setSearchQuery(''); impactLight(); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all"
+              >
+                <CloseIcon size={20} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Main Content */}
         <main className="flex-1 p-4 pb-28 overflow-y-auto">
-          {filteredArticles.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center mb-4">
-                <Package size={36} className="text-emerald-400" />
+          <div className="max-w-3xl mx-auto space-y-6">
+            {searchQuery ? (
+              // Search Results View
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em]">Suchergebnisse ({filteredArticles.length})</h3>
+                </div>
+                {filteredArticles.length === 0 ? (
+                  <div className="text-center py-16 ios-card">
+                    <Search size={36} className="text-white/20 mx-auto mb-4" />
+                    <p className="text-white/40 font-medium">Kein Material gefunden</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {filteredArticles.map(article => {
+                      const quantityInProject = processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).reduce((sum, i) => sum + (i.quantity || 0), 0);
+                      const cat = categories.find(c => c.id === article.categoryId);
+                      return (
+                        <ArticleCard key={article.id} article={article} quantityInProject={quantityInProject}
+                          onAdd={handleDirectAddArticle} onUpdateQuantity={handleUpdateItemQuantity}
+                          onDelete={handleDeleteItem} itemIds={processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).map(i => i.id)}
+                          categoryImageUrl={cat?.imageUrl} />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <p className="text-white/70 font-semibold text-lg">Keine Artikel</p>
-              <p className="text-white/40 text-sm mt-1">Wählen Sie eine andere Kategorie</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {filteredArticles.map(article => {
-                const quantityInProject = processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).reduce((sum, i) => sum + (i.quantity || 0), 0);
-                return (
-                  <ArticleCard key={article.id} article={article} quantityInProject={quantityInProject}
-                    onAdd={handleDirectAddArticle} onUpdateQuantity={handleUpdateItemQuantity}
-                    onDelete={handleDeleteItem} itemIds={processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).map(i => i.id)} />
-                );
-              })}
-            </div>
-          )}
+            ) : selectedCategoryId ? (
+              // Category View
+              <div className="space-y-4">
+                <div className="px-1">
+                  <div className="space-y-1">
+                    <h2 className="text-2xl font-bold text-white">{selectedCategory?.name}</h2>
+                    <p className="text-xs text-white/40 uppercase tracking-widest">Kategorie</p>
+                  </div>
+                </div>
+                
+                {filteredArticles.length === 0 ? (
+                  <div className="text-center py-16 ios-card">
+                    <Package size={36} className="text-white/20 mx-auto mb-4" />
+                    <p className="text-white/40 font-medium">Kein Material in dieser Kategorie</p>
+                    <Button variant="link" onClick={() => setIsCategorySheetOpen(true)} className="text-emerald-400 mt-2">
+                      Katalog öffnen
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {filteredArticles.map(article => {
+                      const quantityInProject = processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).reduce((sum, i) => sum + (i.quantity || 0), 0);
+                      const cat = categories.find(c => c.id === article.categoryId);
+                      return (
+                        <ArticleCard key={article.id} article={article} quantityInProject={quantityInProject}
+                          onAdd={handleDirectAddArticle} onUpdateQuantity={handleUpdateItemQuantity}
+                          onDelete={handleDeleteItem} itemIds={processedSummaryItems.filter(i => i.type === 'article' && i.article_id === article.id).map(i => i.id)}
+                          categoryImageUrl={cat?.imageUrl} />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Empty State (No Category Selected)
+              <div className="text-center py-20">
+                <div className="w-24 h-24 mx-auto rounded-3xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 flex items-center justify-center mb-6 border border-white/5">
+                  <BookMarked size={40} className="text-emerald-400/50" />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">Bereit zum Erfassen</h2>
+                <p className="text-white/40 max-w-[280px] mx-auto mb-8">
+                  Wählen Sie eine Kategorie aus dem Katalog, um Material hinzuzufügen.
+                </p>
+                <Button onClick={() => setIsCategorySheetOpen(true)} className="glass-button px-8 h-14 text-lg">
+                  Katalog öffnen
+                </Button>
+              </div>
+            )}
+          </div>
         </main>
 
         {/* Sticky Bottom Summary */}
-        <div className="fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
-                <Package size={22} className="text-white" />
-              </div>
-              <div>
-                <p className="font-semibold text-white text-lg">{articleCount}</p>
-                <p className="text-xs text-white/50">Artikel im Aufmaß</p>
-              </div>
+        <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
+          <div className="fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10">
+            <div className="flex items-center justify-between p-4">
+              <SheetTrigger asChild>
+                <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
+                    <Package size={22} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-lg">{articleCount}</p>
+                    <p className="text-xs text-white/50">Artikel im Aufmaß</p>
+                  </div>
+                </div>
+              </SheetTrigger>
+              <Button onClick={handleGeneratePdf} disabled={articleCount === 0} className="glass-button text-lg">
+                <FileDown size={20} className="mr-2" /> PDF
+              </Button>
             </div>
-            <Button onClick={handleGeneratePdf} disabled={articleCount === 0} className="glass-button text-lg">
-              <FileDown size={20} className="mr-2" /> PDF
-            </Button>
           </div>
-        </div>
+
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+            <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+              <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
+            </SheetHeader>
+            <div className="overflow-y-auto p-4 flex-1">
+              {processedSummaryItems.length === 0 ? (
+                <div className="text-center py-20 text-white/40">Keine Artikel im Aufmaß</div>
+              ) : (
+                <div className="space-y-1">
+                  {processedSummaryItems.map((item) => (
+                    <SwipeableItem key={item.id} id={item.id} onDelete={() => handleDeleteItem(item.id)}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">{item.article?.name || item.text || 'Unbekannt'}</p>
+                          <div className="flex items-center gap-2">
+                             <p className="text-xs text-white/40 font-mono">{item.article?.articleNumber || 'Keine Art.-Nr.'}</p>
+                             {item.article?.articleNumber && (
+                               <button 
+                                 onClick={async (e) => { 
+                                   e.stopPropagation(); 
+                                   await navigator.clipboard.writeText(item.article!.articleNumber!);
+                                   impactLight();
+                                   toast({ title: "Kopiert", description: item.article!.articleNumber });
+                                 }}
+                                 className="text-white/20 hover:text-white p-1"
+                               >
+                                 <Copy size={12} />
+                               </button>
+                             )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <Button 
+                            onClick={(e) => { e.stopPropagation(); handleUpdateItemQuantity(item.id, -1); }} 
+                            variant="ghost" size="icon" className="h-9 w-9 bg-white/5 hover:bg-white/10"
+                          >
+                            <Minus size={16} />
+                          </Button>
+                          <span className="text-white font-bold w-8 text-center">{item.quantity}</span>
+                          <Button 
+                            onClick={(e) => { e.stopPropagation(); handleUpdateItemQuantity(item.id, 1); }} 
+                            variant="ghost" size="icon" className="h-9 w-9 bg-white/5 hover:bg-white/10"
+                          >
+                            <Plus size={16} />
+                          </Button>
+                        </div>
+                      </div>
+                    </SwipeableItem>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] space-y-3">
+               <div className="grid grid-cols-2 gap-3">
+                 <Button onClick={handleGeneratePdf} disabled={articleCount === 0} className="w-full h-16 text-lg glass-button">
+                   <FileDown size={22} className="mr-2" /> PDF
+                 </Button>
+                 <Button onClick={handleExportCsv} disabled={articleCount === 0} className="w-full h-16 text-lg ios-button-secondary border-emerald-500/30 text-emerald-400">
+                   <FileSpreadsheet size={22} className="mr-2" /> CSV
+                 </Button>
+               </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </div>
   );
@@ -386,64 +559,106 @@ interface ArticleCardProps {
   onUpdateQuantity: (itemId: string, delta: number) => void;
   onDelete: (itemId: string) => void;
   itemIds: string[];
+  categoryImageUrl?: string;
 }
 
-function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDelete, itemIds }: ArticleCardProps) {
+function ArticleCard({ article, quantityInProject, onAdd, onUpdateQuantity, onDelete, itemIds, categoryImageUrl }: ArticleCardProps) {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  const { impactLight } = useHapticFeedback();
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!article.articleNumber) return;
+    try {
+      await navigator.clipboard.writeText(article.articleNumber);
+      setCopied(true);
+      impactLight();
+      toast({ title: "Artikelnummer kopiert", description: article.articleNumber });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+  };
 
   return (
     <div className="ios-card overflow-hidden">
       <div className="p-5">
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white leading-tight line-clamp-2">{article.name}</h3>
-            {article.articleNumber && (
-               <p className="text-xs text-white/40 font-mono mt-1">Art.-Nr: {article.articleNumber}</p>
+        <div className="flex items-start gap-4">
+          {/* Article Image (from Category) */}
+          <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-inner">
+            {categoryImageUrl ? (
+              <img src={categoryImageUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Package size={24} className="text-white/10" />
             )}
           </div>
-          {quantityInProject > 0 && (
-            <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg">
-              {quantityInProject}x
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-white leading-tight line-clamp-2">{article.name}</h3>
+                {article.articleNumber && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xs text-white/40 font-mono">Art.-Nr: {article.articleNumber}</p>
+                    <button 
+                      onClick={handleCopy}
+                      className={cn(
+                        "p-1 rounded-md transition-all",
+                        copied ? "text-emerald-400 bg-emerald-500/10" : "text-white/20 hover:text-white hover:bg-white/10"
+                      )}
+                    >
+                      {copied ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {quantityInProject > 0 && (
+                <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-3 py-1.5 rounded-lg shadow-lg">
+                  {quantityInProject}x
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Quick Add Buttons */}
         <div className="flex gap-2 mt-4">
           {!showQuickAdd ? (
             <>
-              <Button onClick={() => onAdd(article.id, 1)} className="flex-1 h-14 ios-button text-lg font-bold">
+              <Button size="lg" onClick={() => onAdd(article.id, 1)} className="flex-1 ios-button text-lg font-bold">
                 <Plus size={22} className="mr-1" /> 1x
               </Button>
-              <Button onClick={() => onAdd(article.id, 5)} className="flex-1 h-14 ios-button-secondary text-lg font-semibold">
+              <Button size="lg" onClick={() => onAdd(article.id, 5)} className="flex-1 ios-button-secondary text-lg font-semibold">
                 +5
               </Button>
-              <Button onClick={() => setShowQuickAdd(true)} className="h-14 w-14 ios-button-secondary" aria-label="Menge eingeben">
+              <Button size="icon" onClick={() => setShowQuickAdd(true)} className="ios-button-secondary" aria-label="Menge eingeben">
                 <span className="text-xl">⋯</span>
               </Button>
             </>
           ) : (
             <div className="flex gap-2 w-full">
-              <Button onClick={() => setShowQuickAdd(false)} className="ios-button-secondary h-14">Abbrechen</Button>
+              <Button size="lg" onClick={() => setShowQuickAdd(false)} className="ios-button-secondary">Abbr.</Button>
               <input type="number" min="1" defaultValue="10"
                 className="flex-1 h-14 text-center text-lg font-bold glass-input"
                 onKeyDown={(e) => { if (e.key === 'Enter') { const value = parseInt((e.target as HTMLInputElement).value, 10); if (value > 0) { onAdd(article.id, value); setShowQuickAdd(false); } }}}
                 autoFocus />
-              <Button onClick={() => { const input = document.querySelector('input[type="number"]') as HTMLInputElement; const value = parseInt(input.value, 10); if (value > 0) { onAdd(article.id, value); setShowQuickAdd(false); }}}
-                className="h-14 px-5 glass-button">OK</Button>
+              <Button size="lg" onClick={() => { const input = document.querySelector('input[type="number"]') as HTMLInputElement; const value = parseInt(input.value, 10); if (value > 0) { onAdd(article.id, value); setShowQuickAdd(false); }}}
+                className="glass-button px-6">OK</Button>
             </div>
           )}
         </div>
 
         {/* Quantity Adjustment */}
         {quantityInProject > 0 && itemIds.length > 0 && (
-          <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-white/10">
-            <Button onClick={() => onUpdateQuantity(itemIds[0], -1)} className="h-11 w-11 rounded-xl ios-button-secondary p-0">
-              <Minus size={18} />
+          <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-white/10">
+            <Button size="icon" onClick={() => onUpdateQuantity(itemIds[0], -1)} className="rounded-xl ios-button-secondary">
+              <Minus size={20} />
             </Button>
-            <span className="text-sm text-white/50">Anpassen</span>
-            <Button onClick={() => onUpdateQuantity(itemIds[0], 1)} className="h-11 w-11 rounded-xl ios-button-secondary p-0">
-              <Plus size={18} />
+            <span className="text-sm font-bold text-white/50 uppercase tracking-widest">Anpassen</span>
+            <Button size="icon" onClick={() => onUpdateQuantity(itemIds[0], 1)} className="rounded-xl ios-button-secondary">
+              <Plus size={20} />
             </Button>
           </div>
         )}

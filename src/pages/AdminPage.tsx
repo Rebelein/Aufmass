@@ -4,13 +4,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusCircle, Trash2, Edit3, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, PackagePlus, ListPlus, Settings2, FolderPlus, Sparkles } from 'lucide-react';
 import type { Category, Article, Supplier } from '@/lib/data';
-import { subscribeToCategories, addCategory, updateCategory, batchUpdateCategories, subscribeToArticles, batchUpdateArticles, subscribeToSuppliers, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList } from '@/lib/catalog-storage';
+import { subscribeToCategories, addCategory, updateCategory, batchUpdateCategories, subscribeToArticles, batchUpdateArticles, subscribeToSuppliers, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import ArticleManagementDialog from '@/components/dialogs/ArticleManagementDialog';
 import SupplierManagementDialog from '@/components/dialogs/SupplierManagementDialog';
+import ImportDraftsDialog from '@/components/dialogs/ImportDraftsDialog';
+import ImportReviewDialog from '@/components/dialogs/ImportReviewDialog';
+import { getImportDrafts, updateImportDraftData, markImportDraftCompleted, type ImportDraft } from '@/lib/import-storage';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2, FileUp, Check, Copy } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 
 const AdminPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -30,6 +42,25 @@ const AdminPage = () => {
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [editingCategoryData, setEditingCategoryData] = useState<{ id: string; name: string } | null>(null);
   const [editedCategoryName, setEditedCategoryName] = useState('');
+  const [importDrafts, setImportDrafts] = useState<ImportDraft[]>([]);
+  const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
+  const [reviewingDraft, setReviewingDraft] = useState<ImportDraft | null>(null);
+  const [isSyncEditing, setIsSyncEditing] = useState(true);
+  const [reviewSupplierId, setReviewSupplierId] = useState<string>('none');
+  const [reviewTargetCategoryId, setReviewTargetCategoryId] = useState<string>('root');
+  const [collapsedDraftCategories, setCollapsedDraftCategories] = useState<Set<number>>(new Set());
+  const { impactMedium, impactLight } = useHapticFeedback();
+
+  const refreshDrafts = async () => {
+    const drafts = await getImportDrafts();
+    setImportDrafts(drafts);
+  };
+
+  useEffect(() => {
+    refreshDrafts();
+    const interval = setInterval(refreshDrafts, 10000); // Alle 10 Sekunden prüfen
+    return () => clearInterval(interval);
+  }, []);
 
   const refreshData = async () => {
     const [cats, supps, arts] = await Promise.all([getCategoriesList(), getSuppliersList(), getArticlesList()]);
@@ -128,6 +159,14 @@ const AdminPage = () => {
     await batchUpdateArticles(updates); toast({ title: 'Großhändler aktualisiert' }); await refreshData();
   };
 
+  const toggleCategoryExpansion = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId); else next.add(categoryId);
+      return next;
+    });
+  };
+
   const renderCategories = (parentId: string | null = null, level = 0): JSX.Element[] => {
     return categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).flatMap((category, index, filteredArray) => {
       const children = categories.filter(subCat => subCat.parentId === category.id);
@@ -137,16 +176,15 @@ const AdminPage = () => {
       return [
         <li key={category.id} className='ios-card flex justify-between items-center p-4 mb-2 group'
           style={{ marginLeft: `${level * 1.5}rem`}}>
-          <div className="flex items-center flex-grow gap-3 min-w-0">
+          <div 
+            className="flex items-center flex-grow gap-3 min-w-0 cursor-pointer"
+            onClick={() => children.length > 0 && toggleCategoryExpansion(category.id)}
+          >
             <GripVertical className="h-5 w-5 text-white/30 shrink-0" />
             {children.length > 0 ? (
-              <button onClick={() => setExpandedCategories(prev => {
-                const next = new Set(prev);
-                if (next.has(category.id)) next.delete(category.id); else next.add(category.id);
-                return next;
-              })} className="h-9 w-9 flex items-center justify-center text-emerald-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-white/10">
+              <div className="h-9 w-9 flex items-center justify-center text-emerald-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-white/10">
                 {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-              </button>
+              </div>
             ) : <div className="w-9"></div>}
             <span className="font-semibold text-white truncate group-hover:text-emerald-300 transition-colors">{category.name}</span>
           </div>
@@ -168,6 +206,36 @@ const AdminPage = () => {
         ...(isExpanded ? renderCategories(category.id, level + 1) : [])
       ];
     });
+  };
+
+  const toggleDraftCategory = (catIdx: number) => {
+    setCollapsedDraftCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(catIdx)) next.delete(catIdx); else next.add(catIdx);
+      return next;
+    });
+  };
+
+  const handleOpenDraftForReview = (draft: ImportDraft) => {
+    setIsDraftsDialogOpen(false);
+    setReviewingDraft(draft);
+  };
+
+  const handleSaveReviewDraft = async (id: string, data: any, supplierId: string | null) => {
+    await updateImportDraftData(id, data, supplierId);
+    toast({ title: 'Entwurf gespeichert' });
+    refreshDrafts();
+  };
+
+  const handleConfirmReviewImport = async (id: string, data: any, targetId: string | null, supplierId: string | null) => {
+    const catalogData = data.map((c: any) => ({ ...c, subCategories: [] }));
+    await batchAddCatalog(catalogData, categories, targetId, supplierId);
+    await markImportDraftCompleted(id);
+    
+    setReviewingDraft(null);
+    toast({ title: 'Import erfolgreich' });
+    refreshData();
+    refreshDrafts();
   };
 
   return (
@@ -193,7 +261,47 @@ const AdminPage = () => {
           <div className="md:col-span-1 space-y-4">
             <div className="ios-card p-4">
               <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
-                <Sparkles size={14} className="text-emerald-400" /> Aktionen
+                <Sparkles size={14} className="text-emerald-400" /> KI-Management
+              </h3>
+              <div className="space-y-3">
+                <div 
+                  onClick={() => setIsDraftsDialogOpen(true)}
+                  className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group"
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-semibold text-white/70 group-hover:text-emerald-400 transition-colors">KI-Scans</span>
+                    <Badge variant="outline" className={cn(
+                      "text-[10px] px-1.5 py-0",
+                      importDrafts.some(d => d.status === 'ready_for_review') 
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-pulse" 
+                        : "bg-white/5 text-white/40 border-white/10"
+                    )}>
+                      {importDrafts.filter(d => d.status === 'ready_for_review').length} Bereit
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-500" 
+                        style={{ width: `${(importDrafts.length > 0 ? (importDrafts.filter(d => d.status === 'completed').length / importDrafts.length) * 100 : 0)}%` }}
+                      />
+                    </div>
+                    {importDrafts.some(d => d.status === 'processing') && (
+                      <Loader2 size={12} className="text-amber-400 animate-spin" />
+                    )}
+                  </div>
+                </div>
+
+                <Button onClick={() => setIsDraftsDialogOpen(true)} className="w-full ios-button-secondary justify-start gap-3">
+                  <div className="p-1.5 bg-emerald-500/20 rounded-lg"><Sparkles size={16} className="text-emerald-400"/></div>
+                  Alle Scans zeigen
+                </Button>
+              </div>
+            </div>
+
+            <div className="ios-card p-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
+                <Settings2 size={14} className="text-emerald-400" /> Stammdaten
               </h3>
               <Button onClick={() => setIsSupplierManagementDialogOpen(true)} className="w-full ios-button-secondary justify-start gap-3">
                 <div className="p-1.5 bg-emerald-500/20 rounded-lg"><FolderPlus size={16} className="text-emerald-400"/></div>
@@ -284,6 +392,22 @@ const AdminPage = () => {
 
         <SupplierManagementDialog isOpen={isSupplierManagementDialogOpen} onClose={() => setIsSupplierManagementDialogOpen(false)}
           suppliers={suppliers} onAddSupplier={handleAddSupplierAdmin} onUpdateSupplier={handleUpdateSupplierAdmin} onDeleteSupplier={handleDeleteSupplierAdmin} />
+
+        <ImportDraftsDialog 
+          isOpen={isDraftsDialogOpen} 
+          onClose={() => setIsDraftsDialogOpen(false)} 
+          onOpenDraft={handleOpenDraftForReview} 
+        />
+
+        <ImportReviewDialog
+          draft={reviewingDraft}
+          isOpen={!!reviewingDraft}
+          onClose={() => setReviewingDraft(null)}
+          onSaveDraft={handleSaveReviewDraft}
+          onConfirmImport={handleConfirmReviewImport}
+          categories={categories}
+          suppliers={suppliers}
+        />
       </div>
     </div>
   );

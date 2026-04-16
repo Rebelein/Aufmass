@@ -112,11 +112,20 @@ export async function updateCategory(id: string, data: Partial<Omit<Category, 'i
   if (data.name) updateData.name = data.name;
   if (data.parentId !== undefined) updateData.parent_id = data.parentId;
   if (data.order !== undefined) updateData.order = data.order;
+  if (data.imageUrl !== undefined) updateData.image_url = data.imageUrl;
 
   const { error } = await supabase
     .from('categories')
     .update(updateData)
     .eq('id', id);
+  return !error;
+}
+
+export async function updateCategoryImage(categoryId: string, imageUrl: string | null): Promise<boolean> {
+  const { error } = await supabase
+    .from('categories')
+    .update({ image_url: imageUrl })
+    .eq('id', categoryId);
   return !error;
 }
 
@@ -283,12 +292,12 @@ export async function batchAddCatalog(
       if (catError || !newCat) return;
 
       // 2. Create Articles
-      const articlesToInsert = category.articles.map((art, idx) => ({
+      const articlesToInsert = category.articles.map((art: any, idx: number) => ({
         name: art.name,
         article_number: art.articleNumber,
         unit: art.unit,
         category_id: newCat.id,
-        supplier_id: defaultSupplierId,
+        supplier_id: art.supplierId || defaultSupplierId,
         order: idx
       }));
 
