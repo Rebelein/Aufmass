@@ -6,6 +6,7 @@ import HomePage from '@/pages/HomePage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import AufmassPage from '@/pages/AufmassPage'
 import AdminPage from '@/pages/AdminPage'
+import ReloadPrompt from '@/components/ReloadPrompt'
 
 function App() {
   const location = useLocation()
@@ -35,6 +36,7 @@ function App() {
         </main>
       )}
       <Toaster />
+      <ReloadPrompt />
     </div>
   )
 }

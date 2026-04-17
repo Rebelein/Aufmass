@@ -41,9 +41,8 @@ const AufmassPage = () => {
   const [isCatalogDrawerOpen, setIsCatalogDrawerOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState<string | null>(null);
-  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string | null>(null);
-  const activeCategoryId = selectedSubCategoryId || selectedMainCategoryId;
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [isAddingSectionOpen, setIsAddingSectionOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
@@ -95,16 +94,25 @@ const AufmassPage = () => {
 
   // Auto-select first category
   useEffect(() => {
-    if (categories.length > 0 && !selectedMainCategoryId) {
-      setSelectedMainCategoryId(categories.find(c => c.parentId === null)?.id || null);
+    if (categories.length > 0 && !activeCategoryId) {
+      setActiveCategoryId(categories.find(c => c.parentId === null)?.id || null);
     }
-  }, [categories, selectedMainCategoryId]);
+  }, [categories, activeCategoryId]);
 
   const activeCategory = useMemo(() =>
     categories.find(c => c.id === activeCategoryId), [categories, activeCategoryId]);
 
+  const toggleCategoryExpansion = (categoryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId); else next.add(categoryId);
+      return next;
+    });
+  };
+
   // Expand category hierarchy logic mostly handles finding subsets based on search.
-  const expandedCategoryIds = useMemo(() => {
+  const searchExpandedIds = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const ids = new Set<string>();
     searchResults.forEach(art => {
@@ -453,58 +461,52 @@ const AufmassPage = () => {
     toast({ title: 'PDF erstellt' });
   };
 
-  // Category column rendering for sidebar
-  const renderCategoryColumn = (parentId: string | null = null, isSubColumn = false): JSX.Element => {
+  // Category tree rendering for sidebar
+  const renderCategoryTree = (parentId: string | null = null, depth = 0): JSX.Element => {
     const columnCategories = categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     
-    if (columnCategories.length === 0) {
-      if (parentId === null) {
-        return (
-          <div className="py-16 text-center space-y-4">
-            <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
-          </div>
-        );
-      } else {
-        return (
-           <div className="py-6 text-center px-4">
-             <p className="text-white/40 text-[10px] font-medium mb-3">Keine Unterkategorien</p>
-           </div>
-        );
-      }
+    if (columnCategories.length === 0 && parentId === null) {
+      return (
+        <div className="py-16 text-center space-y-4">
+          <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
+        </div>
+      );
     }
 
+    if (columnCategories.length === 0) return <></>;
+
     return (
-      <ul className="space-y-1.5 px-2">
+      <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
         {columnCategories.map((category) => {
           const hasChildren = categories.some(subCat => subCat.parentId === category.id);
-          const isSelected = isSubColumn ? category.id === selectedSubCategoryId : category.id === selectedMainCategoryId;
+          const isSelected = activeCategoryId === category.id;
+          const isExpanded = expandedCategories.has(category.id) || searchExpandedIds.includes(category.id);
           
           return (
             <li key={category.id} className="group/item">
               <div 
                 className={cn(
                   "flex justify-between items-center p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
-                  isSelected 
+                  isSelected && !hasChildren
                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white"
+                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white",
+                  isSelected && hasChildren && "border-white/20 bg-white/5"
                 )}
-                onClick={() => {
-                  if (isSubColumn) {
-                    setSelectedSubCategoryId(category.id);
+                onClick={(e) => {
+                  if (hasChildren) {
+                    toggleCategoryExpansion(category.id, e);
                   } else {
-                    setSelectedMainCategoryId(category.id);
-                    setSelectedSubCategoryId(null);
-                  }
-                  if (window.innerWidth < 1024 && (!hasChildren || isSubColumn)) {
-                    // Mobile dismiss logic, we can keep using original states
-                    // Actually, we don't need 'setIsCatalogDrawerOpen' here as we removed it for desktop
+                    setActiveCategoryId(category.id);
+                    if (window.innerWidth < 1024) {
+                      setIsCategorySheetOpen(false);
+                    }
                   }
                 }}
               >
                 <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
                   <div className={cn(
                       "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                      isSelected ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
+                      isSelected && !hasChildren ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
                   )}>
                       {hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
                   </div>
@@ -513,11 +515,14 @@ const AufmassPage = () => {
                   )}>
                       {category.name}
                   </span>
-                  {!isSubColumn && hasChildren && (
-                    <ChevronRight size={14} className={cn("ml-auto shrink-0", isSelected ? "text-emerald-400" : "text-white/20")} />
+                  {hasChildren && (
+                    <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-emerald-400" : "text-white/20")} />
                   )}
                 </div>
               </div>
+              {hasChildren && isExpanded && (
+                renderCategoryTree(category.id, depth + 1)
+              )}
             </li>
           );
         })}
@@ -655,17 +660,15 @@ const AufmassPage = () => {
         <div className="orb orb-teal w-48 h-48 bottom-40 -left-10" style={{ animationDelay: '-2s' }} />
       </div>
 
-      {/* ===== STAGGERED DRAWER CONTAINER (Desktop/Tablet Landscape) ===== */}
+      {/* ===== SIDEBAR CONTAINER (Desktop/Tablet Landscape) ===== */}
       <div className={cn(
         "hidden lg:block relative shrink-0 transition-[width] duration-300 h-full",
-        selectedMainCategoryId ? "w-[344px] xl:w-[364px]" : "w-[288px] xl:w-[308px]" // 56px offset
+        "w-[288px] xl:w-[308px]"
       )}>
         
-        {/* Drawer 1: HAUPTGRUPPEN */}
+        {/* Drawer: KATEGORIEN */}
         <aside className={cn(
-          "absolute top-0 bottom-0 left-0 w-[288px] xl:w-[308px] flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] transition-[z-index] duration-0 delay-75",
-          "hover:z-50 hover:delay-0 group/haupt",
-          selectedMainCategoryId ? "z-10" : "z-20"
+          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
         )}>
           <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
              <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
@@ -673,24 +676,9 @@ const AufmassPage = () => {
              </h2>
           </div>
           <div className="flex-1 overflow-y-auto py-3">
-             {renderCategoryColumn(null, false)}
+             {renderCategoryTree()}
           </div>
         </aside>
-
-        {/* Drawer 2: UNTERGRUPPEN */}
-        {selectedMainCategoryId && (
-          <aside className={cn(
-            "absolute top-0 bottom-0 left-[56px] w-[288px] xl:w-[308px] flex flex-col border-l border-r border-teal-500/30 bg-slate-900/95 backdrop-blur shadow-[-20px_0_40px_rgba(0,0,0,0.6)] transition-[z-index] duration-0 delay-75 animate-in slide-in-from-left-4 fade-in duration-300",
-            "hover:z-50 z-20 hover:delay-0 group/unter"
-          )}>
-            <div className="px-4 py-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0 h-[53px]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400/80">Untergruppen</p>
-            </div>
-            <div className="flex-1 overflow-y-auto py-3">
-              {renderCategoryColumn(selectedMainCategoryId, true)}
-            </div>
-          </aside>
-        )}
       </div>
 
       {/* ===== CENTER: Main Content ===== */}
@@ -728,17 +716,11 @@ const AufmassPage = () => {
                   </SheetHeader>
                   <div className="overflow-y-auto p-4 flex-1 space-y-6">
                     <div>
-                      {renderCategoryColumn(null, false)}
+                      {renderCategoryTree()}
                     </div>
-                    {selectedMainCategoryId && (
-                      <div className="pt-4 border-t border-white/10 relative">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400/80 mb-3 ml-2">Untergruppen</p>
-                        {renderCategoryColumn(selectedMainCategoryId, true)}
-                      </div>
-                    )}
                   </div>
                   <div className="p-6 border-t border-white/5 bg-white/[0.02]">
-                    <Button variant="ghost" onClick={() => { setSelectedMainCategoryId(null); setSelectedSubCategoryId(null); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
+                    <Button variant="ghost" onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
                       Filter zurücksetzen
                     </Button>
                   </div>

@@ -20,9 +20,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileUp, Check, Copy } from 'lucide-react';
+import { Loader2, FileUp, Check, Copy, Menu, BookMarked, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { useNavigate } from 'react-router-dom';
 
 const AdminPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -36,8 +38,9 @@ const AdminPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'category' | 'article'} | null>(null);
   const { toast } = useToast();
-  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState<string | null>(null);
-  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isSupplierManagementDialogOpen, setIsSupplierManagementDialogOpen] = useState(false);
   const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
   const [editingCategoryData, setEditingCategoryData] = useState<{ id: string; name: string } | null>(null);
@@ -166,73 +169,57 @@ const AdminPage = () => {
     });
   };
 
-  const renderCategoryColumn = (parentId: string | null = null, isSubColumn = false): JSX.Element => {
+  const renderCategoryTree = (parentId: string | null = null, depth = 0): JSX.Element => {
     const columnCategories = categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     
-    if (columnCategories.length === 0) {
-      if (parentId === null) {
-        return (
-          <div className="py-16 text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
-              <ListPlus size={32} className="text-emerald-400" />
-            </div>
-            <p className="text-white/60 font-medium">Keine Kategorien vorhanden</p>
+    if (columnCategories.length === 0 && parentId === null) {
+      return (
+        <div className="py-16 text-center space-y-4">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
+            <ListPlus size={32} className="text-emerald-400" />
           </div>
-        );
-      } else {
-        return (
-          <div className="py-6 text-center px-4">
-            <p className="text-white/40 text-xs font-medium mb-3">Keine Unterkategorien</p>
-            <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => { 
-                    const parentCat = categories.find(c => c.id === parentId);
-                    if (parentCat) {
-                        setSubCategoryParent({ id: parentCat.id, name: parentCat.name }); 
-                        setNewSubCategoryName(''); 
-                        setIsAddSubCategoryDialogOpen(true); 
-                    }
-                }}
-                className="h-8 text-xs text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 w-full"
-            >
-                <PlusCircle size={14} className="mr-1.5" /> Erstellen
-            </Button>
-          </div>
-        );
-      }
+          <p className="text-white/60 font-medium">Keine Kategorien vorhanden</p>
+        </div>
+      );
     }
 
+    if (columnCategories.length === 0) return <></>;
+
     return (
-      <ul className="space-y-1.5 px-2">
+      <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
         {columnCategories.map((category, index) => {
           const hasChildren = categories.some(subCat => subCat.parentId === category.id);
           const isFirst = index === 0;
           const isLast = index === columnCategories.length - 1;
-          const isSelected = isSubColumn ? category.id === selectedSubCategoryId : category.id === selectedMainCategoryId;
+          const isSelected = activeCategoryId === category.id;
+          const isExpanded = expandedCategories.has(category.id);
           
           return (
             <li key={category.id} className="group/item">
               <div 
                 className={cn(
                   "flex justify-between items-center p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
-                  isSelected 
+                  isSelected && !hasChildren
                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white"
+                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white",
+                  isSelected && hasChildren && "border-white/20 bg-white/5"
                 )}
-                onClick={() => {
-                  if (isSubColumn) {
-                    setSelectedSubCategoryId(category.id);
+                onClick={(e) => {
+                  if (hasChildren) {
+                    e.stopPropagation();
+                    toggleCategoryExpansion(category.id);
                   } else {
-                    setSelectedMainCategoryId(category.id);
-                    setSelectedSubCategoryId(null); // select main = clear sub
+                    setActiveCategoryId(category.id);
+                    if (window.innerWidth < 1024) {
+                      setIsCategorySheetOpen(false);
+                    }
                   }
                 }}
               >
                 <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
                   <div className={cn(
                       "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                      isSelected ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
+                      isSelected && !hasChildren ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
                   )}>
                       {hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
                   </div>
@@ -241,8 +228,8 @@ const AdminPage = () => {
                   )}>
                       {category.name}
                   </span>
-                  {!isSubColumn && hasChildren && (
-                    <ChevronRight size={14} className={cn("ml-auto shrink-0", isSelected ? "text-emerald-400" : "text-white/20")} />
+                  {hasChildren && (
+                    <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-emerald-400" : "text-white/20")} />
                   )}
                 </div>
                 
@@ -252,16 +239,17 @@ const AdminPage = () => {
                     className="h-7 w-7 text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md"><ArrowUp size={14} /></Button>
                   <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleMoveCategory(category.id, 'down'); }} disabled={isLast}
                     className="h-7 w-7 text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md"><ArrowDown size={14} /></Button>
-                  {!isSubColumn && (
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }}
+                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }}
                       className="h-7 w-7 text-white/40 hover:text-orange-400 hover:bg-orange-500/10 rounded-md"><PackagePlus size={14} /></Button>
-                  )}
                   <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }}
                     className="h-7 w-7 text-white/40 hover:text-blue-400 hover:bg-blue-500/10 rounded-md"><Edit3 size={14} /></Button>
                   <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }}
                     className="h-7 w-7 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-md"><Trash2 size={14} /></Button>
                 </div>
               </div>
+              {hasChildren && isExpanded && (
+                renderCategoryTree(category.id, depth + 1)
+              )}
             </li>
           );
         })}
@@ -309,36 +297,111 @@ const AdminPage = () => {
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0 animate-in fade-in duration-500 overflow-hidden">
         {/* Page Header */}
-        <div className="px-4 py-3 border-b border-white/5 flex items-center gap-3 shrink-0 bg-slate-900/40 backdrop-blur-sm">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/20 flex items-center justify-center shrink-0">
-            <Settings2 className="w-4 h-4 text-emerald-400" />
+        <header className="shrink-0 border-b border-white/5 bg-slate-900/40 backdrop-blur-sm">
+          <div className="flex items-center justify-between px-4 py-3 gap-3 h-14 md:h-16">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => navigate('/')}
+                className="xl:hidden p-1.5 -ml-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <Settings2 className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-white leading-tight truncate">Verwaltung</h1>
+                <p className="text-[10px] text-white/40 truncate">Katalogstruktur und Stammdaten pflegen</p>
+              </div>
+            </div>
+            {/* Right: catalog (mobile) */}
+            <div className="flex items-center gap-1.5">
+              <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="sm" className="xl:hidden h-9 px-3 text-white/50 hover:text-white hover:bg-white/10 gap-1.5">
+                    <Menu size={16} className="text-emerald-400" />
+                    <span className="hidden sm:inline text-xs">Katalog</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+                  <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+                    <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
+                      <BookMarked size={20} className="text-emerald-400" /> Katalog
+                    </SheetTitle>
+                  </SheetHeader>
+                  
+                  <div className="overflow-y-auto flex-1 flex flex-col">
+                    <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
+                        <ListPlus size={14} /> Hauptgruppen
+                      </p>
+                      <div className="flex gap-2">
+                        <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
+                          placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
+                        <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
+                          <PlusCircle size={16} />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex-1 py-3 overflow-y-auto">
+                      {renderCategoryTree()}
+                    </div>
+                  </div>
+                  
+                  {/* Bottom: KI + Stammdaten inside Sheet */}
+                  <div className="p-4 border-t border-white/10 bg-slate-950 space-y-3 shrink-0 flex flex-col">
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                        <Sparkles size={10} className="text-emerald-400" /> KI-Management
+                      </p>
+                      <div onClick={() => { setIsDraftsDialogOpen(true); setIsCategorySheetOpen(false); }}
+                        className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                          <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
+                            importDrafts.some(d => d.status === 'ready_for_review')
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                              : "bg-transparent text-white/40 border-white/10")}>
+                            {importDrafts.filter(d => d.status === 'ready_for_review').length}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                        <Settings2 size={10} className="text-teal-400" /> Stammdaten
+                      </p>
+                      <Button onClick={() => { setIsSupplierManagementDialogOpen(true); setIsCategorySheetOpen(false); }} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 justify-start gap-2 h-9 text-xs">
+                        <FolderPlus size={14} className="text-teal-400 shrink-0" />
+                        Großhändler / Lieferanten
+                      </Button>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-white leading-tight">Verwaltung</h1>
-            <p className="text-[10px] text-white/40">Katalogstruktur und Stammdaten pflegen</p>
-          </div>
-        </div>
+        </header>
 
         {/* Body: Staggered Overlay Miller Columns */}
         <div className="flex flex-1 min-h-0 overflow-hidden relative">
 
-          {/* ===== STAGGERED DRAWER CONTAINER ===== */}
+          {/* ===== SIDEBAR CONTAINER ===== */}
           <div className={cn(
-            "relative shrink-0 transition-[width] duration-300 h-full",
-            selectedMainCategoryId ? "w-[344px] xl:w-[364px]" : "w-[288px] xl:w-[308px]" // 56px offset
+            "hidden xl:block relative shrink-0 transition-[width] duration-300 h-full",
+            "w-[288px] xl:w-[308px]"
           )}>
             
-            {/* Drawer 1: HAUPTGRUPPEN + KI */}
+            {/* Drawer: KATEGORIEN + KI */}
             <aside className={cn(
-              "absolute top-0 bottom-0 left-0 w-[288px] xl:w-[308px] flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] transition-[z-index] duration-0 delay-75",
-              "hover:z-50 hover:delay-0 group/haupt",
-              selectedMainCategoryId ? "z-10" : "z-20"
+              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
             )}>
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
                 <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
-                    <ListPlus size={14} /> Hauptgruppen
+                    <ListPlus size={14} /> Katalog
                   </p>
                   <div className="flex gap-2">
                     <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
@@ -350,7 +413,7 @@ const AdminPage = () => {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto py-3">
-                  {renderCategoryColumn(null, false)}
+                  {renderCategoryTree()}
                 </div>
               </div>
 
@@ -384,35 +447,12 @@ const AdminPage = () => {
                 </div>
               </div>
             </aside>
-
-            {/* Drawer 2: UNTERGRUPPEN */}
-            {selectedMainCategoryId && (
-              <aside className={cn(
-                "absolute top-0 bottom-0 left-[56px] w-[288px] xl:w-[308px] flex flex-col border-l border-r border-teal-500/30 bg-slate-900/95 backdrop-blur shadow-[-20px_0_40px_rgba(0,0,0,0.6)] transition-[z-index] duration-0 delay-75 animate-in slide-in-from-left-4 fade-in duration-300",
-                "hover:z-50 z-20 hover:delay-0 group/unter"
-              )}>
-                <div className="px-4 py-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0 h-[62px]">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-teal-400/80">Untergruppen</p>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                    const parentCat = categories.find(c => c.id === selectedMainCategoryId);
-                    if (parentCat) { setSubCategoryParent({ id: parentCat.id, name: parentCat.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }
-                  }} className="h-7 px-2 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 text-xs gap-1">
-                    <PlusCircle size={11} /> Neu
-                  </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto py-3">
-                  {renderCategoryColumn(selectedMainCategoryId, true)}
-                </div>
-              </aside>
-            )}
-
           </div>
 
           {/* ===== CENTER: ARTICLE PANEL ===== */}
           <div className="flex-1 min-w-0 overflow-hidden bg-slate-900/40 relative z-0">
             <div className="absolute inset-0 overflow-y-auto">
               {(() => {
-                const activeCategoryId = selectedSubCategoryId || selectedMainCategoryId;
                 const activeCategory = activeCategoryId ? categories.find(c => c.id === activeCategoryId) : null;
                 return activeCategory ? (
                   <ArticleManagementPanel
