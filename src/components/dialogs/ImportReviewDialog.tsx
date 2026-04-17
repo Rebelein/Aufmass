@@ -39,7 +39,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   const [targetCategoryId, setTargetCategoryId] = useState<string>(defaultTargetCategoryId || 'root');
   const [supplierId, setSupplierId] = useState<string>('none');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
-  const [cursorInfo, setCursorInfo] = useState<{ catIdx: number, artIdx: number, pos: number } | null>(null);
+  const [cursorInfo, setCursorInfo] = useState<{ catIdx: number, artIdx: number, pos: number, field: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
@@ -56,7 +56,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   // Cursor-Sicherung
   React.useLayoutEffect(() => {
     if (cursorInfo) {
-      const key = `${cursorInfo.catIdx}-${cursorInfo.artIdx}`;
+      const key = `${cursorInfo.catIdx}-${cursorInfo.artIdx}-${cursorInfo.field}`;
       const input = inputRefs.current[key];
       if (input) {
         input.setSelectionRange(cursorInfo.pos, cursorInfo.pos);
@@ -71,20 +71,20 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     const category = nextData[catIdx];
     const article = category.articles[artIdx];
 
-    if (field === 'name' && isSyncEditing && pos !== undefined) {
-      const delta = value.length - article.name.length;
+    if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
+      const delta = value.length - (article[field] || '').length;
       const oldSuffixStart = pos - delta;
       
       category.articles = category.articles.map((art: any) => {
-        const suffix = art.name.substring(Math.max(0, oldSuffixStart));
+        const suffix = (art[field] || '').substring(Math.max(0, oldSuffixStart));
         const newPrefix = value.substring(0, pos);
-        return { ...art, name: newPrefix + suffix };
+        return { ...art, [field]: newPrefix + suffix };
       });
-      setCursorInfo({ catIdx, artIdx, pos });
+      setCursorInfo({ catIdx, artIdx, pos, field });
     } else {
       article[field] = value;
-      if (field === 'name' && pos !== undefined) {
-        setCursorInfo({ catIdx, artIdx, pos });
+      if ((field === 'name' || field === 'articleNumber') && pos !== undefined) {
+        setCursorInfo({ catIdx, artIdx, pos, field });
       }
     }
     setLocalData(nextData);
@@ -171,7 +171,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                 <SelectTrigger className="glass-input h-10">
                   <SelectValue placeholder="Wählen..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[300px]">
+                <SelectContent className="bg-background border-white/10 text-white max-h-[300px]">
                   <SelectItem value="root">Hauptverzeichnis (Root)</SelectItem>
                   {categories.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -185,7 +185,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                 <SelectTrigger className="glass-input h-10">
                   <SelectValue placeholder="Wählen..." />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-900 border-white/10 text-white">
+                <SelectContent className="bg-background border-white/10 text-white">
                   <SelectItem value="none">Keiner</SelectItem>
                   {suppliers.map(s => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -258,7 +258,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                  <TableRow key={article.id || artIdx} className="border-white/5 hover:bg-white/[0.02] transition-colors group">
                                    <TableCell className="p-2">
                                      <input 
-                                       ref={el => { if (el) inputRefs.current[inputKey] = el; }}
+                                       ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
                                        value={article.name}
                                        onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
                                        className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all"
@@ -266,8 +266,9 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                    </TableCell>
                                    <TableCell className="p-2">
                                      <input 
+                                       ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
                                        value={article.articleNumber}
-                                       onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value)}
+                                       onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
                                        className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-all"
                                      />
                                    </TableCell>

@@ -4,21 +4,23 @@ export const formatGermanNumber = (num: number, decimals: number): string => {
   return num.toFixed(decimals).replace('.', ',');
 };
 
+export const getSupplierName = (item: ProcessedSummaryItem): string => {
+  if (item.type !== 'article') return '';
+  return item.article?.supplierName || (item as any).supplier_name || 'Andere';
+};
+
 export const generateGCCsv = (items: ProcessedSummaryItem[]): string => {
   const header = ';Artikelnummer;Menge;Beschreibung 1;Beschreibung 2;Listenpreis;\n';
   const rows = items
-    .filter((item) => item.type === 'article' && item.article)
+    .filter((item) => item.type === 'article')
     .map((item) => {
-      const articleNumber = item.article?.articleNumber || '';
+      const articleNumber = item.article?.articleNumber || (item as any).article_number || '';
       const quantity = item.quantity || 0;
-      const name = item.article?.name || item.text || '';
-      // Assuming price could be on the article, if not it's empty
-      const priceVal = (item.article as any)?.price;
       
       const qtyStr = formatGermanNumber(quantity, 3);
-      const priceStr = priceVal ? `${formatGermanNumber(priceVal, 2)} €` : '';
       
-      return `ART;${articleNumber};${qtyStr};${name};;${priceStr};`;
+      // GC benötigt nur Artikelnummer und Menge. Rest bleibt leer, damit das GC-System die Daten selbst ergänzt.
+      return `ART;${articleNumber};${qtyStr};;;;`;
     })
     .join('\n');
   
@@ -27,12 +29,12 @@ export const generateGCCsv = (items: ProcessedSummaryItem[]): string => {
 
 export const generateHeinzeCsv = (items: ProcessedSummaryItem[]): string => {
   const rows = items
-    .filter((item) => item.type === 'article' && item.article)
+    .filter((item) => item.type === 'article')
     .map((item) => {
-      const articleNumber = item.article?.articleNumber || '';
+      const articleNumber = item.article?.articleNumber || (item as any).article_number || '';
       const quantity = item.quantity || 0;
-      const name = item.article?.name || item.text || '';
-      const unit = item.article?.unit || 'ST';
+      const name = item.article?.name || item.text || (item as any).name || '';
+      const unit = item.article?.unit || (item as any).unit || 'ST';
       const priceVal = (item.article as any)?.price;
       
       const qtyStr = formatGermanNumber(quantity, 3);
@@ -44,6 +46,18 @@ export const generateHeinzeCsv = (items: ProcessedSummaryItem[]): string => {
     .join('\n');
   
   return rows;
+};
+
+export const generateCsvForSupplier = (supplier: string, items: ProcessedSummaryItem[]): string => {
+  const normalizedSupplier = supplier.toUpperCase();
+  if (normalizedSupplier.includes('GC')) {
+    return generateGCCsv(items);
+  } else if (normalizedSupplier.includes('HEINZE')) {
+    return generateHeinzeCsv(items);
+  } else {
+    // Default to GC format as requested
+    return generateGCCsv(items);
+  }
 };
 
 export const downloadCsv = (content: string, filename: string) => {

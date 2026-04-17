@@ -1,8 +1,7 @@
 
 'use client';
 
-import type { ProposedCategory, ProposedArticle } from '@/ai/catalog-schemas';
-import type { Abgaswert } from './abgaswerte-storage';
+import type { ProposedCategory, ProposedArticle, Abgaswert } from '@/lib/types';
 
 /**
  * Parses a CSV string into a catalog structure.

@@ -43,6 +43,12 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
     if (!categories || !articles) return imageMap;
     
     for (const category of categories) {
+      // Prioritize the category's own image
+      if (category.imageUrl) {
+        imageMap.set(category.id, category.imageUrl);
+        continue;
+      }
+
       const allDescendantIds = getDescendantCategoryIds(category.id, categories);
       const allCategoryIds = [category.id, ...allDescendantIds];
       const articleWithImage = articles.find(art => allCategoryIds.includes(art.categoryId) && art.imageUrl);
@@ -93,7 +99,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 >
                     {previewImageUrl ? (
                         <div className="relative w-6 h-6 shrink-0 rounded-lg overflow-hidden border border-white/10">
-                            <img src={previewImageUrl} alt="" fill className="object-cover" />
+                            <img src={previewImageUrl} alt="" className="w-full h-full object-cover" />
                         </div>
                     ) : (
                         <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-white/50")} />

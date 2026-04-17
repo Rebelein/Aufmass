@@ -44,7 +44,7 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({ children, onDelete
         dragElastic={0.1}
         onDragEnd={handleDragEnd}
         style={{ x }}
-        className="relative z-10 bg-slate-900/90 backdrop-blur-sm p-4 w-full touch-pan-y"
+        className="relative z-10 bg-background/90 backdrop-blur-sm p-4 w-full touch-pan-y"
       >
         {children}
       </motion.div>

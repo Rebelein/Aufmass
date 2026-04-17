@@ -11,24 +11,25 @@ import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  ChevronLeft, Plus, Minus, FileDown, Menu, Check, Package, Sparkles,
-  Copy, FileSpreadsheet, BookMarked, Search, X as CloseIcon, Trash2,
-  FolderOpen, PenLine, ChevronRight, FolderPlus
+  ChevronLeft, FileDown, Menu, Package, Sparkles,
+  FileSpreadsheet, BookMarked, Search, X as CloseIcon,
+  PenLine
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
-import jsPDF from 'jspdf';
+import { cn, generateUUID } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
-import { SwipeableItem } from '@/components/catalog/SwipeableItem';
+import { motion } from 'framer-motion';
+import { CsvExportDialog } from '@/components/dialogs/CsvExportDialog';
+import type { ProcessedSummaryItem } from '@/lib/types';
 import Fuse from 'fuse.js';
-
-// --- Types ---
-
-interface ProcessedSummaryItem extends ProjectSelectedItem {
-  article?: Partial<Omit<Article, 'price'>>;
-}
+import { generateAufmassPdf } from '@/lib/pdf-export';
+import { generateAngebotPdf } from '@/lib/pdf-export-angebot';
+import { ArticleCard } from '@/components/aufmass/ArticleCard';
+import { SectionBar } from '@/components/aufmass/SectionBar';
+import { SummaryList } from '@/components/aufmass/SummaryList';
+import { CategoryTree } from '@/components/catalog/CategoryTree';
+import { AngebotTool } from '@/components/aufmass/AngebotTool';
 
 // --- Main Page ---
 
@@ -37,6 +38,7 @@ const AufmassPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [viewMode, setViewMode] = useState<'aufmass' | 'angebot'>('angebot');
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isCatalogDrawerOpen, setIsCatalogDrawerOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -44,9 +46,8 @@ const AufmassPage = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [isAddingSectionOpen, setIsAddingSectionOpen] = useState(false);
-  const [newSectionName, setNewSectionName] = useState('');
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [isCsvExportDialogOpen, setIsCsvExportDialogOpen] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualQty, setManualQty] = useState('1');
   const [manualUnit, setManualUnit] = useState('');
@@ -72,7 +73,7 @@ const AufmassPage = () => {
   // Load project & catalog
   useEffect(() => {
     const projectId = getCurrentProjectId();
-    if (!projectId) { navigate('/projects'); return; }
+    if (!projectId) { navigate('/'); return; }
 
     let isMounted = true;
     const unsubCats = subscribeToCategories(cats => { if (isMounted) setCategories(cats); });
@@ -81,7 +82,7 @@ const AufmassPage = () => {
 
     const load = async () => {
       const project = await getProjectById(projectId);
-      if (!project) { navigate('/projects'); return; }
+      if (!project) { navigate('/'); return; }
       if (isMounted) { setCurrentProject(project); setIsLoadingData(false); }
     };
     load();
@@ -98,6 +99,15 @@ const AufmassPage = () => {
       setActiveCategoryId(categories.find(c => c.parentId === null)?.id || null);
     }
   }, [categories, activeCategoryId]);
+
+    // Force view mode if not in planning
+    useEffect(() => {
+      if (currentProject && currentProject.status !== 'planning') {
+        setViewMode('aufmass');
+      } else if (currentProject && currentProject.status === 'planning' && !viewMode) {
+        setViewMode('angebot');
+      }
+    }, [currentProject?.status]);
 
   const activeCategory = useMemo(() =>
     categories.find(c => c.id === activeCategoryId), [categories, activeCategoryId]);
@@ -211,7 +221,7 @@ const AufmassPage = () => {
       }
     } else {
       const newItem: ProjectSelectedItem = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         project_id: currentProject.id,
         type: 'article',
         order: currentProject.selectedItems.length,
@@ -274,25 +284,45 @@ const AufmassPage = () => {
     await deleteProjectItem(itemId);
   }, [removeLocalItem]);
 
+  // Update item quantity
+  const handleUpdateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
+    if (newQuantity < 1) return;
+    impactLight();
+    
+    // Update local state immediately
+    setCurrentProject(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        selectedItems: prev.selectedItems.map(i => 
+          i.id === itemId ? { ...i, quantity: newQuantity } : i
+        )
+      };
+    });
+
+    const ok = await updateProjectItemQuantity(itemId, newQuantity);
+    if (!ok) {
+      toast({ title: 'Fehler', description: 'Menge konnte nicht aktualisiert werden.', variant: 'destructive' });
+    }
+  }, [toast, impactLight]);
+
   // Add section
-  const handleAddSection = async () => {
-    if (!currentProject || !newSectionName.trim()) return;
+  const handleAddSection = async (sectionName: string) => {
+    if (!currentProject || !sectionName.trim()) return;
     const order = currentProject.selectedItems.length;
-    const newSec = await addSection(currentProject.id, newSectionName, order);
+    const newSec = await addSection(currentProject.id, sectionName, order);
     if (newSec) {
       updateLocalItem(newSec);
       setActiveSectionId(newSec.id);
-      toast({ title: 'Abschnitt erstellt', description: newSectionName });
+      toast({ title: 'Abschnitt erstellt', description: sectionName });
     }
-    setNewSectionName('');
-    setIsAddingSectionOpen(false);
   };
 
   // Add manual position
   const handleAddManualPosition = async () => {
     if (!currentProject || !manualName.trim()) return;
     const newItem: ProjectSelectedItem = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       project_id: currentProject.id,
       type: 'article',
       order: currentProject.selectedItems.length,
@@ -318,57 +348,8 @@ const AufmassPage = () => {
   // Export CSV
   const handleExportCsv = () => {
     if (!currentProject) return;
-    const sectionItems = currentProject.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order);
-    const articleItems = processedSummaryItems.filter(i => i.type === 'article');
-
-    let csv = '';
-    const exportSection = (sId: string | null, label: string) => {
-      const items = articleItems.filter(i => i.section_id === sId);
-      if (items.length === 0) return;
-      csv += `"${label}"\n`;
-      csv += 'Menge;Artikelnummer;Bezeichnung\n';
-      items.forEach(i => {
-        const qty = i.quantity ?? 0;
-        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
-        const name = i.article?.name ?? i.name ?? '';
-        csv += `${qty};"${artNum}";"${name}"\n`;
-      });
-      csv += '\n';
-    };
-
-    // Per-section breakdown
-    exportSection(null, 'Allgemein');
-    sectionItems.forEach(s => exportSection(s.id, s.text ?? 'Abschnitt'));
-
-    // Total summary (aggregated across all sections)
-    if (sectionItems.length > 0) {
-      csv += `"=== GESAMTÜBERSICHT ==="\n`;
-      csv += 'Menge Gesamt;Artikelnummer;Bezeichnung\n';
-      const totals = new Map<string, { name: string; artNum: string; qty: number }>();
-      articleItems.forEach(i => {
-        const key = i.article?.articleNumber ?? i.article_number ?? i.article?.name ?? i.name ?? i.id;
-        const existing = totals.get(key);
-        const qty = i.quantity ?? 0;
-        const name = i.article?.name ?? i.name ?? 'Manuell';
-        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
-        if (existing) {
-          totals.set(key, { ...existing, qty: existing.qty + qty });
-        } else {
-          totals.set(key, { name, artNum, qty });
-        }
-      });
-      totals.forEach(v => {
-        csv += `${v.qty};"${v.artNum}";"${v.name}"\n`;
-      });
-    }
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.setAttribute('href', URL.createObjectURL(blob));
-    link.setAttribute('download', `aufmass_${currentProject.name}.csv`);
-    link.click();
+    setIsCsvExportDialogOpen(true);
     impactMedium();
-    toast({ title: 'CSV exportiert' });
   };
 
   // Export PDF
@@ -376,268 +357,18 @@ const AufmassPage = () => {
     if (!currentProject) return;
     const sectionItems = currentProject.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order);
     const articleItems = processedSummaryItems.filter(i => i.type === 'article');
-
-    const doc = new jsPDF();
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Projekt: ${currentProject.name}`, 15, 20);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(150);
-    doc.text(`Erstellt: ${new Date().toLocaleDateString('de-DE')}`, 15, 28);
-    doc.setTextColor(0);
-    let y = 40;
-
-    const checkNewPage = () => { if (y > 270) { doc.addPage(); y = 20; } };
-
-    const renderSection = (sId: string | null, label: string) => {
-      const items = articleItems.filter(i => i.section_id === sId);
-      if (items.length === 0) return;
-      checkNewPage();
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(label, 15, y); y += 7;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      items.forEach(i => {
-        checkNewPage();
-        const name = i.article?.name ?? i.name ?? 'Manuell';
-        const qty = i.quantity ?? 0;
-        const artNum = i.article?.articleNumber ?? i.article_number ?? '';
-        const unit = i.article?.unit ?? i.unit ?? '';
-        doc.text(`${qty}${unit ? ' ' + unit : 'x'}`, 20, y);
-        doc.text(`${name}${artNum ? '  (' + artNum + ')' : ''}`, 45, y);
-        y += 6;
-      });
-      y += 4;
-    };
-
-    // Per-section breakdown
-    renderSection(null, 'Allgemein');
-    sectionItems.forEach(s => renderSection(s.id, s.text ?? 'Abschnitt'));
-
-    // Total summary page (only if there are sections)
-    if (sectionItems.length > 0 && articleItems.length > 0) {
-      doc.addPage();
-      y = 20;
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Gesamtübersicht', 15, y); y += 10;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(120);
-      doc.text('Alle Abschnitte aufsummiert – für die Bestellung', 15, y); y += 8;
-      doc.setTextColor(0);
-      doc.setFontSize(10);
-
-      const totals = new Map<string, { name: string; artNum: string; unit: string; qty: number }>();
-      articleItems.forEach(i => {
-        const key = i.article?.articleNumber ?? i.article_number ?? i.article?.name ?? i.name ?? i.id;
-        const existing = totals.get(key);
-        const qty = i.quantity ?? 0;
-        if (existing) {
-          totals.set(key, { ...existing, qty: existing.qty + qty });
-        } else {
-          totals.set(key, {
-            name: i.article?.name ?? i.name ?? 'Manuell',
-            artNum: i.article?.articleNumber ?? i.article_number ?? '',
-            unit: i.article?.unit ?? i.unit ?? '',
-            qty,
-          });
-        }
-      });
-
-      totals.forEach(v => {
-        checkNewPage();
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${v.qty}${v.unit ? ' ' + v.unit : 'x'}`, 20, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${v.name}${v.artNum ? '  (' + v.artNum + ')' : ''}`, 45, y);
-        y += 6;
-      });
-    }
-
-    doc.save(`aufmass_${currentProject.name}.pdf`);
+    generateAufmassPdf({ projectName: currentProject.name, sectionItems, articleItems });
     toast({ title: 'PDF erstellt' });
   };
 
-  // Category tree rendering for sidebar
-  const renderCategoryTree = (parentId: string | null = null, depth = 0): JSX.Element => {
-    const columnCategories = categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    
-    if (columnCategories.length === 0 && parentId === null) {
-      return (
-        <div className="py-16 text-center space-y-4">
-          <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
-        </div>
-      );
+
+  // Helper: select category and close mobile sheet
+  const handleSelectCategory = (categoryId: string) => {
+    setActiveCategoryId(categoryId);
+    if (window.innerWidth < 1024) {
+      setIsCategorySheetOpen(false);
     }
-
-    if (columnCategories.length === 0) return <></>;
-
-    return (
-      <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
-        {columnCategories.map((category) => {
-          const hasChildren = categories.some(subCat => subCat.parentId === category.id);
-          const isSelected = activeCategoryId === category.id;
-          const isExpanded = expandedCategories.has(category.id) || searchExpandedIds.includes(category.id);
-          
-          return (
-            <li key={category.id} className="group/item">
-              <div 
-                className={cn(
-                  "flex justify-between items-center p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
-                  isSelected && !hasChildren
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white",
-                  isSelected && hasChildren && "border-white/20 bg-white/5"
-                )}
-                onClick={(e) => {
-                  if (hasChildren) {
-                    toggleCategoryExpansion(category.id, e);
-                  } else {
-                    setActiveCategoryId(category.id);
-                    if (window.innerWidth < 1024) {
-                      setIsCategorySheetOpen(false);
-                    }
-                  }
-                }}
-              >
-                <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
-                  <div className={cn(
-                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                      isSelected && !hasChildren ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
-                  )}>
-                      {hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
-                  </div>
-                  <span className={cn(
-                      "font-semibold truncate transition-colors text-sm"
-                  )}>
-                      {category.name}
-                  </span>
-                  {hasChildren && (
-                    <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-emerald-400" : "text-white/20")} />
-                  )}
-                </div>
-              </div>
-              {hasChildren && isExpanded && (
-                renderCategoryTree(category.id, depth + 1)
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    );
   };
-
-  // Summary list component (shared between bottom sheet + right panel)
-  const SummaryList = () => {
-    const sectionItems = currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? [];
-    const articleItems = processedSummaryItems.filter(i => i.type === 'article');
-
-    const renderSectionGroup = (sId: string | null, label: string) => {
-      const items = articleItems.filter(i => i.section_id === sId);
-      if (items.length === 0 && sId !== null) return null;
-      return (
-        <div key={sId ?? 'general'} className="mb-4">
-          <button
-            onClick={() => setActiveSectionId(sId)}
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left mb-2 transition-colors',
-              activeSectionId === sId ? 'bg-emerald-500/15 text-emerald-400' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-            )}
-          >
-            <FolderOpen size={14} />
-            <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
-          </button>
-          {items.length === 0 ? (
-            <p className="text-xs text-white/20 px-3 mb-2">Keine Positionen</p>
-          ) : (
-            <div className="space-y-1">
-              {items.map(item => (
-                <SwipeableItem key={item.id} id={item.id} onDelete={() => handleDeleteItem(item.id)}>
-                  <div className="flex items-center justify-between gap-3 px-3 py-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-medium truncate">{item.article?.name ?? item.name ?? 'Manuell'}</p>
-                      <p className="text-xs text-white/30 font-mono">{item.article?.articleNumber ?? item.article_number ?? '—'}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button onClick={() => handleDeleteItem(item.id)} variant="ghost" size="icon" className="h-7 w-7 text-white/20 hover:text-red-400">
-                        <Trash2 size={13} />
-                      </Button>
-                      <span className="text-white font-bold text-sm min-w-[2rem] text-center">{item.quantity}</span>
-                    </div>
-                  </div>
-                </SwipeableItem>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    return (
-      <div className="overflow-y-auto flex-1 p-4 space-y-1">
-        {renderSectionGroup(null, 'Allgemein')}
-        {sectionItems.map(s => renderSectionGroup(s.id, s.text ?? 'Abschnitt'))}
-        {articleItems.length === 0 && (
-          <div className="text-center py-12 text-white/30 text-sm">Keine Artikel im Aufmaß</div>
-        )}
-      </div>
-    );
-  };
-
-  // Section selector bar
-  const SectionBar = () => (
-    <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto border-b border-white/5 shrink-0">
-      <button
-        onClick={() => setActiveSectionId(null)}
-        className={cn(
-          'shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
-          activeSectionId === null
-            ? 'bg-emerald-500 text-white shadow-lg'
-            : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-        )}
-      >
-        Allgemein
-      </button>
-      {sections.map(sec => (
-        <button
-          key={sec.id}
-          onClick={() => setActiveSectionId(sec.id)}
-          className={cn(
-            'shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
-            activeSectionId === sec.id
-              ? 'bg-emerald-500 text-white shadow-lg'
-              : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-          )}
-        >
-          {sec.text}
-        </button>
-      ))}
-      {isAddingSectionOpen ? (
-        <div className="flex items-center gap-2 shrink-0">
-          <Input
-            value={newSectionName}
-            onChange={e => setNewSectionName(e.target.value)}
-            placeholder="Abschnitt Name..."
-            className="h-8 w-36 glass-input text-sm"
-            autoFocus
-            onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') setIsAddingSectionOpen(false); }}
-          />
-          <Button onClick={handleAddSection} size="sm" className="h-8 glass-button px-3">OK</Button>
-          <Button onClick={() => setIsAddingSectionOpen(false)} size="sm" variant="ghost" className="h-8 px-2 text-white/50">✕</Button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setIsAddingSectionOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-white/5 text-emerald-400 hover:bg-emerald-500/10 transition-all whitespace-nowrap border border-emerald-500/20"
-        >
-          <Plus size={14} /> Abschnitt
-        </button>
-      )}
-    </div>
-  );
 
   if (isLoadingData || !currentProject) {
     return (
@@ -652,44 +383,111 @@ const AufmassPage = () => {
     );
   }
 
+  const pageVariants = {
+    initial: { opacity: 0, y: 15 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+    exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
+  };
+
   return (
-    <div className="flex h-[calc(100vh-3rem)] overflow-hidden relative">
-      {/* Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="orb orb-emerald w-64 h-64 -top-10 right-20" style={{ animationDelay: '0s' }} />
-        <div className="orb orb-teal w-48 h-48 bottom-40 -left-10" style={{ animationDelay: '-2s' }} />
-      </div>
+    <motion.div 
+      className="flex h-[calc(100vh-3rem)] overflow-hidden relative"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
 
       {/* ===== SIDEBAR CONTAINER (Desktop/Tablet Landscape) ===== */}
       <div className={cn(
         "hidden lg:block relative shrink-0 transition-[width] duration-300 h-full",
-        "w-[288px] xl:w-[308px]"
+        viewMode === 'angebot' ? "w-[240px]" : "w-[288px] xl:w-[308px]"
       )}>
         
         {/* Drawer: KATEGORIEN */}
         <aside className={cn(
-          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
+          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-background/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
         )}>
-          <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
-             <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-               <BookMarked size={14} /> Artikelkatalog
-             </h2>
-          </div>
-          <div className="flex-1 overflow-y-auto py-3">
-             {renderCategoryTree()}
-          </div>
+          {viewMode === 'aufmass' ? (
+            <>
+              <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
+                <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                  <BookMarked size={14} /> Artikelkatalog
+                </h2>
+              </div>
+              <div className="flex-1 overflow-y-auto py-3">
+                <CategoryTree
+                  categories={categories}
+                  activeCategoryId={activeCategoryId}
+                  expandedCategories={expandedCategories}
+                  forceExpandedIds={searchExpandedIds}
+                  onSelectCategory={handleSelectCategory}
+                  onToggleExpansion={toggleCategoryExpansion}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
+                <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                  <BookMarked size={14} /> Projekt-Struktur
+                </h2>
+                <Button onClick={() => {
+                   const name = "Neuer Bauabschnitt";
+                   const order = currentProject?.selectedItems?.length || 0;
+                   if (currentProject) {
+                     addSection(currentProject.id, name, order).then(res => {
+                       if (res) { updateLocalItem(res); setActiveSectionId(res.id); }
+                     });
+                   }
+                }} className="w-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 h-9">
+                  Abschnitt hinzufügen
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
+                {sections.map(s => (
+                  <button 
+                    key={s.id}
+                    onClick={() => setActiveSectionId(s.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors truncate", 
+                      activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
+                    )}
+                  >
+                    {s.text}
+                  </button>
+                ))}
+                {sections.length === 0 && (
+                  <p className="text-xs text-white/30 text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
+                )}
+              </div>
+              <div className="p-4 border-t border-white/5 bg-white/[0.02] shrink-0">
+                <Button onClick={() => {
+                   if (!currentProject) return;
+                   try {
+                     generateAngebotPdf({ project: currentProject, sectionItems: sections, articleItems: processedSummaryItems.filter(i => i.type === 'article') });
+                     toast({ title: "Erfolgreich", description: "PDF wurde generiert." });
+                   } catch(e) {
+                     toast({ title: "Fehler", variant: "destructive", description: "PDF Generierung fehlgeschlagen." });
+                   }
+                }} className="w-full bg-white text-black hover:bg-white/90">
+                  <FileDown size={16} className="mr-2" /> PDF exportieren
+                </Button>
+              </div>
+            </>
+          )}
         </aside>
       </div>
 
       {/* ===== CENTER: Main Content ===== */}
-      <div className="flex-1 flex flex-col overflow-hidden z-20 min-w-0">
+      <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-background/80")}>
         {/* Page header – slim, no duplicate back-button on desktop */}
-        <header className="shrink-0 border-b border-white/5 bg-slate-900/40 backdrop-blur-sm">
+        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm relative">
           <div className="flex items-center justify-between px-4 h-12 gap-3">
             {/* Left: back (mobile only) + project name */}
             <div className="flex items-center gap-2 min-w-0">
               <button
-                onClick={() => navigate('/projects')}
+                onClick={() => navigate('/')}
                 className="xl:hidden p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
               >
                 <ChevronLeft size={18} />
@@ -699,6 +497,24 @@ const AufmassPage = () => {
                 <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel erfasst</p>
               </div>
             </div>
+
+            {/* Center: Mode Switch (only visible if planning) */}
+            {currentProject.status === 'planning' && (
+              <div className="hidden sm:flex items-center bg-white/5 p-1 rounded-xl mx-auto absolute left-1/2 -translate-x-1/2">
+                <button 
+                  onClick={() => setViewMode('angebot')}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'angebot' ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white")}
+                >
+                  📸 Struktur & Notizen
+                </button>
+                <button 
+                  onClick={() => setViewMode('aufmass')}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'aufmass' ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white")}
+                >
+                  🛒 Material
+                </button>
+              </div>
+            )}
             {/* Right: catalog (mobile/tablet) + manual position button */}
             <div className="flex items-center gap-1.5">
               <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
@@ -708,7 +524,7 @@ const AufmassPage = () => {
                     <span className="hidden sm:inline text-xs">Katalog</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
                   <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
                     <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                       <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
@@ -716,7 +532,14 @@ const AufmassPage = () => {
                   </SheetHeader>
                   <div className="overflow-y-auto p-4 flex-1 space-y-6">
                     <div>
-                      {renderCategoryTree()}
+                      <CategoryTree
+                        categories={categories}
+                        activeCategoryId={activeCategoryId}
+                        expandedCategories={expandedCategories}
+                        forceExpandedIds={searchExpandedIds}
+                        onSelectCategory={handleSelectCategory}
+                        onToggleExpansion={toggleCategoryExpansion}
+                      />
                     </div>
                   </div>
                   <div className="p-6 border-t border-white/5 bg-white/[0.02]">
@@ -740,8 +563,15 @@ const AufmassPage = () => {
           </div>
         </header>
 
-        {/* Section Bar */}
-        <SectionBar />
+        {viewMode === 'aufmass' ? (
+          <>
+            {/* Section Bar */}
+            <SectionBar
+              sections={sections}
+              activeSectionId={activeSectionId}
+              onSelectSection={setActiveSectionId}
+              onAddSection={handleAddSection}
+            />
 
         {/* Search Bar */}
         <div className="px-4 py-3 border-b border-white/5 shrink-0">
@@ -800,16 +630,34 @@ const AufmassPage = () => {
             )}
           </div>
         </main>
+      </>
+        ) : (
+          <AngebotTool 
+            project={currentProject} 
+            activeSectionId={activeSectionId}
+            onUpdateLocalItem={updateLocalItem}
+            onRemoveLocalItem={removeLocalItem}
+          />
+        )}
       </div>
 
       {/* ===== RIGHT PANEL: Summary (Tablet landscape+ = permanent, Mobile = BottomSheet) ===== */}
-      {/* Desktop/Tablet permanent panel */}
-      <aside className="hidden lg:flex flex-col w-80 xl:w-96 shrink-0 border-l border-white/10 bg-slate-900/60 backdrop-blur-xl z-10">
+      {viewMode === 'aufmass' && (
+        <>
+          {/* Desktop/Tablet permanent panel */}
+      <aside className="hidden lg:flex flex-col w-80 xl:w-96 shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10">
         <div className="p-4 border-b border-white/5 shrink-0">
           <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider">Aufmaß</h2>
           <p className="text-2xl font-bold text-emerald-400 mt-1">{totalArticleCount} <span className="text-sm font-normal text-white/40">Artikel</span></p>
         </div>
-        <SummaryList />
+        <SummaryList
+                sectionItems={currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? []}
+                articleItems={processedSummaryItems.filter(i => i.type === 'article')}
+                activeSectionId={activeSectionId}
+                onSelectSection={setActiveSectionId}
+                onDeleteItem={handleDeleteItem}
+                onUpdateQuantity={handleUpdateQuantity}
+              />
         <div className="p-4 border-t border-white/5 bg-white/[0.02] space-y-2 shrink-0">
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full glass-button">
@@ -842,11 +690,18 @@ const AufmassPage = () => {
             </Button>
           </div>
         </div>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
           <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
             <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
           </SheetHeader>
-          <SummaryList />
+          <SummaryList
+                sectionItems={currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? []}
+                articleItems={processedSummaryItems.filter(i => i.type === 'article')}
+                activeSectionId={activeSectionId}
+                onSelectSection={setActiveSectionId}
+                onDeleteItem={handleDeleteItem}
+                onUpdateQuantity={handleUpdateQuantity}
+              />
           <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] grid grid-cols-2 gap-3">
             <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="h-14 text-lg glass-button">
               <FileDown size={20} className="mr-2" /> PDF
@@ -860,7 +715,7 @@ const AufmassPage = () => {
 
       {/* Manual Position Dialog */}
       <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-slate-900/95 sm:max-w-md">
+        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl font-bold flex items-center gap-2">
               <PenLine size={18} className="text-emerald-400" /> Manuelle Position
@@ -892,107 +747,16 @@ const AufmassPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      <CsvExportDialog
+        isOpen={isCsvExportDialogOpen}
+        onClose={() => setIsCsvExportDialogOpen(false)}
+        projectItems={processedSummaryItems}
+        projectName={currentProject.name}
+     />
+        </>
+      )}
+    </motion.div>
   );
 };
-
-// --- ArticleCard Component ---
-
-interface ArticleCardProps {
-  article: Article;
-  quantity: number;
-  onIncrement: () => void;
-  onDecrement: () => void;
-  onReset: () => void;
-  categoryImageUrl?: string;
-}
-
-function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl }: ArticleCardProps) {
-  const [copied, setCopied] = useState(false);
-  const { toast } = useToast();
-  const { impactLight } = useHapticFeedback();
-
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!article.articleNumber) return;
-    await navigator.clipboard.writeText(article.articleNumber);
-    setCopied(true);
-    impactLight();
-    toast({ title: 'Artikelnummer kopiert', description: article.articleNumber });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="ios-card overflow-hidden">
-      <div className="p-4">
-        <div className="flex items-start gap-4">
-          {/* Image */}
-          <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-            {categoryImageUrl
-              ? <img src={categoryImageUrl} alt="" className="w-full h-full object-cover" />
-              : <Package size={20} className="text-white/10" />}
-          </div>
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="font-semibold text-white leading-tight line-clamp-2 flex-1">{article.name}</h3>
-              {quantity > 0 && (
-                <div className="shrink-0 bg-gradient-to-br from-emerald-500 to-teal-500 text-white text-sm font-bold px-2.5 py-1 rounded-lg shadow-lg">
-                  {quantity}×
-                </div>
-              )}
-            </div>
-            {article.articleNumber && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <p className="text-xs text-white/40 font-mono">Art.-Nr: {article.articleNumber}</p>
-                <button
-                  onClick={handleCopy}
-                  className={cn('p-1 rounded-md transition-all', copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-white/20 hover:text-white hover:bg-white/10')}
-                >
-                  {copied ? <Check size={11} /> : <Copy size={11} />}
-                </button>
-              </div>
-            )}
-            {article.unit && <p className="text-xs text-white/30 mt-0.5">Einheit: {article.unit}</p>}
-          </div>
-        </div>
-
-        {/* Action Row */}
-        <div className="flex items-center gap-2 mt-4">
-          <Button
-            onClick={onDecrement}
-            size="icon"
-            disabled={quantity <= 0}
-            className="h-11 w-11 rounded-xl ios-button-secondary shrink-0 disabled:opacity-50"
-            aria-label="Minus"
-          >
-            <Minus size={20} />
-          </Button>
-          <div className="flex-1 flex items-center justify-center h-11 glass-input rounded-xl font-bold text-white text-xl">
-            {quantity}
-          </div>
-          <Button
-            onClick={onIncrement}
-            size="icon"
-            className="h-11 w-11 rounded-xl ios-button shrink-0"
-            aria-label="Plus"
-          >
-            <Plus size={20} />
-          </Button>
-          <Button
-            onClick={onReset}
-            size="icon"
-            variant="ghost"
-            disabled={quantity <= 0}
-            className="h-11 w-11 rounded-xl text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-white/20"
-            aria-label="Entfernen"
-          >
-            <Trash2 size={16} />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default AufmassPage;

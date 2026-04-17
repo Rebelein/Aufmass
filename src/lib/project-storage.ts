@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { generateUUID } from './utils';
 
 export interface ProjectSection {
   id: string;
@@ -22,6 +23,8 @@ export interface ProjectSelectedItem {
 
   // For sections
   text?: string;
+  description?: string | null;
+  images?: string[];
 
   // For manual articles
   name?: string;
@@ -33,6 +36,12 @@ export interface ProjectSelectedItem {
 export interface Project {
   id: string;
   name: string;
+  status: 'planning' | 'active' | 'completed';
+  address?: string | null;
+  client_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string | null;
   selectedItems: ProjectSelectedItem[];
   created_at: string;
   updated_at: string;
@@ -102,10 +111,18 @@ export async function getProjectById(projectId: string): Promise<Project | undef
   } as Project;
 }
 
-export async function addProjectToSupabase(projectName: string): Promise<Project | null> {
+export async function addProjectToSupabase(projectName: string, projectData?: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at'>>): Promise<Project | null> {
   const { data, error } = await supabase
     .from('projects')
-    .insert([{ name: projectName.trim() }])
+    .insert([{ 
+      name: projectName.trim(),
+      status: projectData?.status || 'planning',
+      address: projectData?.address || null,
+      client_name: projectData?.client_name || null,
+      start_date: projectData?.start_date || null,
+      end_date: projectData?.end_date || null,
+      notes: projectData?.notes || null
+    }])
     .select()
     .single();
 
@@ -116,12 +133,21 @@ export async function addProjectToSupabase(projectName: string): Promise<Project
   return { ...data, selectedItems: [] } as Project;
 }
 
-export async function updateProjectName(projectId: string, name: string): Promise<boolean> {
+export async function updateProject(projectId: string, updates: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at'>>): Promise<boolean> {
+  const payload = { ...updates };
+  if (payload.name) {
+    payload.name = payload.name.trim();
+  }
+  
   const { error } = await supabase
     .from('projects')
-    .update({ name: name.trim() })
+    .update(payload)
     .eq('id', projectId);
   return !error;
+}
+
+export async function updateProjectName(projectId: string, name: string): Promise<boolean> {
+  return updateProject(projectId, { name });
 }
 
 export async function deleteProjectFromSupabase(projectId: string): Promise<boolean> {
@@ -153,6 +179,8 @@ export async function upsertProjectItem(item: ProjectSelectedItem): Promise<Proj
     article_number: item.article_number ?? null,
     unit: item.unit ?? null,
     supplier_name: item.supplier_name ?? null,
+    description: item.description ?? null,
+    images: item.images ?? null,
   };
 
   // Only include article_id if present and not null
@@ -212,7 +240,7 @@ export async function addSection(
   order: number
 ): Promise<ProjectSelectedItem | null> {
   const newSection: Record<string, unknown> = {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     project_id: projectId,
     type: 'section',
     text: sectionName.trim(),

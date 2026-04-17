@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Trash2, Edit3, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, PackagePlus, ListPlus, Settings2, FolderPlus, Sparkles, Package } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, ChevronDown, ChevronRight, ArrowUp, ArrowDown, GripVertical, PackagePlus, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical } from 'lucide-react';
 import type { Category, Article, Supplier } from '@/lib/data';
 import { subscribeToCategories, addCategory, updateCategory, batchUpdateCategories, subscribeToArticles, batchUpdateArticles, subscribeToSuppliers, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
 import ArticleManagementPanel from '@/components/admin/ArticleManagementPanel';
 import SupplierManagementDialog from '@/components/dialogs/SupplierManagementDialog';
@@ -25,6 +26,8 @@ import { cn } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router-dom';
+import { CategoryTree } from '@/components/catalog/CategoryTree';
+import { motion } from 'framer-motion';
 
 const AdminPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -161,7 +164,8 @@ const AdminPage = () => {
     await batchUpdateArticles(updates); toast({ title: 'Großhändler aktualisiert' }); await refreshData();
   };
 
-  const toggleCategoryExpansion = (categoryId: string) => {
+  const toggleCategoryExpansion = (categoryId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setExpandedCategories(prev => {
       const next = new Set(prev);
       if (next.has(categoryId)) next.delete(categoryId); else next.add(categoryId);
@@ -169,93 +173,41 @@ const AdminPage = () => {
     });
   };
 
-  const renderCategoryTree = (parentId: string | null = null, depth = 0): JSX.Element => {
-    const columnCategories = categories.filter(category => category.parentId === parentId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    
-    if (columnCategories.length === 0 && parentId === null) {
-      return (
-        <div className="py-16 text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
-            <ListPlus size={32} className="text-emerald-400" />
-          </div>
-          <p className="text-white/60 font-medium">Keine Kategorien vorhanden</p>
-        </div>
-      );
+  const handleSelectCategory = (categoryId: string) => {
+    setActiveCategoryId(categoryId);
+    if (window.innerWidth < 1024) {
+      setIsCategorySheetOpen(false);
     }
-
-    if (columnCategories.length === 0) return <></>;
-
-    return (
-      <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
-        {columnCategories.map((category, index) => {
-          const hasChildren = categories.some(subCat => subCat.parentId === category.id);
-          const isFirst = index === 0;
-          const isLast = index === columnCategories.length - 1;
-          const isSelected = activeCategoryId === category.id;
-          const isExpanded = expandedCategories.has(category.id);
-          
-          return (
-            <li key={category.id} className="group/item">
-              <div 
-                className={cn(
-                  "flex justify-between items-center p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
-                  isSelected && !hasChildren
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]" 
-                    : "bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10 text-white/80 hover:text-white",
-                  isSelected && hasChildren && "border-white/20 bg-white/5"
-                )}
-                onClick={(e) => {
-                  if (hasChildren) {
-                    e.stopPropagation();
-                    toggleCategoryExpansion(category.id);
-                  } else {
-                    setActiveCategoryId(category.id);
-                    if (window.innerWidth < 1024) {
-                      setIsCategorySheetOpen(false);
-                    }
-                  }
-                }}
-              >
-                <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
-                  <div className={cn(
-                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                      isSelected && !hasChildren ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
-                  )}>
-                      {hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
-                  </div>
-                  <span className={cn(
-                      "font-semibold truncate transition-colors text-sm"
-                  )}>
-                      {category.name}
-                  </span>
-                  {hasChildren && (
-                    <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-emerald-400" : "text-white/20")} />
-                  )}
-                </div>
-                
-                {/* Actions */}
-                <div className="flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleMoveCategory(category.id, 'up'); }} disabled={isFirst}
-                    className="h-7 w-7 text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md"><ArrowUp size={14} /></Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleMoveCategory(category.id, 'down'); }} disabled={isLast}
-                    className="h-7 w-7 text-white/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md"><ArrowDown size={14} /></Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }}
-                      className="h-7 w-7 text-white/40 hover:text-orange-400 hover:bg-orange-500/10 rounded-md"><PackagePlus size={14} /></Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }}
-                    className="h-7 w-7 text-white/40 hover:text-blue-400 hover:bg-blue-500/10 rounded-md"><Edit3 size={14} /></Button>
-                  <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }}
-                    className="h-7 w-7 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-md"><Trash2 size={14} /></Button>
-                </div>
-              </div>
-              {hasChildren && isExpanded && (
-                renderCategoryTree(category.id, depth + 1)
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    );
   };
+
+  const renderAdminActions = (category: Category, { isFirst, isLast }: { isFirst: boolean; isLast: boolean }) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10 rounded-md">
+          <MoreVertical size={16} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 bg-gray-900 border-white/10 text-white shadow-xl">
+        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst} className="hover:bg-white/10 cursor-pointer focus:bg-white/10">
+          <ArrowUp size={14} className="mr-2 text-white/50" /> Nach oben
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast} className="hover:bg-white/10 cursor-pointer focus:bg-white/10">
+          <ArrowDown size={14} className="mr-2 text-white/50" /> Nach unten
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuItem onClick={() => { setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-orange-400 focus:text-orange-300">
+          <PackagePlus size={14} className="mr-2" /> Unterkategorie
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => { setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-blue-400 focus:text-blue-300">
+          <Edit3 size={14} className="mr-2" /> Bearbeiten
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuItem onClick={() => { setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }} className="hover:bg-red-500/20 cursor-pointer focus:bg-red-500/20 text-red-400 focus:text-red-300">
+          <Trash2 size={14} className="mr-2" /> Löschen
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   const toggleDraftCategory = (catIdx: number) => {
     setCollapsedDraftCategories(prev => {
@@ -287,17 +239,24 @@ const AdminPage = () => {
     refreshDrafts();
   };
 
+  const pageVariants = {
+    initial: { opacity: 0, y: 15 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+    exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
+  };
+
   return (
-    <div className="h-[calc(100vh-3rem)] flex flex-col relative overflow-hidden">
-      {/* Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="orb orb-emerald w-80 h-80 -top-20 -left-20" style={{ animationDelay: '0s' }} />
-        <div className="orb orb-teal w-64 h-64 bottom-40 right-10" style={{ animationDelay: '-2s' }} />
-      </div>
+    <motion.div 
+      className="h-full flex flex-col relative overflow-hidden"
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0 animate-in fade-in duration-500 overflow-hidden">
         {/* Page Header */}
-        <header className="shrink-0 border-b border-white/5 bg-slate-900/40 backdrop-blur-sm">
+        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm">
           <div className="flex items-center justify-between px-4 py-3 gap-3 h-14 md:h-16">
             <div className="flex items-center gap-3 min-w-0">
               <button
@@ -323,7 +282,7 @@ const AdminPage = () => {
                     <span className="hidden sm:inline text-xs">Katalog</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col p-0">
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
                   <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
                     <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                       <BookMarked size={20} className="text-emerald-400" /> Katalog
@@ -345,12 +304,19 @@ const AdminPage = () => {
                       </div>
                     </div>
                     <div className="flex-1 py-3 overflow-y-auto">
-                      {renderCategoryTree()}
+                                        <CategoryTree
+                    categories={categories}
+                    activeCategoryId={activeCategoryId}
+                    expandedCategories={expandedCategories}
+                    onSelectCategory={handleSelectCategory}
+                    onToggleExpansion={toggleCategoryExpansion}
+                    renderActions={renderAdminActions}
+                  />
                     </div>
                   </div>
                   
                   {/* Bottom: KI + Stammdaten inside Sheet */}
-                  <div className="p-4 border-t border-white/10 bg-slate-950 space-y-3 shrink-0 flex flex-col">
+                  <div className="p-4 border-t border-white/10 bg-background space-y-3 shrink-0 flex flex-col">
                     <div>
                       <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
                         <Sparkles size={10} className="text-emerald-400" /> KI-Management
@@ -395,7 +361,7 @@ const AdminPage = () => {
             
             {/* Drawer: KATEGORIEN + KI */}
             <aside className={cn(
-              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-slate-900/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
+              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-background/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
             )}>
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
@@ -413,12 +379,19 @@ const AdminPage = () => {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto py-3">
-                  {renderCategoryTree()}
+                                    <CategoryTree
+                    categories={categories}
+                    activeCategoryId={activeCategoryId}
+                    expandedCategories={expandedCategories}
+                    onSelectCategory={handleSelectCategory}
+                    onToggleExpansion={toggleCategoryExpansion}
+                    renderActions={renderAdminActions}
+                  />
                 </div>
               </div>
 
               {/* Bottom 25%: KI + Stammdaten */}
-              <div className="flex-[1] min-h-[140px] border-t border-white/10 bg-slate-950 p-4 space-y-3 shrink-0 flex flex-col overflow-y-auto">
+              <div className="flex-[1] min-h-[140px] border-t border-white/10 bg-background p-4 space-y-3 shrink-0 flex flex-col overflow-y-auto">
                 <div>
                   <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
                     <Sparkles size={10} className="text-emerald-400" /> KI-Management
@@ -450,7 +423,7 @@ const AdminPage = () => {
           </div>
 
           {/* ===== CENTER: ARTICLE PANEL ===== */}
-          <div className="flex-1 min-w-0 overflow-hidden bg-slate-900/40 relative z-0">
+          <div className="flex-1 min-w-0 overflow-hidden bg-background/40 relative z-0">
             <div className="absolute inset-0 overflow-y-auto">
               {(() => {
                 const activeCategory = activeCategoryId ? categories.find(c => c.id === activeCategoryId) : null;
@@ -487,7 +460,7 @@ const AdminPage = () => {
 
       {/* ===== DIALOGS ===== */}
       <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-slate-900/95">
+        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
           <DialogHeader><DialogTitle className="text-xl font-bold text-white">Kategorie umbenennen</DialogTitle></DialogHeader>
           <div className="py-4"><Input value={editedCategoryName} onChange={(e) => setEditedCategoryName(e.target.value)} className="glass-input" /></div>
           <DialogFooter className="gap-2">
@@ -498,7 +471,7 @@ const AdminPage = () => {
       </Dialog>
 
       <Dialog open={isAddSubCategoryDialogOpen} onOpenChange={setIsAddSubCategoryDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-slate-900/95">
+        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-white">Unterkategorie erstellen</DialogTitle>
             <p className="text-white/50 text-sm">Neu in: <span className="text-emerald-400 font-bold">{subCategoryParent?.name}</span></p>
@@ -512,7 +485,7 @@ const AdminPage = () => {
       </Dialog>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="ios-card border border-white/10 bg-slate-900/95">
+        <AlertDialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-bold text-red-400">Element löschen?</AlertDialogTitle>
             <p className="text-white/50">Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
@@ -532,7 +505,7 @@ const AdminPage = () => {
       <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)}
         onSaveDraft={handleSaveReviewDraft} onConfirmImport={handleConfirmReviewImport}
         categories={categories} suppliers={suppliers} />
-    </div>
+    </motion.div>
   );
 };
 

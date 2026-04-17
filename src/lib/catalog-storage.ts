@@ -2,7 +2,7 @@
 
 import { supabase } from './supabase';
 import type { Article, Category, Supplier } from './data';
-import type { ProposedCategory } from '@/ai/catalog-schemas';
+import type { ProposedCategory } from '@/lib/types';
 
 // --- Supplier Functions ---
 
@@ -72,10 +72,11 @@ export async function getCategoriesList(): Promise<Category[]> {
     console.error("Error fetching categories:", error);
     return [];
   }
-  // Map parent_id to parentId for compatibility with existing UI
+  // Map database snake_case to UI camelCase for compatibility
   return (data as any[]).map(cat => ({
     ...cat,
-    parentId: cat.parent_id
+    parentId: cat.parent_id,
+    imageUrl: cat.image_url
   })) as Category[];
 }
 
@@ -104,7 +105,11 @@ export async function addCategory(categoryData: Omit<Category, 'id'>): Promise<C
     .single();
 
   if (error) return null;
-  return { ...data, parentId: data.parent_id } as Category;
+  return { 
+    ...data, 
+    parentId: data.parent_id,
+    imageUrl: data.image_url
+  } as Category;
 }
 
 export async function updateCategory(id: string, data: Partial<Omit<Category, 'id'>>): Promise<boolean> {
@@ -214,7 +219,12 @@ export async function addArticle(articleData: Omit<Article, 'id'>): Promise<Arti
     console.error("Error adding article:", error);
     return null;
   }
-  return { ...data, articleId: data.id, articleNumber: data.article_number } as unknown as Article;
+  return { 
+    ...data, 
+    articleNumber: data.article_number,
+    categoryId: data.category_id,
+    supplierId: data.supplier_id
+  } as Article;
 }
 
 export async function updateArticle(id: string, data: Partial<Omit<Article, 'id'>>): Promise<boolean> {
@@ -223,7 +233,7 @@ export async function updateArticle(id: string, data: Partial<Omit<Article, 'id'
   if (data.articleNumber) updateData.article_number = data.articleNumber;
   if (data.unit) updateData.unit = data.unit;
   if (data.categoryId) updateData.category_id = data.categoryId;
-  if (data.supplierId) updateData.supplier_id = data.supplierId;
+  if ('supplierId' in data) updateData.supplier_id = data.supplierId || null;
   if (data.order !== undefined) updateData.order = data.order;
   if (data.aliases) updateData.aliases = data.aliases;
 
