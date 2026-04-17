@@ -13,7 +13,9 @@ import {
   Settings2,
   ChevronDown,
   ChevronUp,
-  X
+  X,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   Card, 
@@ -27,6 +29,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { cn } from '@/lib/utils';
 import type { ProcessedSummaryItem } from '@/lib/types';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { generateGCCsv, generateHeinzeCsv, downloadCsv } from '@/lib/csv-export';
 
 interface SelectionSummaryProps {
   selectedItems: ProcessedSummaryItem[];
@@ -58,6 +67,17 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
   const [isAddingSection, setIsAddingSection] = useState(false);
 
   const articleCount = selectedItems.filter(i => i.type === 'article').length;
+
+  const handleExport = (type: 'gc' | 'heinze') => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    if (type === 'gc') {
+      const csv = generateGCCsv(selectedItems);
+      downloadCsv(csv, `bestellung_gc_${dateStr}.csv`);
+    } else {
+      const csv = generateHeinzeCsv(selectedItems);
+      downloadCsv(csv, `bestellung_heinze_${dateStr}.csv`);
+    }
+  };
 
   return (
     <div className="glass-card flex flex-col h-full border-white/10 shadow-2xl overflow-hidden bg-gray-900/20 backdrop-blur-2xl">
@@ -177,20 +197,50 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                 </Button>
             )}
 
-            <Button 
-                onClick={onGeneratePdf}
-                disabled={articleCount === 0 || isGeneratingPdf}
-                className="w-full btn-primary h-14 rounded-2xl shadow-emerald-900/20 gap-3 text-lg font-bold"
-            >
-                {isGeneratingPdf ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-white"></div>
-                ) : (
-                    <>
-                        <FileDown size={22} />
-                        PDF Exportieren
-                    </>
-                )}
-            </Button>
+            <div className="flex gap-2 w-full">
+              <Button 
+                  onClick={onGeneratePdf}
+                  disabled={articleCount === 0 || isGeneratingPdf}
+                  className="w-full btn-primary h-14 rounded-2xl shadow-emerald-900/20 gap-3 text-lg font-bold flex-1"
+              >
+                  {isGeneratingPdf ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/20 border-t-white"></div>
+                  ) : (
+                      <>
+                          <FileDown size={22} />
+                          PDF Export
+                      </>
+                  )}
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                      disabled={articleCount === 0}
+                      variant="outline"
+                      className="h-14 rounded-2xl border-white/10 bg-white/5 hover:bg-white/10 text-white font-bold px-4"
+                  >
+                      <Download size={22} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" className="w-56 bg-gray-900 border-white/10 text-white shadow-xl">
+                  <DropdownMenuItem onClick={() => handleExport('gc')} className="hover:bg-white/10 cursor-pointer gap-3 py-3">
+                      <FileSpreadsheet size={18} className="text-emerald-400" />
+                      <div className="flex flex-col">
+                        <span className="font-medium">CSV (GC & Funk)</span>
+                        <span className="text-[10px] text-white/50">Mit Kopfzeile & ART-Präfix</span>
+                      </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('heinze')} className="hover:bg-white/10 cursor-pointer gap-3 py-3">
+                      <FileSpreadsheet size={18} className="text-emerald-400" />
+                      <div className="flex flex-col">
+                        <span className="font-medium">CSV (Sanitär Heinze)</span>
+                        <span className="text-[10px] text-white/50">Format für den Import</span>
+                      </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
         </div>
       </CardContent>
     </div>
