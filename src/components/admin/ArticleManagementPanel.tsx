@@ -95,11 +95,20 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   const [cursorInfo, setCursorInfo] = useState<{ id: string, field: string, pos: number } | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement>>({});
 
+  const previousCategoryRef = useRef(categoryId);
+  const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
+  hasUnsavedChangesRef.current = hasUnsavedChanges;
+
   useEffect(() => {
-    // Reset selection and local articles when category changes
-    setSelectedArticleIds(new Set());
-    setLocalArticles(initialArticles.map(a => ({ ...a })));
-    setHasUnsavedChanges(false);
+    const categoryChanged = previousCategoryRef.current !== categoryId;
+    previousCategoryRef.current = categoryId;
+
+    // Nur resetten, wenn sich die Kategorie ändert ODER der User gerade keine ungespeicherten Daten tippt.
+    if (categoryChanged || !hasUnsavedChangesRef.current) {
+      setSelectedArticleIds(new Set());
+      setLocalArticles(initialArticles.map(a => ({ ...a })));
+      setHasUnsavedChanges(false);
+    }
   }, [categoryId, initialArticles]);
 
   useEffect(() => {
@@ -126,7 +135,9 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
       const article = next[articleIndex];
 
-      if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
+      if ((field === 'unit' || field === 'supplierId') && isSyncEditing) {
+        return next.map(art => ({ ...art, [field]: value }));
+      } else if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
         const delta = value.length - (String(article[field]) || '').length;
         const oldSuffixStart = pos - delta;
 
@@ -141,7 +152,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       }
     });
 
-    if ((field === 'name' || field === 'articleNumber') && pos !== undefined) {
+    if ((field === 'name' || field === 'articleNumber' || field === 'unit') && pos !== undefined) {
       setCursorInfo({ id, field, pos });
     }
   };
@@ -150,7 +161,13 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     if (!hasUnsavedChanges) return;
     setIsSavingBatch(true);
     try {
-      const changes = localArticles.map(a => ({ id: a.id, name: a.name, articleNumber: a.articleNumber, unit: a.unit }));
+      const changes = localArticles.map(a => ({ 
+        id: a.id, 
+        name: a.name, 
+        articleNumber: a.articleNumber, 
+        unit: a.unit,
+        supplierId: a.supplierId 
+      }));
       await batchUpdateArticles(changes);
       setHasUnsavedChanges(false);
       impactMedium();
@@ -448,8 +465,9 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-white/60 text-xs font-medium p-2">
                                   <input 
+                                    ref={el => { if (el) inputRefs.current[`${article.id}-unit`] = el; }}
                                     value={article.unit || ''}
-                                    onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value)}
+                                    onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value, e.target.selectionStart || 0)}
                                     className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white/70 focus:border-emerald-500/50 outline-none transition-all"
                                   />
                                 </TableCell>

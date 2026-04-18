@@ -71,7 +71,10 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     const category = nextData[catIdx];
     const article = category.articles[artIdx];
 
-    if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
+    if (field === 'unit' && isSyncEditing) {
+      category.articles = category.articles.map((art: any) => ({ ...art, unit: value }));
+      if (pos !== undefined) setCursorInfo({ catIdx, artIdx, pos, field });
+    } else if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
       const delta = value.length - (article[field] || '').length;
       const oldSuffixStart = pos - delta;
       
@@ -83,7 +86,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
       setCursorInfo({ catIdx, artIdx, pos, field });
     } else {
       article[field] = value;
-      if ((field === 'name' || field === 'articleNumber') && pos !== undefined) {
+      if ((field === 'name' || field === 'articleNumber' || field === 'unit') && pos !== undefined) {
         setCursorInfo({ catIdx, artIdx, pos, field });
       }
     }
@@ -274,8 +277,9 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                    </TableCell>
                                    <TableCell className="p-2">
                                      <input 
+                                       ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
                                        value={article.unit}
-                                       onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value)}
+                                       onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
                                        className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white/70 focus:border-emerald-500/50 outline-none transition-all"
                                      />
                                    </TableCell>

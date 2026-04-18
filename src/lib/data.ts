@@ -10,6 +10,7 @@ export interface Category {
   parentId?: string | null;
   order?: number; // Reihenfolge innerhalb der Ebene
   imageUrl?: string;
+  source?: 'own' | 'wholesale';
 }
 
 export interface Article {
@@ -24,6 +25,7 @@ export interface Article {
   imageUrl?: string;
   supplierName?: string;
   aliases?: string[];
+  source?: 'own' | 'wholesale';
 }
 
 export interface TypePlate {

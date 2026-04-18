@@ -62,11 +62,17 @@ export async function deleteSupplier(supplierId: string): Promise<boolean> {
 
 // --- Category Functions ---
 
-export async function getCategoriesList(): Promise<Category[]> {
-  const { data, error } = await supabase
+export async function getCategoriesList(source?: 'own' | 'wholesale'): Promise<Category[]> {
+  let query = supabase
     .from('categories')
     .select('*')
     .order('order');
+
+  if (source) {
+    query = query.eq('source', source);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching categories:", error);
@@ -76,20 +82,21 @@ export async function getCategoriesList(): Promise<Category[]> {
   return (data as any[]).map(cat => ({
     ...cat,
     parentId: cat.parent_id,
-    imageUrl: cat.image_url
+    imageUrl: cat.image_url,
+    source: cat.source ?? 'own',
   })) as Category[];
 }
 
-export function subscribeToCategories(callback: (categories: Category[]) => void) {
+export function subscribeToCategories(callback: (categories: Category[]) => void, source?: 'own' | 'wholesale') {
   const channel = supabase
-    .channel('public:categories')
+    .channel(`public:categories:${source ?? 'all'}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, async () => {
-      const categories = await getCategoriesList();
+      const categories = await getCategoriesList(source);
       callback(categories);
     })
     .subscribe();
 
-  getCategoriesList().then(callback);
+  getCategoriesList(source).then(callback);
   return () => { supabase.removeChannel(channel); };
 }
 
@@ -166,11 +173,17 @@ export async function batchUpdateCategories(categoriesToUpdate: Partial<Category
 
 // --- Article Functions ---
 
-export async function getArticlesList(): Promise<Article[]> {
-  const { data, error } = await supabase
+export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Article[]> {
+  let query = supabase
     .from('articles')
     .select('*, categories(name), suppliers(name)')
     .order('order');
+
+  if (source) {
+    query = query.eq('source', source);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching articles:", error);
@@ -182,22 +195,70 @@ export async function getArticlesList(): Promise<Article[]> {
     articleNumber: art.article_number,
     categoryId: art.category_id,
     supplierId: art.supplier_id,
+    imageUrl: art.image_url ?? undefined,
+    source: art.source ?? 'own',
     categoryName: art.categories?.name || '',
     supplierName: art.suppliers?.name || ''
   })) as Article[];
 }
 
-export function subscribeToArticles(callback: (articles: Article[]) => void) {
+export function subscribeToArticles(callback: (articles: Article[]) => void, source?: 'own' | 'wholesale') {
   const channel = supabase
-    .channel('public:articles')
+    .channel(`public:articles:${source ?? 'all'}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, async () => {
-      const articles = await getArticlesList();
+      const articles = await getArticlesList(source);
       callback(articles);
     })
     .subscribe();
 
-  getArticlesList().then(callback);
+  getArticlesList(source).then(callback);
   return () => { supabase.removeChannel(channel); };
+}
+
+/**
+ * Kopiert einen Grosshaendler-Artikel in den eigenen Katalog.
+ * Erstellt einen neuen Eintrag mit source='own' in der angegebenen Zielkategorie.
+ */
+export async function copyArticleToOwnCatalog(
+  wholesaleArticle: Article,
+  targetCategoryId: string
+): Promise<Article | null> {
+  // Bestimme den naechsten Order-Wert in der Zielkategorie
+  const { data: existing } = await supabase
+    .from('articles')
+    .select('order')
+    .eq('category_id', targetCategoryId)
+    .eq('source', 'own')
+    .order('order', { ascending: false })
+    .limit(1);
+
+  const nextOrder = existing && existing.length > 0 ? (existing[0].order ?? 0) + 1 : 0;
+
+  const { data, error } = await supabase
+    .from('articles')
+    .insert([{
+      name: wholesaleArticle.name,
+      article_number: wholesaleArticle.articleNumber,
+      unit: wholesaleArticle.unit,
+      category_id: targetCategoryId,
+      image_url: wholesaleArticle.imageUrl ?? null,
+      aliases: wholesaleArticle.aliases ?? [],
+      order: nextOrder,
+      source: 'own',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('copyArticleToOwnCatalog error:', error);
+    return null;
+  }
+  return {
+    ...data,
+    articleNumber: data.article_number,
+    categoryId: data.category_id,
+    source: 'own',
+  } as Article;
 }
 
 export async function addArticle(articleData: Omit<Article, 'id'>): Promise<Article | null> {

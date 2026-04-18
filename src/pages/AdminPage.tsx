@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useToast } from '@/hooks/use-toast';
 import ArticleManagementPanel from '@/components/admin/ArticleManagementPanel';
+import { WholesaleCatalogPanel } from '@/components/admin/WholesaleCatalogPanel';
 import SupplierManagementDialog from '@/components/dialogs/SupplierManagementDialog';
 import ImportDraftsDialog from '@/components/dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '@/components/dialogs/ImportReviewDialog';
@@ -31,9 +32,12 @@ import { motion } from 'framer-motion';
 
 const AdminPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [wholesaleCategories, setWholesaleCategories] = useState<Category[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [articlesAdmin, setArticlesAdmin] = useState<Article[]>([]);
+  const [wholesaleArticles, setWholesaleArticles] = useState<Article[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
   const [newMainCategoryName, setNewMainCategoryName] = useState('');
   const [newSubCategoryName, setNewSubCategoryName] = useState('');
   const [isAddSubCategoryDialogOpen, setIsAddSubCategoryDialogOpen] = useState(false);
@@ -69,15 +73,21 @@ const AdminPage = () => {
   }, []);
 
   const refreshData = async () => {
-    const [cats, supps, arts] = await Promise.all([getCategoriesList(), getSuppliersList(), getArticlesList()]);
+    const [cats, supps, arts, wCats, wArts] = await Promise.all([
+      getCategoriesList('own'), getSuppliersList(), getArticlesList('own'),
+      getCategoriesList('wholesale'), getArticlesList('wholesale'),
+    ]);
     setCategories(cats); setSuppliers(supps); setArticlesAdmin(arts);
+    setWholesaleCategories(wCats); setWholesaleArticles(wArts);
   };
 
   useEffect(() => {
-    const unsubscribeCategories = subscribeToCategories(setCategories);
+    const unsubscribeCategories = subscribeToCategories(cats => setCategories(cats.filter(c => c.source !== 'wholesale')), 'own');
+    const unsubscribeWholesaleCategories = subscribeToCategories(cats => setWholesaleCategories(cats), 'wholesale');
     const unsubscribeSuppliers = subscribeToSuppliers(setSuppliers);
-    const unsubscribeArticles = subscribeToArticles(setArticlesAdmin);
-    return () => { unsubscribeCategories(); unsubscribeSuppliers(); unsubscribeArticles(); };
+    const unsubscribeArticles = subscribeToArticles(arts => setArticlesAdmin(arts.filter(a => a.source !== 'wholesale')), 'own');
+    const unsubscribeWholesaleArticles = subscribeToArticles(arts => setWholesaleArticles(arts), 'wholesale');
+    return () => { unsubscribeCategories(); unsubscribeWholesaleCategories(); unsubscribeSuppliers(); unsubscribeArticles(); unsubscribeWholesaleArticles(); };
   }, []);
 
   const handleAddMainCategory = async () => {
@@ -365,27 +375,44 @@ const AdminPage = () => {
             )}>
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
-                <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
-                    <ListPlus size={14} /> Katalog
-                  </p>
-                  <div className="flex gap-2">
-                    <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
-                      placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
-                      onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
-                    <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
-                      <PlusCircle size={16} />
-                    </Button>
+                <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
+                  {/* Katalog-Tab-Switcher */}
+                  <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10">
+                    <button
+                      onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); }}
+                      className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                    >
+                      Eigener Katalog
+                    </button>
+                    <button
+                      onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); }}
+                      className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                    >
+                      Großhändler
+                    </button>
                   </div>
+                  {catalogSource === 'own' && (
+                    <div className="flex gap-2">
+                      <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
+                        placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
+                      <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
+                        <PlusCircle size={16} />
+                      </Button>
+                    </div>
+                  )}
+                  {catalogSource === 'wholesale' && wholesaleCategories.length === 0 && (
+                    <p className="text-xs text-amber-400/60 text-center py-1">Noch kein Großhändler-Katalog importiert.</p>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto py-3">
-                                    <CategoryTree
-                    categories={categories}
+                  <CategoryTree
+                    categories={catalogSource === 'own' ? categories : wholesaleCategories}
                     activeCategoryId={activeCategoryId}
                     expandedCategories={expandedCategories}
                     onSelectCategory={handleSelectCategory}
                     onToggleExpansion={toggleCategoryExpansion}
-                    renderActions={renderAdminActions}
+                    renderActions={catalogSource === 'own' ? renderAdminActions : undefined}
                   />
                 </div>
               </div>
@@ -426,8 +453,43 @@ const AdminPage = () => {
           <div className="flex-1 min-w-0 overflow-hidden bg-background/40 relative z-0">
             <div className="absolute inset-0 overflow-y-auto">
               {(() => {
-                const activeCategory = activeCategoryId ? categories.find(c => c.id === activeCategoryId) : null;
-                return activeCategory ? (
+                const activeCategory = activeCategoryId
+                  ? (catalogSource === 'own' ? categories : wholesaleCategories).find(c => c.id === activeCategoryId)
+                  : null;
+
+                if (!activeCategory) {
+                  return (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+                      <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
+                        <Package size={36} className={catalogSource === 'wholesale' ? 'text-amber-500/20' : 'text-white/15'} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-lg font-semibold text-white/50">
+                          {catalogSource === 'wholesale' ? 'Großhändler-Katalog' : 'Katalog Leerlauf'}
+                        </h3>
+                        <p className="text-sm text-white/30 max-w-[300px] leading-relaxed">
+                          {catalogSource === 'wholesale'
+                            ? 'Wähle eine Kategorie aus dem Großhändler-Katalog, um Artikel zu durchsuchen und in den eigenen Katalog zu übernehmen.'
+                            : 'Wähle links im Baummenü eine Haupt- oder Untergruppe aus, um Artikel zu verwalten.'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (catalogSource === 'wholesale') {
+                  return (
+                    <WholesaleCatalogPanel
+                      categoryName={activeCategory.name}
+                      categoryId={activeCategory.id}
+                      articles={wholesaleArticles.filter(a => a.categoryId === activeCategory.id).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))}
+                      ownCategories={categories}
+                      onArticlesCopied={refreshData}
+                    />
+                  );
+                }
+
+                return (
                   <ArticleManagementPanel
                     categoryName={activeCategory.name} categoryId={activeCategory.id}
                     articles={articlesAdmin.filter(art => art.categoryId === activeCategory.id).sort((a,b) => (a.order ?? 0) - (b.order ?? 0))}
@@ -438,18 +500,6 @@ const AdminPage = () => {
                     onAssignSupplier={handleAssignSupplierToArticles}
                     allCategories={categories} suppliers={suppliers}
                     onAssignImage={() => {}} onNavigateCategory={() => {}} />
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                    <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
-                      <Package size={36} className="text-white/15" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h3 className="text-lg font-semibold text-white/50">Katalog Leerlauf</h3>
-                      <p className="text-sm text-white/30 max-w-[300px] leading-relaxed">
-                        Wähle links im Baummenü eine Haupt- oder Untergruppe aus, um Artikel zu verwalten.
-                      </p>
-                    </div>
-                  </div>
                 );
               })()}
             </div>

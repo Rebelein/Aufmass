@@ -35,7 +35,10 @@ import { AngebotTool } from '@/components/aufmass/AngebotTool';
 
 const AufmassPage = () => {
   const [articlesData, setArticlesData] = useState<Article[]>([]);
+  const [wholesaleArticlesData, setWholesaleArticlesData] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [wholesaleCategories, setWholesaleCategories] = useState<Category[]>([]);
+  const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [viewMode, setViewMode] = useState<'aufmass' | 'angebot'>('angebot');
@@ -57,8 +60,12 @@ const AufmassPage = () => {
   const navigate = useNavigate();
   const { impactMedium, impactLight } = useHapticFeedback();
 
+  // Aktive Daten je nach Quelle
+  const activeArticles = catalogSource === 'own' ? articlesData : wholesaleArticlesData;
+  const activeCategories = catalogSource === 'own' ? categories : wholesaleCategories;
+
   // Fuzzy search
-  const fuse = useMemo(() => new Fuse(articlesData, {
+  const fuse = useMemo(() => new Fuse(activeArticles, {
     keys: ['name', 'articleNumber'],
     threshold: 0.35,
     distance: 100,
@@ -76,8 +83,10 @@ const AufmassPage = () => {
     if (!projectId) { navigate('/'); return; }
 
     let isMounted = true;
-    const unsubCats = subscribeToCategories(cats => { if (isMounted) setCategories(cats); });
-    const unsubArts = subscribeToArticles(arts => { if (isMounted) setArticlesData(arts); });
+    const unsubCats = subscribeToCategories(cats => { if (isMounted) setCategories(cats); }, 'own');
+    const unsubWCats = subscribeToCategories(cats => { if (isMounted) setWholesaleCategories(cats); }, 'wholesale');
+    const unsubArts = subscribeToArticles(arts => { if (isMounted) setArticlesData(arts); }, 'own');
+    const unsubWArts = subscribeToArticles(arts => { if (isMounted) setWholesaleArticlesData(arts); }, 'wholesale');
     const unsubSupps = subscribeToSuppliers(() => {});
 
     const load = async () => {
@@ -89,16 +98,24 @@ const AufmassPage = () => {
 
     return () => {
       isMounted = false;
-      unsubCats(); unsubArts(); unsubSupps();
+      unsubCats(); unsubWCats(); unsubArts(); unsubWArts(); unsubSupps();
     };
   }, [navigate]);
 
-  // Auto-select first category
+  // Auto-select first category when source changes
   useEffect(() => {
-    if (categories.length > 0 && !activeCategoryId) {
+    setActiveCategoryId(null);
+    setTimeout(() => {
+      setActiveCategoryId(activeCategories.find(c => c.parentId === null)?.id || null);
+    }, 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogSource]);
+
+  useEffect(() => {
+    if (categories.length > 0 && !activeCategoryId && catalogSource === 'own') {
       setActiveCategoryId(categories.find(c => c.parentId === null)?.id || null);
     }
-  }, [categories, activeCategoryId]);
+  }, [categories, activeCategoryId, catalogSource]);
 
     // Force view mode if not in planning
     useEffect(() => {
@@ -110,7 +127,7 @@ const AufmassPage = () => {
     }, [currentProject?.status]);
 
   const activeCategory = useMemo(() =>
-    categories.find(c => c.id === activeCategoryId), [categories, activeCategoryId]);
+    activeCategories.find(c => c.id === activeCategoryId), [activeCategories, activeCategoryId]);
 
   const toggleCategoryExpansion = (categoryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -129,24 +146,24 @@ const AufmassPage = () => {
       let currentId = art.categoryId;
       while (currentId) {
         ids.add(currentId);
-        const parentId = categories.find(c => c.id === currentId)?.parentId;
+        const parentId = activeCategories.find(c => c.id === currentId)?.parentId;
         if (parentId) ids.add(parentId);
         currentId = parentId || null;
       }
     });
     return Array.from(ids);
-  }, [searchResults, categories, searchQuery]);
+  }, [searchResults, activeCategories, searchQuery]);
 
   const viewArticles = useMemo(() => {
     if (searchQuery.trim().length > 0) return searchResults;
     if (!activeCategoryId) return [];
     
     // Get current cat + subcats
-    const subcats = categories.filter(c => c.parentId === activeCategoryId);
+    const subcats = activeCategories.filter(c => c.parentId === activeCategoryId);
     const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
     
-    return articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [articlesData, activeCategoryId, searchQuery, searchResults, categories]);
+    return activeArticles.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [activeArticles, activeCategoryId, searchQuery, searchResults, activeCategories]);
 
   const sections = useMemo(() =>
     (currentProject?.selectedItems ?? []).filter(i => i.type === 'section')
@@ -155,14 +172,68 @@ const AufmassPage = () => {
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
-    return currentProject.selectedItems.map(item => {
+    
+    // 1. Enrich items with article data
+    // Summary always uses OWN catalog data (articlesData + categories)
+    const enrichedItems = currentProject.selectedItems.map(item => {
       if (item.type === 'article' && item.article_id) {
-        const articleDetail = articlesData.find(a => a.id === item.article_id);
-        return { ...item, article: articleDetail };
+        const articleDetail = articlesData.find(a => a.id === item.article_id)
+          ?? wholesaleArticlesData.find(a => a.id === item.article_id);
+        const allCats = [...categories, ...wholesaleCategories];
+        const categoryImageUrl = articleDetail?.categoryId
+          ? allCats.find(c => c.id === articleDetail.categoryId)?.imageUrl
+          : undefined;
+        return { ...item, article: articleDetail, categoryImageUrl };
       }
       return item as ProcessedSummaryItem;
-    }).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [currentProject, articlesData]);
+    });
+
+    // 2. Sorting logic
+    return enrichedItems.sort((a, b) => {
+      // Sections should maintain their absolute order relative to each other if they were mixed,
+      // but in this app sections are grouped separately in SummaryList.
+      // However, SummaryList uses this array, so we must be careful.
+      // The user wants items WITHIN sections to be sorted logically.
+      
+      // If one is a section and they are in the same project, we might want to keep original order
+      // But SummaryList filters by section_id, so the global order of this array doesn't 
+      // strictly matter for the section grouping, but it does for the "Allgemein" group.
+
+      if (a.type === 'section' || b.type === 'section') {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
+
+      // Both are articles. Sort by category hierarchy, then article order, then name.
+      const getCategoryPathOrder = (categoryId?: string): string => {
+        if (!categoryId) return '999999';
+        const path: number[] = [];
+        let currId: string | undefined | null = categoryId;
+        const allCats = [...categories, ...wholesaleCategories];
+        while (currId) {
+          const cat = allCats.find(c => c.id === currId);
+          if (!cat) break;
+          path.unshift(cat.order ?? 0);
+          currId = cat.parentId;
+        }
+        return path.map(n => n.toString().padStart(5, '0')).join('-');
+      };
+
+      const pathA = getCategoryPathOrder(a.article?.categoryId);
+      const pathB = getCategoryPathOrder(b.article?.categoryId);
+
+      if (pathA !== pathB) return pathA.localeCompare(pathB);
+
+      // Same category path, sort by article order
+      const orderA = a.article?.order ?? 999;
+      const orderB = b.article?.order ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+
+      // Finally by name
+      const nameA = a.article?.name ?? a.name ?? '';
+      const nameB = b.article?.name ?? b.name ?? '';
+      return nameA.localeCompare(nameB);
+    });
+  }, [currentProject, articlesData, wholesaleArticlesData, categories, wholesaleCategories]);
 
   const totalArticleCount = useMemo(() =>
     processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0),
@@ -410,14 +481,29 @@ const AufmassPage = () => {
         )}>
           {viewMode === 'aufmass' ? (
             <>
-              <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
-                <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                  <BookMarked size={14} /> Artikelkatalog
-                </h2>
+              <div className="p-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-2">
+                {/* Katalog-Toggle */}
+                <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10">
+                  <button
+                    onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); setSearchQuery(''); }}
+                    className={cn('flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                  >
+                    Eigener Katalog
+                  </button>
+                  <button
+                    onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); setSearchQuery(''); }}
+                    className={cn('flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                  >
+                    Großhändler
+                  </button>
+                </div>
+                {catalogSource === 'wholesale' && (
+                  <p className="text-[10px] text-amber-400/70 text-center">Großhändler-Katalog aktiv</p>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto py-3">
                 <CategoryTree
-                  categories={categories}
+                  categories={activeCategories}
                   activeCategoryId={activeCategoryId}
                   expandedCategories={expandedCategories}
                   forceExpandedIds={searchExpandedIds}
@@ -525,19 +611,34 @@ const AufmassPage = () => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
-                  <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+                  <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
                     <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                       <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
                     </SheetTitle>
+                    {/* Mobile Katalog-Toggle */}
+                    <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 mt-2">
+                      <button
+                        onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); setSearchQuery(''); }}
+                        className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                      >
+                        Eigener Katalog
+                      </button>
+                      <button
+                        onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); setSearchQuery(''); }}
+                        className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
+                      >
+                        Großhändler
+                      </button>
+                    </div>
                   </SheetHeader>
                   <div className="overflow-y-auto p-4 flex-1 space-y-6">
                     <div>
                       <CategoryTree
-                        categories={categories}
+                        categories={activeCategories}
                         activeCategoryId={activeCategoryId}
                         expandedCategories={expandedCategories}
                         forceExpandedIds={searchExpandedIds}
-                        onSelectCategory={handleSelectCategory}
+                        onSelectCategory={(id) => { handleSelectCategory(id); setIsCategorySheetOpen(false); }}
                         onToggleExpansion={toggleCategoryExpansion}
                       />
                     </div>
@@ -614,7 +715,7 @@ const AufmassPage = () => {
             ) : (
               viewArticles.map(article => {
                 const qty = getQuantityInSection(article.id);
-                const cat = categories.find(c => c.id === article.categoryId);
+                const cat = activeCategories.find(c => c.id === article.categoryId);
                 return (
                   <ArticleCard
                     key={article.id}
@@ -660,11 +761,11 @@ const AufmassPage = () => {
               />
         <div className="p-4 border-t border-white/5 bg-white/[0.02] space-y-2 shrink-0">
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full glass-button">
-              <FileDown size={16} className="mr-2" /> PDF
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] border-0 h-10 rounded-xl transition-all">
+              <FileDown size={16} className="mr-2 opacity-70" /> PDF
             </Button>
-            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full ios-button-secondary border-emerald-500/30 text-emerald-400">
-              <FileSpreadsheet size={16} className="mr-2" /> CSV
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 h-10 rounded-xl transition-colors">
+              <FileSpreadsheet size={16} className="mr-2 opacity-50" /> CSV
             </Button>
           </div>
         </div>
@@ -703,11 +804,11 @@ const AufmassPage = () => {
                 onUpdateQuantity={handleUpdateQuantity}
               />
           <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] grid grid-cols-2 gap-3">
-            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="h-14 text-lg glass-button">
-              <FileDown size={20} className="mr-2" /> PDF
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="h-14 text-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_30px_rgba(16,185,129,0.3)] border-0 rounded-2xl transition-all">
+              <FileDown size={20} className="mr-2 opacity-70" /> PDF
             </Button>
-            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg ios-button-secondary border-emerald-500/30 text-emerald-400">
-              <FileSpreadsheet size={20} className="mr-2" /> CSV
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 rounded-2xl transition-colors">
+              <FileSpreadsheet size={20} className="mr-2 opacity-50" /> CSV
             </Button>
           </div>
         </SheetContent>

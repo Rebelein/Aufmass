@@ -65,10 +65,16 @@ export async function startAiCatalogImport(
         (cat: any) => ({
           ...cat,
           subCategories: [],
-          articles: cat.articles.map((art: any) => ({
-            ...art,
-            id: art.id || generateUUID(),
-          })),
+          articles: (cat.articles || [])
+            .map((art: any) => ({
+              ...art,
+              id: art.id || generateUUID(),
+            }))
+            .sort((a: any, b: any) => {
+               const nameA = a.name || '';
+               const nameB = b.name || '';
+               return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+            }),
         })
       );
 

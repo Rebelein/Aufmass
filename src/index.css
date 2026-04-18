@@ -71,24 +71,24 @@
 
 @layer base {
   :root {
-    --background: 240 10% 4%; /* #09090b - pure dark */
+    --background: 220 10% 12%; /* Elegant very dark grey instead of pure black */
     --foreground: 0 0% 98%;
-    --card: 240 10% 6%; /* #0a0a0c */
+    --card: 220 10% 16%; /* Lighter card color to distinguish from background */
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 6%;
+    --popover: 220 10% 16%;
     --popover-foreground: 0 0% 98%;
-    --primary: 158 64% 45%; /* Refined company emerald #29b685 */
+    --primary: 158 64% 45%; /* Refined company emerald */
     --primary-foreground: 158 100% 10%;
-    --secondary: 240 5% 15%; /* #262629 */
+    --secondary: 220 10% 22%; /* Noticeable grey for secondary elements */
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 5% 12%; 
-    --muted-foreground: 240 5% 65%; /* #a1a1aa */
-    --accent: 240 5% 12%;
+    --muted: 220 10% 18%; 
+    --muted-foreground: 220 10% 65%;
+    --accent: 220 10% 22%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 5% 15%; /* Sleek thin lines */
-    --input: 240 5% 15%;
+    --border: 220 10% 24%; /* Clearer borders */
+    --input: 220 10% 20%;
     --ring: 158 64% 45%;
     --radius: 0.75rem; /* Tighter modern radius */
   }
@@ -115,18 +115,21 @@
 }
 
 @layer components {
-  /* Sleek Flat Cards */
+  /* Sleek Flat Cards & Glassmorphism */
   .glass-card, .ios-card, .card-flat {
-    background-color: hsl(var(--card));
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-lg);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transition: all 0.2s ease;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
   }
   
   .glass-card:hover, .ios-card:hover, .card-flat:hover {
-    border-color: rgba(255, 255, 255, 0.12);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
   
   .glass-card-light {
@@ -215,12 +218,14 @@
   }
   
   .glass-input, .input-light {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: white;
     border-radius: var(--radius-md);
     padding: 0.75rem 1rem;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     min-height: 44px;
   }
   
