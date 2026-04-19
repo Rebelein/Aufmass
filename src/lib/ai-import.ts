@@ -15,6 +15,18 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+/**
+ * Reads a Blob as base64 (data portion only).
+ */
+function readBlobAsBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 export interface AiImportCallbacks {
   onDraftCreated?: () => void;
   onSuccess?: (draftId: string) => void;
@@ -22,19 +34,64 @@ export interface AiImportCallbacks {
 }
 
 /**
- * Starts the AI catalog import process:
- * 1. Creates an import draft in Supabase
- * 2. Sends the file to Gemini for analysis
- * 3. Updates the draft with the extracted data or error
- *
- * Returns the draft ID if the draft was created, or null on failure.
+ * Core function: sends base64 image data to Gemini and parses the result.
+ */
+async function runGeminiExtraction(base64Data: string, mimeType: string): Promise<ProposedCategory[]> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('Gemini API Key fehlt.');
+  }
+
+  console.log('[KI-Import] Starte Gemini-Anfrage…', { mimeType, dataLength: base64Data.length });
+
+  const genAI = new GoogleGenerativeAI(apiKey.trim());
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+
+  const prompt = `Extrahiere Materialdaten aus dieser Katalogseite. Erfasse verschiedene Produktgruppen jeweils als eine eigene Kategorie. Rückgabe als JSON-Array von Objekten: [ { "categoryName": "Name der Gruppe/Kategorie", "articles": [ { "name": "...", "articleNumber": "...", "unit": "..." } ] } ]. Erzeuge KEINE verschachtelten Unterkategorien.`;
+
+  const result = await model.generateContent([
+    { inlineData: { data: base64Data, mimeType } },
+    { text: prompt },
+  ]);
+
+  const response = result.response;
+  const text = response.text();
+  console.log('[KI-Import] Gemini-Antwort erhalten:', text.substring(0, 200) + '…');
+
+  const jsonStr = text.trim().replace(/```json|```/g, '').trim();
+  const rawData = JSON.parse(jsonStr);
+
+  const parsedData: ProposedCategory[] = (Array.isArray(rawData) ? rawData : [rawData]).map(
+    (cat: any) => ({
+      ...cat,
+      subCategories: [],
+      articles: (cat.articles || [])
+        .map((art: any) => ({
+          ...art,
+          id: art.id || generateUUID(),
+        }))
+        .sort((a: any, b: any) => {
+          const nameA = a.name || '';
+          const nameB = b.name || '';
+          return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+        }),
+    })
+  );
+
+  console.log('[KI-Import] Erfolgreich geparst:', parsedData.length, 'Kategorien');
+  return parsedData;
+}
+
+/**
+ * Starts the AI catalog import process from a File (PDF or image).
  */
 export async function startAiCatalogImport(
   file: File,
   supplierId: string | null,
+  targetCategoryId: string | null,
   callbacks?: AiImportCallbacks
 ): Promise<string | null> {
-  const draftId = await createImportDraft(file.name, supplierId);
+  const draftId = await createImportDraft(file.name, supplierId, targetCategoryId);
   if (!draftId) return null;
 
   callbacks?.onDraftCreated?.();
@@ -42,45 +99,45 @@ export async function startAiCatalogImport(
   // Background processing – non-blocking
   (async () => {
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey || apiKey.trim() === '') {
-        throw new Error('Gemini API Key fehlt.');
-      }
-
       const base64Data = await readFileAsBase64(file);
-      const genAI = new GoogleGenerativeAI(apiKey.trim());
-      const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-
-      const prompt = `Extrahiere Materialdaten aus dieser Katalogseite. Erfasse verschiedene Produktgruppen jeweils als eine eigene Kategorie. Rückgabe als JSON-Array von Objekten: [ { "categoryName": "Name der Gruppe/Kategorie", "articles": [ { "name": "...", "articleNumber": "...", "unit": "..." } ] } ]. Erzeuge KEINE verschachtelten Unterkategorien.`;
-
-      const result = await model.generateContent([
-        { inlineData: { data: base64Data, mimeType: file.type } },
-        { text: prompt },
-      ]);
-      const text = (await result.response).text();
-      const jsonStr = text.trim().replace(/```json|```/g, '').trim();
-      const rawData = JSON.parse(jsonStr);
-
-      const parsedData: ProposedCategory[] = (Array.isArray(rawData) ? rawData : [rawData]).map(
-        (cat: any) => ({
-          ...cat,
-          subCategories: [],
-          articles: (cat.articles || [])
-            .map((art: any) => ({
-              ...art,
-              id: art.id || generateUUID(),
-            }))
-            .sort((a: any, b: any) => {
-               const nameA = a.name || '';
-               const nameB = b.name || '';
-               return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-            }),
-        })
-      );
+      const parsedData = await runGeminiExtraction(base64Data, file.type || 'image/png');
 
       await updateImportDraftSuccess(draftId, parsedData);
       callbacks?.onSuccess?.(draftId);
     } catch (error: any) {
+      console.error('[KI-Import] Fehler:', error);
+      await updateImportDraftError(draftId, error.message);
+      callbacks?.onError?.(draftId, error.message);
+    }
+  })();
+
+  return draftId;
+}
+
+/**
+ * Starts the AI catalog import from a Blob (e.g. clipboard image).
+ */
+export async function startAiCatalogImportFromBlob(
+  blob: Blob,
+  supplierId: string | null,
+  targetCategoryId: string | null,
+  callbacks?: AiImportCallbacks
+): Promise<string | null> {
+  const draftId = await createImportDraft('Zwischenablage_' + new Date().toLocaleTimeString('de-DE').replace(/:/g, ''), supplierId, targetCategoryId);
+  if (!draftId) return null;
+
+  callbacks?.onDraftCreated?.();
+
+  // Background processing – non-blocking
+  (async () => {
+    try {
+      const base64Data = await readBlobAsBase64(blob);
+      const parsedData = await runGeminiExtraction(base64Data, blob.type || 'image/png');
+
+      await updateImportDraftSuccess(draftId, parsedData);
+      callbacks?.onSuccess?.(draftId);
+    } catch (error: any) {
+      console.error('[KI-Import] Fehler:', error);
       await updateImportDraftError(draftId, error.message);
       callbacks?.onError?.(draftId, error.message);
     }

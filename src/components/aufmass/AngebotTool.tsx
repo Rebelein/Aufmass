@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { generateUUID } from '@/lib/utils';
 import { generateAngebotPdf } from '@/lib/pdf-export-angebot';
 import type { ProcessedSummaryItem } from '@/lib/types';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface AngebotToolProps {
   project: Project;
@@ -108,12 +109,10 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
   const handleDeleteSection = async () => {
     if (!activeSectionId) return;
-    if (window.confirm("Bist du sicher, dass du diesen kompletten Abschnitt inkl. aller Notizen und Fotos löschen willst?")) {
-       const id = activeSectionId;
-       onRemoveLocalItem(id);
-       await deleteProjectItem(id);
-       toast({ title: "Gelöscht", description: "Der Bauabschnitt wurde entfernt." });
-    }
+    const id = activeSectionId;
+    onRemoveLocalItem(id);
+    await deleteProjectItem(id);
+    toast({ title: "Gelöscht", description: "Der Bauabschnitt wurde entfernt." });
   };
 
   const activeSection = project.selectedItems.find(i => i.id === activeSectionId && i.type === 'section');
@@ -157,9 +156,25 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
         </div>
         
         <div className="flex items-center gap-2 shrink-0">
-           <Button variant="ghost" size="icon" onClick={handleDeleteSection} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11 w-11 shrink-0 rounded-full">
-             <Trash2 className="w-5 h-5" />
-           </Button>
+           <AlertDialog>
+             <AlertDialogTrigger asChild>
+               <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11 w-11 shrink-0 rounded-full">
+                 <Trash2 className="w-5 h-5" />
+               </Button>
+             </AlertDialogTrigger>
+             <AlertDialogContent className="ios-card border border-white/10 bg-background">
+               <AlertDialogHeader>
+                 <AlertDialogTitle className="text-xl font-bold text-white">Bauabschnitt löschen?</AlertDialogTitle>
+                 <AlertDialogDescription className="text-white/60">
+                   Möchten Sie diesen kompletten Abschnitt inkl. aller Notizen und Fotos wirklich unwiderruflich löschen?
+                 </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter className="gap-2">
+                 <AlertDialogCancel className="ios-button-secondary border-none">Abbrechen</AlertDialogCancel>
+                 <AlertDialogAction onClick={handleDeleteSection} className="bg-red-500/90 hover:bg-red-500 text-white rounded-xl">Löschen</AlertDialogAction>
+               </AlertDialogFooter>
+             </AlertDialogContent>
+           </AlertDialog>
            <Button onClick={() => triggerCamera(activeSection.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
              <Camera className="w-5 h-5 mr-2" /> Foto aufnehmen
            </Button>

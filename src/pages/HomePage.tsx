@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetDescription } from '@/components/ui/sheet';
+import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Label } from '@/components/ui/label';
 import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText } from 'lucide-react';
 import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId } from '@/lib/project-storage';
@@ -257,23 +257,32 @@ export default function HomePage() {
               <p className="text-white/50">Projekt- und Aufmaßverwaltung</p>
             </div>
             
-            <Sheet open={isNewProjectSheetOpen} onOpenChange={setIsNewProjectSheetOpen}>
-              <SheetTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg border border-primary/20 transition-all h-11 px-6">
+            <Button onClick={() => setIsNewProjectSheetOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg border border-primary/20 transition-all h-11 px-6">
                   <FolderOpen className="mr-2 h-5 w-5" /> Neue Baustelle anlegen
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="ios-card w-full sm:w-[540px] sm:max-w-none border-l border-white/10 p-0 overflow-y-auto flex flex-col bg-background shadow-2xl">
-                <SheetHeader className="p-6 bg-white/[0.02] border-b border-white/5 text-left shrink-0">
-                  <SheetTitle className="text-2xl font-bold text-white flex items-center gap-3">
+            <ResizableSidePanel
+              isOpen={isNewProjectSheetOpen}
+              onClose={() => setIsNewProjectSheetOpen(false)}
+              storageKey="new-project"
+              defaultWidth={540}
+              minWidth={400}
+              maxWidth={800}
+              title={
+                <div>
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                     <FolderOpen className="text-primary" size={28} /> Neue Baustelle
-                  </SheetTitle>
-                  <SheetDescription className="text-white/50 text-base">
-                    Lege ein neues Projekt an und bereite das Aufmaß vor, bevor es in die Ausführung geht.
-                  </SheetDescription>
-                </SheetHeader>
-                
-                <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                  </h2>
+                  <p className="text-white/50 text-sm mt-1">Lege ein neues Projekt an und bereite das Aufmaß vor, bevor es in die Ausführung geht.</p>
+                </div>
+              }
+              footer={
+                <div className="p-6 w-full flex justify-between gap-4">
+                  <Button variant="ghost" onClick={() => setIsNewProjectSheetOpen(false)} className="text-white/50 hover:text-white hover:bg-white/5 h-12 px-6 rounded-xl">Abbrechen</Button>
+                  <Button onClick={handleAddProject} disabled={newProject.name.trim() === ''} className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl h-12 px-8 shadow-lg">Projekt anlegen</Button>
+                </div>
+              }
+            >
+                <div className="p-6 space-y-8">
                   
                   {/* Grunddaten */}
                   <div className="space-y-4">
@@ -348,13 +357,7 @@ export default function HomePage() {
                   </div>
 
                 </div>
-                
-                <SheetFooter className="p-6 bg-white/[0.02] border-t border-white/10 shrink-0 w-full flex-row justify-between gap-4 mt-auto">
-                  <Button variant="ghost" onClick={() => setIsNewProjectSheetOpen(false)} className="text-white/50 hover:text-white hover:bg-white/5 h-12 px-6 rounded-xl">Abbrechen</Button>
-                  <Button onClick={handleAddProject} disabled={newProject.name.trim() === ''} className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold rounded-xl h-12 px-8 shadow-lg">Projekt anlegen</Button>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
+            </ResizableSidePanel>
           </div>
 
           {/* Stats Row */}

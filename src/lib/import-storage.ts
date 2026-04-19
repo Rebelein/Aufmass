@@ -7,18 +7,20 @@ export interface ImportDraft {
   extracted_data: any;
   error_message: string | null;
   default_supplier_id: string | null;
+  default_target_category_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export async function createImportDraft(fileName: string, supplierId?: string | null): Promise<string | null> {
+export async function createImportDraft(fileName: string, supplierId?: string | null, targetCategoryId?: string | null): Promise<string | null> {
   try {
     const { data, error } = await supabase
       .from('import_drafts')
       .insert({ 
         file_name: fileName, 
         status: 'processing',
-        default_supplier_id: supplierId === 'none' ? null : supplierId 
+        default_supplier_id: supplierId === 'none' ? null : supplierId,
+        default_target_category_id: targetCategoryId === 'root' ? null : (targetCategoryId || null)
       })
       .select('id')
       .single();
@@ -31,11 +33,14 @@ export async function createImportDraft(fileName: string, supplierId?: string | 
   }
 }
 
-export async function updateImportDraftData(id: string, extractedData: any, supplierId?: string | null): Promise<boolean> {
+export async function updateImportDraftData(id: string, extractedData: any, supplierId?: string | null, targetCategoryId?: string | null): Promise<boolean> {
   try {
     const updateData: any = { extracted_data: extractedData };
     if (supplierId !== undefined) {
       updateData.default_supplier_id = supplierId === 'none' ? null : supplierId;
+    }
+    if (targetCategoryId !== undefined) {
+      updateData.default_target_category_id = targetCategoryId === 'root' ? null : (targetCategoryId || null);
     }
 
     const { error } = await supabase

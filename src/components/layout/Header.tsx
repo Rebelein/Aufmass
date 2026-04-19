@@ -1,7 +1,7 @@
 "use client";
 
 import { Link, useLocation } from 'react-router-dom';
-import { BookMarked, Settings, ClipboardList, LayoutDashboard, Moon, Sun } from 'lucide-react';
+import { BookMarked, Settings, ClipboardList, LayoutDashboard, Moon, Sun, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
 
@@ -28,20 +28,37 @@ const Header = () => {
   // On the /aufmass page the page itself handles its own page-level header.
   // We keep the shell header ultra-slim on that route so it doesn't compete.
   const isAufmass = location.pathname === '/aufmass';
+  const isAdmin = location.pathname.startsWith('/admin');
+  const pageLabel = isAdmin ? 'Verwaltung' 
+    : location.pathname.startsWith('/aufmass') ? 'Aufmaß' 
+    : 'Aufmaß';
+
+  if (isAufmass) return null;
 
   return (
-    <header className={`sticky top-0 z-50 border-b border-white/5 backdrop-blur-xl bg-background/80 ${isAufmass ? 'h-12' : 'h-14 md:h-16'} flex items-center`}>
+    <header className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-xl bg-background/80 h-14 md:h-16 flex items-center">
       <div className="w-full px-4 md:px-6 flex items-center justify-between gap-4">
 
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2.5 group shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-900/40 group-hover:shadow-emerald-700/40 transition-all duration-300">
-            <BookMarked size={15} className="text-white" />
-          </div>
-          <span className="font-bold text-white tracking-tight text-sm hidden sm:block">Rebelein</span>
-          <span className="text-white/20 text-xs hidden sm:block">|</span>
-          <span className="text-white/50 text-xs hidden sm:block font-medium">Aufmaß</span>
-        </Link>
+        {/* Left: Logo + optional Katalog button */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Katalog burger - admin only, mobile only */}
+          {isAdmin && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('toggle-catalog-sheet'))}
+              className="xl:hidden p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <Menu size={18} className="text-emerald-400" />
+            </button>
+          )}
+          <Link to="/" className="flex items-center gap-2.5 group shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-900/40 group-hover:shadow-emerald-700/40 transition-all duration-300">
+              <BookMarked size={15} className="text-white" />
+            </div>
+            <span className="font-bold text-white tracking-tight text-sm hidden sm:block">Rebelein</span>
+            <span className="text-white/20 text-xs hidden sm:block">|</span>
+            <span className="text-white/50 text-xs hidden sm:block font-medium">{pageLabel}</span>
+          </Link>
+        </div>
 
         {/* Nav — pill-style, centered */}
         <nav className="hidden md:flex items-center gap-1 bg-white/[0.04] border border-white/[0.07] rounded-full px-1.5 py-1">

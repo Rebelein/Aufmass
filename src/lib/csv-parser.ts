@@ -24,13 +24,23 @@ export const parseCsvToCatalog = (csvContent: string): { catalog: ProposedCatego
     const nameIndex = header.indexOf('name');
     const numIndex = header.indexOf('artikel-nr.');
     const unitIndex = header.indexOf('einheit');
-    const supplierIndex = header.indexOf('großhändler'); // This is optional, -1 if not found
+    let supplierIndex = header.indexOf('großhändler'); // This is optional, -1 if not found
+    if (supplierIndex === -1) supplierIndex = header.indexOf('grosshaendler');
 
     if (catIndex === -1 || nameIndex === -1 || numIndex === -1 || unitIndex === -1) {
         return { catalog: null, error: "Die CSV-Datei muss die Spalten 'Kategorie', 'Name', 'Artikel-Nr.' und 'Einheit' enthalten. Der Separator muss ein Semikolon (;) sein." };
     }
 
-    const categoryMap = new Map<string, ProposedArticle[]>();
+    const rootCategories: ProposedCategory[] = [];
+
+    const getOrCreateCategory = (name: string): ProposedCategory => {
+        let cat = rootCategories.find(c => c.categoryName === name);
+        if (!cat) {
+            cat = { categoryName: name, articles: [], subCategories: [] };
+            rootCategories.push(cat);
+        }
+        return cat;
+    };
 
     for (const line of lines) {
         if (!line.trim()) continue;
@@ -38,8 +48,8 @@ export const parseCsvToCatalog = (csvContent: string): { catalog: ProposedCatego
         // Use a semicolon as the separator.
         const values = line.split(';').map(v => v.trim().replace(/"/g, ''));
 
-        const categoryName = values[catIndex];
-        if (!categoryName) continue; // Skip rows without a category name
+        const categoryPathStr = values[catIndex];
+        if (!categoryPathStr) continue; // Skip rows without a category name
 
         const article: ProposedArticle = {
             name: values[nameIndex] || '',
@@ -48,26 +58,15 @@ export const parseCsvToCatalog = (csvContent: string): { catalog: ProposedCatego
             supplierName: supplierIndex !== -1 ? (values[supplierIndex] || '') : '',
         };
 
-        if (!categoryMap.has(categoryName)) {
-            categoryMap.set(categoryName, []);
-        }
-        categoryMap.get(categoryName)!.push(article);
+        const targetCategory = getOrCreateCategory(categoryPathStr);
+        targetCategory.articles.push(article);
     }
 
-    const proposedCatalog: ProposedCategory[] = [];
-    for (const [categoryName, articles] of categoryMap.entries()) {
-        proposedCatalog.push({
-            categoryName,
-            articles,
-            subCategories: [],
-        });
-    }
-
-    if (proposedCatalog.length === 0) {
+    if (rootCategories.length === 0) {
         return { catalog: null, error: "Es konnten keine gültigen Artikelzeilen in der CSV-Datei gefunden werden." };
     }
 
-    return { catalog: proposedCatalog };
+    return { catalog: rootCategories };
 };
 
 

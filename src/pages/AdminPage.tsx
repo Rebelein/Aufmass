@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,8 @@ import { WholesaleCatalogPanel } from '@/components/admin/WholesaleCatalogPanel'
 import SupplierManagementDialog from '@/components/dialogs/SupplierManagementDialog';
 import ImportDraftsDialog from '@/components/dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '@/components/dialogs/ImportReviewDialog';
-import { getImportDrafts, updateImportDraftData, markImportDraftCompleted, type ImportDraft } from '@/lib/import-storage';
+import { getImportDrafts, updateImportDraftData, markImportDraftCompleted, createImportDraft, updateImportDraftSuccess, type ImportDraft } from '@/lib/import-storage';
+import { parseCsvToCatalog } from '@/lib/csv-parser';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -35,13 +36,13 @@ const AdminPage = () => {
   const [wholesaleCategories, setWholesaleCategories] = useState<Category[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [articlesAdmin, setArticlesAdmin] = useState<Article[]>([]);
-  const [wholesaleArticles, setWholesaleArticles] = useState<Article[]>([]);
+  const [dynamicWholesaleArticles, setDynamicWholesaleArticles] = useState<Article[]>([]);
+  const [isFetchingWholesale, setIsFetchingWholesale] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
   const [newMainCategoryName, setNewMainCategoryName] = useState('');
-  const [newSubCategoryName, setNewSubCategoryName] = useState('');
-  const [isAddSubCategoryDialogOpen, setIsAddSubCategoryDialogOpen] = useState(false);
-  const [subCategoryParent, setSubCategoryParent] = useState<{ id: string; name: string } | null>(null);
+  const [inlineCreateParentId, setInlineCreateParentId] = useState<string | null>(null);
+  const [inlineNewSubCategoryName, setInlineNewSubCategoryName] = useState('');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'category' | 'article'} | null>(null);
   const { toast } = useToast();
@@ -49,9 +50,8 @@ const AdminPage = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isSupplierManagementDialogOpen, setIsSupplierManagementDialogOpen] = useState(false);
-  const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
-  const [editingCategoryData, setEditingCategoryData] = useState<{ id: string; name: string } | null>(null);
-  const [editedCategoryName, setEditedCategoryName] = useState('');
+  const [inlineEditingCategoryId, setInlineEditingCategoryId] = useState<string | null>(null);
+  const [inlineEditedCategoryName, setInlineEditedCategoryName] = useState('');
   const [importDrafts, setImportDrafts] = useState<ImportDraft[]>([]);
   const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
   const [reviewingDraft, setReviewingDraft] = useState<ImportDraft | null>(null);
@@ -59,7 +59,37 @@ const AdminPage = () => {
   const [reviewSupplierId, setReviewSupplierId] = useState<string>('none');
   const [reviewTargetCategoryId, setReviewTargetCategoryId] = useState<string>('root');
   const [collapsedDraftCategories, setCollapsedDraftCategories] = useState<Set<number>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { impactMedium, impactLight } = useHapticFeedback();
+
+  const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    impactMedium();
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      const { catalog, error } = parseCsvToCatalog(text);
+      
+      if (error || !catalog) {
+        toast({ title: 'Fehler beim CSV-Import', description: error || 'Unbekannter Fehler', variant: 'destructive' });
+        return;
+      }
+      
+      // Create a draft for the parsed catalog
+      const draftId = await createImportDraft(file.name, null);
+      if (draftId) {
+        await updateImportDraftSuccess(draftId, catalog);
+        toast({ title: 'CSV erfolgreich gelesen', description: 'Du kannst den Import nun prüfen.' });
+        refreshDrafts();
+      } else {
+        toast({ title: 'Fehler', description: 'Import-Entwurf konnte nicht erstellt werden.', variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const refreshDrafts = async () => {
     const drafts = await getImportDrafts();
@@ -73,12 +103,12 @@ const AdminPage = () => {
   }, []);
 
   const refreshData = async () => {
-    const [cats, supps, arts, wCats, wArts] = await Promise.all([
+    const [cats, supps, arts, wCats] = await Promise.all([
       getCategoriesList('own'), getSuppliersList(), getArticlesList('own'),
-      getCategoriesList('wholesale'), getArticlesList('wholesale'),
+      getCategoriesList('wholesale'),
     ]);
     setCategories(cats); setSuppliers(supps); setArticlesAdmin(arts);
-    setWholesaleCategories(wCats); setWholesaleArticles(wArts);
+    setWholesaleCategories(wCats);
   };
 
   useEffect(() => {
@@ -86,8 +116,16 @@ const AdminPage = () => {
     const unsubscribeWholesaleCategories = subscribeToCategories(cats => setWholesaleCategories(cats), 'wholesale');
     const unsubscribeSuppliers = subscribeToSuppliers(setSuppliers);
     const unsubscribeArticles = subscribeToArticles(arts => setArticlesAdmin(arts.filter(a => a.source !== 'wholesale')), 'own');
-    const unsubscribeWholesaleArticles = subscribeToArticles(arts => setWholesaleArticles(arts), 'wholesale');
-    return () => { unsubscribeCategories(); unsubscribeWholesaleCategories(); unsubscribeSuppliers(); unsubscribeArticles(); unsubscribeWholesaleArticles(); };
+    const handleToggleCatalog = () => setIsCategorySheetOpen(true);
+    window.addEventListener('toggle-catalog-sheet', handleToggleCatalog);
+
+    return () => { 
+      unsubscribeCategories(); 
+      unsubscribeWholesaleCategories(); 
+      unsubscribeSuppliers(); 
+      unsubscribeArticles(); 
+      window.removeEventListener('toggle-catalog-sheet', handleToggleCatalog);
+    };
   }, []);
 
   const handleAddMainCategory = async () => {
@@ -100,12 +138,12 @@ const AdminPage = () => {
     await refreshData();
   };
 
-  const handleConfirmAddSubCategory = async () => {
-    if (!subCategoryParent || !newSubCategoryName.trim()) return;
-    const siblings = categories.filter(cat => cat.parentId === subCategoryParent.id);
+  const handleSaveNewSubCategory = async () => {
+    if (!inlineCreateParentId || !inlineNewSubCategoryName.trim()) return;
+    const siblings = categories.filter(cat => cat.parentId === inlineCreateParentId);
     const newOrder = siblings.length > 0 ? Math.max(...siblings.map(s => s.order ?? 0)) + 1 : 0;
-    await addCategory({ name: newSubCategoryName.trim(), parentId: subCategoryParent.id, order: newOrder });
-    setIsAddSubCategoryDialogOpen(false); setSubCategoryParent(null);
+    await addCategory({ name: inlineNewSubCategoryName.trim(), parentId: inlineCreateParentId, order: newOrder });
+    setInlineCreateParentId(null); setInlineNewSubCategoryName('');
     toast({ title: 'Unterkategorie hinzugefügt' });
     await refreshData();
   };
@@ -123,10 +161,11 @@ const AdminPage = () => {
     setIsDeleteDialogOpen(false); setItemToDelete(null); await refreshData();
   };
 
-  const handleSaveChangesToCategory = async () => {
-    if (!editingCategoryData || !editedCategoryName.trim()) return;
-    await updateCategory(editingCategoryData.id, { name: editedCategoryName.trim() });
-    setIsEditCategoryDialogOpen(false); toast({ title: "Kategorie aktualisiert" }); await refreshData();
+  const handleSaveEditCategory = async () => {
+    if (!inlineEditingCategoryId || !inlineEditedCategoryName.trim()) return;
+    await updateCategory(inlineEditingCategoryId, { name: inlineEditedCategoryName.trim() });
+    setInlineEditingCategoryId(null); setInlineEditedCategoryName('');
+    toast({ title: "Kategorie aktualisiert" }); await refreshData();
   };
 
   const handleMoveCategory = async (categoryId: string, direction: 'up' | 'down') => {
@@ -205,10 +244,10 @@ const AdminPage = () => {
           <ArrowDown size={14} className="mr-2 text-white/50" /> Nach unten
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-white/10" />
-        <DropdownMenuItem onClick={() => { setSubCategoryParent({ id: category.id, name: category.name }); setNewSubCategoryName(''); setIsAddSubCategoryDialogOpen(true); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-orange-400 focus:text-orange-300">
+        <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); setExpandedCategories(prev => new Set(prev).add(category.id)); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-orange-400 focus:text-orange-300">
           <PackagePlus size={14} className="mr-2" /> Unterkategorie
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => { setEditingCategoryData({ id: category.id, name: category.name }); setEditedCategoryName(category.name); setIsEditCategoryDialogOpen(true); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-blue-400 focus:text-blue-300">
+        <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-blue-400 focus:text-blue-300">
           <Edit3 size={14} className="mr-2" /> Bearbeiten
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-white/10" />
@@ -238,17 +277,61 @@ const AdminPage = () => {
     refreshDrafts();
   };
 
-  const handleConfirmReviewImport = async (id: string, data: any, targetId: string | null, supplierId: string | null) => {
-    const catalogData = data.map((c: any) => ({ ...c, subCategories: [] }));
-    await batchAddCatalog(catalogData, categories, targetId, supplierId);
+  const handleConfirmReviewImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
+    if (importMode === 'add_to_existing' && targetId) {
+      const allArticles = data.flatMap((c: any) => c.articles || []);
+      const existingCount = articlesAdmin.filter(a => a.categoryId === targetId).length;
+      const articlesToInsert = allArticles.map((art: any, idx: number) => ({
+        name: art.name,
+        article_number: art.articleNumber,
+        unit: art.unit,
+        category_id: targetId,
+        supplier_id: art.supplierId || (supplierId === 'none' ? null : supplierId),
+        order: existingCount + idx,
+      }));
+      
+      if (articlesToInsert.length > 0) {
+        const { supabase } = await import('@/lib/supabase');
+        await supabase.from('articles').insert(articlesToInsert);
+      }
+    } else {
+      const catalogData: any[] = [];
+
+      const getOrCreateCategory = (list: any[], name: string) => {
+          let cat = list.find((c: any) => c.categoryName === name);
+          if (!cat) {
+              cat = { categoryName: name, articles: [], subCategories: [] };
+              list.push(cat);
+          }
+          return cat;
+      };
+
+      data.forEach((flatCat: any) => {
+          const pathParts = flatCat.categoryName.split('>').map((p: string) => p.trim()).filter(Boolean);
+          if (pathParts.length === 0) return;
+
+          let currentLevel = catalogData;
+          let targetCategory: any = null;
+
+          for (let i = 0; i < pathParts.length; i++) {
+              targetCategory = getOrCreateCategory(currentLevel, pathParts[i]);
+              currentLevel = targetCategory.subCategories;
+          }
+
+          if (targetCategory) {
+              targetCategory.articles.push(...(flatCat.articles || []));
+          }
+      });
+
+      await batchAddCatalog(catalogData, categories, targetId, supplierId);
+    }
     await markImportDraftCompleted(id);
-    
+
     setReviewingDraft(null);
     toast({ title: 'Import erfolgreich' });
     refreshData();
     refreshDrafts();
   };
-
   const pageVariants = {
     initial: { opacity: 0, y: 15 },
     animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
@@ -265,76 +348,73 @@ const AdminPage = () => {
     >
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0 animate-in fade-in duration-500 overflow-hidden">
-        {/* Page Header */}
-        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm">
-          <div className="flex items-center justify-between px-4 py-3 gap-3 h-14 md:h-16">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                onClick={() => navigate('/')}
-                className="xl:hidden p-1.5 -ml-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                <Settings2 className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-base font-bold text-white leading-tight truncate">Verwaltung</h1>
-                <p className="text-[10px] text-white/40 truncate">Katalogstruktur und Stammdaten pflegen</p>
-              </div>
-            </div>
-            {/* Right: catalog (mobile) */}
-            <div className="flex items-center gap-1.5">
-              <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="xl:hidden h-9 px-3 text-white/50 hover:text-white hover:bg-white/10 gap-1.5">
-                    <Menu size={16} className="text-emerald-400" />
-                    <span className="hidden sm:inline text-xs">Katalog</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
-                  <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
-                    <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
-                      <BookMarked size={20} className="text-emerald-400" /> Katalog
-                    </SheetTitle>
-                  </SheetHeader>
-                  
-                  <div className="overflow-y-auto flex-1 flex flex-col">
-                    <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
-                        <ListPlus size={14} /> Hauptgruppen
-                      </p>
-                      <div className="flex gap-2">
-                        <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
-                          placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
-                          onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
-                        <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
-                          <PlusCircle size={16} />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex-1 py-3 overflow-y-auto">
-                                        <CategoryTree
+
+        {/* Body: Staggered Overlay Miller Columns */}
+        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+
+          {/* Mobile Katalog Sheet - triggered from Header burger */}
+          <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+            <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
+              <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+                <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
+                  <BookMarked size={20} className="text-emerald-400" /> Katalog
+                </SheetTitle>
+              </SheetHeader>
+              
+              <div className="overflow-y-auto flex-1 flex flex-col">
+                <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
+                    <ListPlus size={14} /> Hauptgruppen
+                  </p>
+                  <div className="flex gap-2">
+                    <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
+                      placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
+                    <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
+                      <PlusCircle size={16} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex-1 py-3 overflow-y-auto">
+                                    <CategoryTree
                     categories={categories}
                     activeCategoryId={activeCategoryId}
                     expandedCategories={expandedCategories}
                     onSelectCategory={handleSelectCategory}
                     onToggleExpansion={toggleCategoryExpansion}
                     renderActions={renderAdminActions}
+                    inlineEditingCategoryId={inlineEditingCategoryId}
+                    editedCategoryName={inlineEditedCategoryName}
+                    onEditedCategoryNameChange={setInlineEditedCategoryName}
+                    onSaveEdit={handleSaveEditCategory}
+                    onCancelEdit={() => setInlineEditingCategoryId(null)}
+                    inlineCreateParentId={inlineCreateParentId}
+                    newSubCategoryName={inlineNewSubCategoryName}
+                    onNewSubCategoryNameChange={setInlineNewSubCategoryName}
+                    onSaveNewSubCategory={handleSaveNewSubCategory}
+                    onCancelNewSubCategory={() => setInlineCreateParentId(null)}
                   />
-                    </div>
-                  </div>
-                  
-                  {/* Bottom: KI + Stammdaten inside Sheet */}
-                  <div className="p-4 border-t border-white/10 bg-background space-y-3 shrink-0 flex flex-col">
-                    <div>
-                      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
-                        <Sparkles size={10} className="text-emerald-400" /> KI-Management
-                      </p>
-                      <div onClick={() => { setIsDraftsDialogOpen(true); setIsCategorySheetOpen(false); }}
-                        className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                </div>
+              </div>
+              
+              {/* Bottom: KI + Stammdaten inside Sheet */}
+              <div className="p-4 border-t border-white/10 bg-background space-y-3 shrink-0 flex flex-col">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                    <Sparkles size={10} className="text-emerald-400" /> KI-Management
+                  </p>
+                  <div className="space-y-2">
+                    <div onClick={() => { setIsDraftsDialogOpen(true); setIsCategorySheetOpen(false); }}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                        <div className="flex items-center gap-1.5">
+                          {importDrafts.filter(d => d.status === 'processing').length > 0 && (
+                            <Badge variant="outline" className="text-[10px] px-2 py-0 border bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse">
+                              <Loader2 size={10} className="mr-1 animate-spin" />
+                              {importDrafts.filter(d => d.status === 'processing').length}
+                            </Badge>
+                          )}
                           <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
                             importDrafts.some(d => d.status === 'ready_for_review')
                               ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
@@ -344,24 +424,25 @@ const AdminPage = () => {
                         </div>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
-                        <Settings2 size={10} className="text-teal-400" /> Stammdaten
-                      </p>
-                      <Button onClick={() => { setIsSupplierManagementDialogOpen(true); setIsCategorySheetOpen(false); }} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 justify-start gap-2 h-9 text-xs">
-                        <FolderPlus size={14} className="text-teal-400 shrink-0" />
-                        Großhändler / Lieferanten
-                      </Button>
+                    <div onClick={() => fileInputRef.current?.click()}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group flex items-center gap-2">
+                      <FileUp size={14} className="text-emerald-400" />
+                      <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">CSV Import</span>
                     </div>
                   </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-          </div>
-        </header>
-
-        {/* Body: Staggered Overlay Miller Columns */}
-        <div className="flex flex-1 min-h-0 overflow-hidden relative">
+                </div>
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                    <Settings2 size={10} className="text-teal-400" /> Stammdaten
+                  </p>
+                  <Button onClick={() => { setIsSupplierManagementDialogOpen(true); setIsCategorySheetOpen(false); }} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 justify-start gap-2 h-9 text-xs">
+                    <FolderPlus size={14} className="text-teal-400 shrink-0" />
+                    Großhändler / Lieferanten
+                  </Button>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
 
           {/* ===== SIDEBAR CONTAINER ===== */}
           <div className={cn(
@@ -376,21 +457,7 @@ const AdminPage = () => {
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
                 <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
-                  {/* Katalog-Tab-Switcher */}
-                  <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10">
-                    <button
-                      onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); }}
-                      className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                    >
-                      Eigener Katalog
-                    </button>
-                    <button
-                      onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); }}
-                      className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                    >
-                      Großhändler
-                    </button>
-                  </div>
+                  {/* Katalog-Tab-Switcher (Deaktiviert für reinen "Eigener Katalog" Modus) */}
                   {catalogSource === 'own' && (
                     <div className="flex gap-2">
                       <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
@@ -413,6 +480,16 @@ const AdminPage = () => {
                     onSelectCategory={handleSelectCategory}
                     onToggleExpansion={toggleCategoryExpansion}
                     renderActions={catalogSource === 'own' ? renderAdminActions : undefined}
+                    inlineEditingCategoryId={catalogSource === 'own' ? inlineEditingCategoryId : null}
+                    editedCategoryName={inlineEditedCategoryName}
+                    onEditedCategoryNameChange={setInlineEditedCategoryName}
+                    onSaveEdit={handleSaveEditCategory}
+                    onCancelEdit={() => setInlineEditingCategoryId(null)}
+                    inlineCreateParentId={catalogSource === 'own' ? inlineCreateParentId : null}
+                    newSubCategoryName={inlineNewSubCategoryName}
+                    onNewSubCategoryNameChange={setInlineNewSubCategoryName}
+                    onSaveNewSubCategory={handleSaveNewSubCategory}
+                    onCancelNewSubCategory={() => setInlineCreateParentId(null)}
                   />
                 </div>
               </div>
@@ -423,16 +500,31 @@ const AdminPage = () => {
                   <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
                     <Sparkles size={10} className="text-emerald-400" /> KI-Management
                   </p>
-                  <div onClick={() => setIsDraftsDialogOpen(true)}
-                    className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
-                      <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
-                        importDrafts.some(d => d.status === 'ready_for_review')
-                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-transparent text-white/40 border-white/10")}>
-                        {importDrafts.filter(d => d.status === 'ready_for_review').length}
-                      </Badge>
+                  <div className="space-y-2">
+                    <div onClick={() => setIsDraftsDialogOpen(true)}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                        <div className="flex items-center gap-1.5">
+                          {importDrafts.filter(d => d.status === 'processing').length > 0 && (
+                            <Badge variant="outline" className="text-[10px] px-2 py-0 border bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse">
+                              <Loader2 size={10} className="mr-1 animate-spin" />
+                              {importDrafts.filter(d => d.status === 'processing').length}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
+                            importDrafts.some(d => d.status === 'ready_for_review')
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                              : "bg-transparent text-white/40 border-white/10")}>
+                            {importDrafts.filter(d => d.status === 'ready_for_review').length}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div onClick={() => fileInputRef.current?.click()}
+                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group flex items-center gap-2">
+                      <FileUp size={14} className="text-emerald-400" />
+                      <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">CSV Import</span>
                     </div>
                   </div>
                 </div>
@@ -482,7 +574,7 @@ const AdminPage = () => {
                     <WholesaleCatalogPanel
                       categoryName={activeCategory.name}
                       categoryId={activeCategory.id}
-                      articles={wholesaleArticles.filter(a => a.categoryId === activeCategory.id).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))}
+                      articles={dynamicWholesaleArticles.filter(a => a.categoryId === activeCategory.id).sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }))}
                       ownCategories={categories}
                       onArticlesCopied={refreshData}
                     />
@@ -492,7 +584,8 @@ const AdminPage = () => {
                 return (
                   <ArticleManagementPanel
                     categoryName={activeCategory.name} categoryId={activeCategory.id}
-                    articles={articlesAdmin.filter(art => art.categoryId === activeCategory.id).sort((a,b) => (a.order ?? 0) - (b.order ?? 0))}
+                    articles={articlesAdmin.filter(art => art.categoryId === activeCategory.id).sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }))}
+                    allArticles={articlesAdmin}
                     onAddNewArticle={(data) => handleAddNewArticleToCategory(activeCategory.id, data)}
                     onUpdateExistingArticle={handleUpdateExistingArticle}
                     onReorderArticles={handleReorderArticlesInCategory}
@@ -509,30 +602,6 @@ const AdminPage = () => {
       </div>
 
       {/* ===== DIALOGS ===== */}
-      <Dialog open={isEditCategoryDialogOpen} onOpenChange={setIsEditCategoryDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
-          <DialogHeader><DialogTitle className="text-xl font-bold text-white">Kategorie umbenennen</DialogTitle></DialogHeader>
-          <div className="py-4"><Input value={editedCategoryName} onChange={(e) => setEditedCategoryName(e.target.value)} className="glass-input" /></div>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setIsEditCategoryDialogOpen(false)} className="ios-button-secondary">Abbrechen</Button>
-            <Button onClick={handleSaveChangesToCategory} className="glass-button">Speichern</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isAddSubCategoryDialogOpen} onOpenChange={setIsAddSubCategoryDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white">Unterkategorie erstellen</DialogTitle>
-            <p className="text-white/50 text-sm">Neu in: <span className="text-emerald-400 font-bold">{subCategoryParent?.name}</span></p>
-          </DialogHeader>
-          <div className="py-4"><Input value={newSubCategoryName} onChange={(e) => setNewSubCategoryName(e.target.value)} placeholder="Name..." className="glass-input" /></div>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setIsAddSubCategoryDialogOpen(false)} className="ios-button-secondary">Abbrechen</Button>
-            <Button onClick={handleConfirmAddSubCategory} className="glass-button">Erstellen</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
@@ -554,9 +623,11 @@ const AdminPage = () => {
 
       <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)}
         onSaveDraft={handleSaveReviewDraft} onConfirmImport={handleConfirmReviewImport}
-        categories={categories} suppliers={suppliers} />
-    </motion.div>
-  );
-};
+        categories={categories} suppliers={suppliers} articles={articlesAdmin} />
 
-export default AdminPage;
+      <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+      </motion.div>
+      );
+      }
+
+      export default AdminPage;

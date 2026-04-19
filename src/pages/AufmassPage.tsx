@@ -1,19 +1,23 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Article, Category } from '@/lib/data';
-import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers } from '@/lib/catalog-storage';
+import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers, fetchWholesaleArticlesByCategory, searchWholesaleArticles } from '@/lib/catalog-storage';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import {
   getCurrentProjectId, getProjectById,
-  upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection
+  upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection, updateProject
 } from '@/lib/project-storage';
 import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import {
   ChevronLeft, FileDown, Menu, Package, Sparkles,
   FileSpreadsheet, BookMarked, Search, X as CloseIcon,
-  PenLine
+  PenLine, Edit3, Sun, Moon
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -35,7 +39,9 @@ import { AngebotTool } from '@/components/aufmass/AngebotTool';
 
 const AufmassPage = () => {
   const [articlesData, setArticlesData] = useState<Article[]>([]);
-  const [wholesaleArticlesData, setWholesaleArticlesData] = useState<Article[]>([]);
+  const [dynamicWholesaleArticles, setDynamicWholesaleArticles] = useState<Article[]>([]);
+  const [projectWholesaleArticles, setProjectWholesaleArticles] = useState<Article[]>([]);
+  const [isFetchingWholesale, setIsFetchingWholesale] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wholesaleCategories, setWholesaleCategories] = useState<Category[]>([]);
   const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
@@ -46,11 +52,21 @@ const AufmassPage = () => {
   const [isCatalogDrawerOpen, setIsCatalogDrawerOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
   const [isCsvExportDialogOpen, setIsCsvExportDialogOpen] = useState(false);
+  const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
+  const [editProjectData, setEditProjectData] = useState({ name: '', client_name: '', address: '', notes: '', start_date: '', end_date: '' });
+  const [theme, setTheme] = useState<'dark' | 'light'>((localStorage.getItem('theme') as 'dark' | 'light') || 'dark');
   const [manualName, setManualName] = useState('');
   const [manualQty, setManualQty] = useState('1');
   const [manualUnit, setManualUnit] = useState('');
@@ -60,12 +76,17 @@ const AufmassPage = () => {
   const navigate = useNavigate();
   const { impactMedium, impactLight } = useHapticFeedback();
 
-  // Aktive Daten je nach Quelle
-  const activeArticles = catalogSource === 'own' ? articlesData : wholesaleArticlesData;
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  // Aktive Daten je nach Quelle (own ist client-side)
   const activeCategories = catalogSource === 'own' ? categories : wholesaleCategories;
 
-  // Fuzzy search
-  const fuse = useMemo(() => new Fuse(activeArticles, {
+  // Fuzzy search (only for own catalog)
+  const fuse = useMemo(() => new Fuse(articlesData, {
     keys: ['name', 'articleNumber'],
     threshold: 0.35,
     distance: 100,
@@ -73,9 +94,79 @@ const AufmassPage = () => {
   }), [articlesData]);
 
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    return fuse.search(searchQuery).map(r => r.item);
-  }, [searchQuery, fuse]);
+    if (catalogSource === 'wholesale') return dynamicWholesaleArticles;
+    if (!debouncedSearchQuery.trim()) return [];
+    return fuse.search(debouncedSearchQuery).map(r => r.item);
+  }, [debouncedSearchQuery, fuse, catalogSource, dynamicWholesaleArticles]);
+
+  // Load wholesale articles dynamically
+  useEffect(() => {
+    if (catalogSource !== 'wholesale') return;
+
+    let isMounted = true;
+    const fetchArticles = async () => {
+      setIsFetchingWholesale(true);
+      try {
+        if (debouncedSearchQuery.trim()) {
+          const results = await searchWholesaleArticles(debouncedSearchQuery);
+          if (isMounted) setDynamicWholesaleArticles(results);
+        } else if (activeCategoryId) {
+          const subcats = wholesaleCategories.filter(c => c.parentId === activeCategoryId);
+          const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
+          const results = await fetchWholesaleArticlesByCategory(validIds);
+          if (isMounted) setDynamicWholesaleArticles(results);
+        } else {
+          if (isMounted) setDynamicWholesaleArticles([]);
+        }
+      } finally {
+        if (isMounted) setIsFetchingWholesale(false);
+      }
+    };
+
+    fetchArticles();
+    return () => { isMounted = false; };
+  }, [catalogSource, debouncedSearchQuery, activeCategoryId, wholesaleCategories]);
+
+  // Load missing wholesale articles for project summary
+  useEffect(() => {
+    if (!currentProject || isLoadingData) return;
+    const missingIds = currentProject.selectedItems
+      .filter(i => i.type === 'article' && i.article_id)
+      .map(i => i.article_id!)
+      .filter(id => !articlesData.find(a => a.id === id) && !projectWholesaleArticles.find(a => a.id === id));
+    
+    if (missingIds.length === 0) return;
+
+    let isMounted = true;
+    const fetchMissing = async () => {
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*, categories(name), suppliers(name)')
+        .in('id', missingIds);
+        
+      if (!error && data && isMounted) {
+        setProjectWholesaleArticles(prev => {
+          const newMap = new Map(prev.map(a => [a.id, a]));
+          data.forEach(art => {
+            const a = {
+              ...art,
+              articleNumber: art.article_number,
+              categoryId: art.category_id,
+              supplierId: art.supplier_id,
+              imageUrl: art.image_url ?? undefined,
+              source: art.source ?? 'own',
+              categoryName: art.categories?.name || '',
+              supplierName: art.suppliers?.name || ''
+            };
+            newMap.set(a.id, a as Article);
+          });
+          return Array.from(newMap.values());
+        });
+      }
+    };
+    fetchMissing();
+    return () => { isMounted = false; };
+  }, [currentProject?.selectedItems, articlesData, isLoadingData, projectWholesaleArticles]);
 
   // Load project & catalog
   useEffect(() => {
@@ -142,7 +233,8 @@ const AufmassPage = () => {
   const searchExpandedIds = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const ids = new Set<string>();
-    searchResults.forEach(art => {
+    const resultsToUse = catalogSource === 'own' ? searchResults : dynamicWholesaleArticles;
+    resultsToUse.forEach(art => {
       let currentId = art.categoryId;
       while (currentId) {
         ids.add(currentId);
@@ -152,9 +244,12 @@ const AufmassPage = () => {
       }
     });
     return Array.from(ids);
-  }, [searchResults, activeCategories, searchQuery]);
+  }, [searchResults, dynamicWholesaleArticles, activeCategories, searchQuery, catalogSource]);
 
   const viewArticles = useMemo(() => {
+    if (catalogSource === 'wholesale') {
+      return dynamicWholesaleArticles;
+    }
     if (searchQuery.trim().length > 0) return searchResults;
     if (!activeCategoryId) return [];
     
@@ -162,23 +257,23 @@ const AufmassPage = () => {
     const subcats = activeCategories.filter(c => c.parentId === activeCategoryId);
     const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
     
-    return activeArticles.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [activeArticles, activeCategoryId, searchQuery, searchResults, activeCategories]);
+    return articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }));
+  }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
 
   const sections = useMemo(() =>
     (currentProject?.selectedItems ?? []).filter(i => i.type === 'section')
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      .sort((a,b) => (a.order ?? 0) - (b.order ?? 0)),
     [currentProject]);
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
     
     // 1. Enrich items with article data
-    // Summary always uses OWN catalog data (articlesData + categories)
     const enrichedItems = currentProject.selectedItems.map(item => {
       if (item.type === 'article' && item.article_id) {
         const articleDetail = articlesData.find(a => a.id === item.article_id)
-          ?? wholesaleArticlesData.find(a => a.id === item.article_id);
+          ?? dynamicWholesaleArticles.find(a => a.id === item.article_id)
+          ?? projectWholesaleArticles.find(a => a.id === item.article_id);
         const allCats = [...categories, ...wholesaleCategories];
         const categoryImageUrl = articleDetail?.categoryId
           ? allCats.find(c => c.id === articleDetail.categoryId)?.imageUrl
@@ -223,17 +318,12 @@ const AufmassPage = () => {
 
       if (pathA !== pathB) return pathA.localeCompare(pathB);
 
-      // Same category path, sort by article order
-      const orderA = a.article?.order ?? 999;
-      const orderB = b.article?.order ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-
-      // Finally by name
-      const nameA = a.article?.name ?? a.name ?? '';
-      const nameB = b.article?.name ?? b.name ?? '';
-      return nameA.localeCompare(nameB);
+      // Same category path, sort naturally by name
+      const nameA = (a.article?.name ?? a.name ?? '').replace(/\s+/g, ' ').trim();
+      const nameB = (b.article?.name ?? b.name ?? '').replace(/\s+/g, ' ').trim();
+      return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [currentProject, articlesData, wholesaleArticlesData, categories, wholesaleCategories]);
+  }, [currentProject, articlesData, dynamicWholesaleArticles, projectWholesaleArticles, categories, wholesaleCategories]);
 
   const totalArticleCount = useMemo(() =>
     processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0),
@@ -416,6 +506,38 @@ const AufmassPage = () => {
     setIsManualDialogOpen(false);
   };
 
+
+  // Open Edit Project
+  const handleOpenEditProject = () => {
+    if (!currentProject) return;
+    setEditProjectData({
+      name: currentProject.name || '',
+      client_name: currentProject.client_name || '',
+      address: currentProject.address || '',
+      notes: currentProject.notes || '',
+      start_date: currentProject.start_date || '',
+      end_date: currentProject.end_date || ''
+    });
+    setIsEditProjectOpen(true);
+  };
+
+  // Save Edit Project
+  const handleSaveProject = async () => {
+    if (!currentProject || !editProjectData.name.trim()) return;
+    const success = await updateProject(currentProject.id, {
+      ...editProjectData,
+      start_date: editProjectData.start_date || null,
+      end_date: editProjectData.end_date || null,
+    });
+    if (success) {
+      setCurrentProject({ ...currentProject, ...editProjectData });
+      setIsEditProjectOpen(false);
+      toast({ title: 'Baustelle aktualisiert', description: 'Die Projektdaten wurden gespeichert.' });
+    } else {
+      toast({ title: 'Fehler', description: 'Projektdaten konnten nicht gespeichert werden.', variant: 'destructive' });
+    }
+  };
+
   // Export CSV
   const handleExportCsv = () => {
     if (!currentProject) return;
@@ -482,21 +604,6 @@ const AufmassPage = () => {
           {viewMode === 'aufmass' ? (
             <>
               <div className="p-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-2">
-                {/* Katalog-Toggle */}
-                <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10">
-                  <button
-                    onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); setSearchQuery(''); }}
-                    className={cn('flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                  >
-                    Eigener Katalog
-                  </button>
-                  <button
-                    onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); setSearchQuery(''); }}
-                    className={cn('flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                  >
-                    Großhändler
-                  </button>
-                </div>
                 {catalogSource === 'wholesale' && (
                   <p className="text-[10px] text-amber-400/70 text-center">Großhändler-Katalog aktiv</p>
                 )}
@@ -567,26 +674,107 @@ const AufmassPage = () => {
 
       {/* ===== CENTER: Main Content ===== */}
       <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-background/80")}>
-        {/* Page header – slim, no duplicate back-button on desktop */}
-        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm relative">
-          <div className="flex items-center justify-between px-4 h-12 gap-3">
-            {/* Left: back (mobile only) + project name */}
-            <div className="flex items-center gap-2 min-w-0">
+        {/* Page header – Unified global/local header */}
+        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm relative z-30">
+          <div className="flex items-center justify-between px-4 h-14 md:h-16 gap-3">
+            {/* Left: back, logo + project name/edit */}
+            <div className="flex items-center gap-3 min-w-0">
               <button
                 onClick={() => navigate('/')}
-                className="xl:hidden p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={20} />
               </button>
-              <div className="min-w-0">
-                <h1 className="font-semibold text-white text-sm truncate">{currentProject.name}</h1>
-                <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel erfasst</p>
+              
+              <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="sm" className="lg:hidden p-1.5 shrink-0 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                    <Menu size={20} className="text-emerald-400" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
+                  {viewMode === 'aufmass' ? (
+                    <>
+                      <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
+                        <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
+                          <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
+                        </SheetTitle>
+                        {/* Mobile Katalog-Toggle (Deaktiviert für reinen "Eigener Katalog" Modus) */}
+                      </SheetHeader>
+                      <div className="overflow-y-auto p-4 flex-1 space-y-6">
+                        <div>
+                          <CategoryTree
+                            categories={activeCategories}
+                            activeCategoryId={activeCategoryId}
+                            expandedCategories={expandedCategories}
+                            forceExpandedIds={searchExpandedIds}
+                            onSelectCategory={(id) => { handleSelectCategory(id); setIsCategorySheetOpen(false); }}
+                            onToggleExpansion={toggleCategoryExpansion}
+                          />
+                        </div>
+                      </div>
+                      <div className="p-6 border-t border-white/5 bg-white/[0.02]">
+                        <Button variant="ghost" onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
+                          Filter zurücksetzen
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0 space-y-3">
+                        <SheetTitle className="text-left text-xl text-emerald-400 flex items-center gap-2">
+                          <BookMarked size={20} className="text-emerald-400" /> Projekt-Struktur
+                        </SheetTitle>
+                        <Button onClick={() => {
+                           const name = "Neuer Bauabschnitt";
+                           const order = currentProject?.selectedItems?.length || 0;
+                           if (currentProject) {
+                             addSection(currentProject.id, name, order).then(res => {
+                               if (res) { updateLocalItem(res); setActiveSectionId(res.id); setIsCategorySheetOpen(false); }
+                             });
+                           }
+                        }} className="w-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 h-9">
+                          Abschnitt hinzufügen
+                        </Button>
+                      </SheetHeader>
+                      <div className="flex-1 overflow-y-auto py-3 px-3 space-y-1">
+                        {sections.map(s => (
+                          <button 
+                            key={s.id}
+                            onClick={() => { setActiveSectionId(s.id); setIsCategorySheetOpen(false); }}
+                            className={cn(
+                              "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors truncate", 
+                              activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
+                            )}
+                          >
+                            {s.text}
+                          </button>
+                        ))}
+                        {sections.length === 0 && (
+                          <p className="text-xs text-white/30 text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </SheetContent>
+              </Sheet>
+              
+              <div className="hidden sm:flex w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 items-center justify-center shadow-md shrink-0">
+                <BookMarked size={15} className="text-white" />
+              </div>
+              
+              <div className="min-w-0 flex flex-col">
+                <div className="flex items-center gap-1.5 cursor-pointer hover:bg-white/5 p-1 -ml-1 rounded-md" onClick={handleOpenEditProject}>
+                  <h1 className="font-semibold text-white text-sm md:text-base truncate">{currentProject.name}</h1>
+                  <Edit3 size={14} className="text-emerald-400 shrink-0" />
+                </div>
+                <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel verplant</p>
               </div>
             </div>
 
-            {/* Center: Mode Switch (only visible if planning) */}
+            {/* Center: Mode Switch (only visible if planning, desktop) */}
             {currentProject.status === 'planning' && (
-              <div className="hidden sm:flex items-center bg-white/5 p-1 rounded-xl mx-auto absolute left-1/2 -translate-x-1/2">
+              <div className="hidden xl:flex items-center bg-white/5 p-1 rounded-xl mx-auto absolute left-1/2 -translate-x-1/2">
                 <button 
                   onClick={() => setViewMode('angebot')}
                   className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'angebot' ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white")}
@@ -601,55 +789,9 @@ const AufmassPage = () => {
                 </button>
               </div>
             )}
-            {/* Right: catalog (mobile/tablet) + manual position button */}
-            <div className="flex items-center gap-1.5">
-              <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="xl:hidden h-8 px-2.5 text-white/50 hover:text-white hover:bg-white/10 gap-1.5">
-                    <Menu size={15} className="text-emerald-400" />
-                    <span className="hidden sm:inline text-xs">Katalog</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
-                  <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
-                    <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
-                      <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
-                    </SheetTitle>
-                    {/* Mobile Katalog-Toggle */}
-                    <div className="flex items-center bg-white/5 p-0.5 rounded-xl border border-white/10 mt-2">
-                      <button
-                        onClick={() => { setCatalogSource('own'); setActiveCategoryId(null); setSearchQuery(''); }}
-                        className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'own' ? 'bg-white text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                      >
-                        Eigener Katalog
-                      </button>
-                      <button
-                        onClick={() => { setCatalogSource('wholesale'); setActiveCategoryId(null); setSearchQuery(''); }}
-                        className={cn('flex-1 text-xs font-bold py-1.5 rounded-lg transition-all', catalogSource === 'wholesale' ? 'bg-amber-500 text-black shadow-sm' : 'text-white/50 hover:text-white')}
-                      >
-                        Großhändler
-                      </button>
-                    </div>
-                  </SheetHeader>
-                  <div className="overflow-y-auto p-4 flex-1 space-y-6">
-                    <div>
-                      <CategoryTree
-                        categories={activeCategories}
-                        activeCategoryId={activeCategoryId}
-                        expandedCategories={expandedCategories}
-                        forceExpandedIds={searchExpandedIds}
-                        onSelectCategory={(id) => { handleSelectCategory(id); setIsCategorySheetOpen(false); }}
-                        onToggleExpansion={toggleCategoryExpansion}
-                      />
-                    </div>
-                  </div>
-                  <div className="p-6 border-t border-white/5 bg-white/[0.02]">
-                    <Button variant="ghost" onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
-                      Filter zurücksetzen
-                    </Button>
-                  </div>
-                </SheetContent>
-              </Sheet>
+
+            {/* Right: manual position + theme */}
+            <div className="flex items-center gap-1 shrink-0">
               <Button
                 onClick={() => setIsManualDialogOpen(true)}
                 variant="ghost"
@@ -660,20 +802,47 @@ const AufmassPage = () => {
                 <PenLine size={15} />
                 <span className="hidden sm:inline text-xs">Manuell</span>
               </Button>
+              <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="h-8 w-8 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all"
+              >
+                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              </Button>
             </div>
           </div>
         </header>
 
+        {/* Mobile: Mode Switch */}
+        {currentProject.status === 'planning' && (
+          <div className="xl:hidden flex items-center bg-white/[0.02] p-1.5 border-b border-white/5 shrink-0 gap-1.5 overflow-x-auto no-scrollbar">
+            <button 
+              onClick={() => setViewMode('angebot')}
+              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'angebot' ? "bg-white text-black shadow-sm" : "bg-white/5 text-white/60 hover:text-white")}
+            >
+              📸 Struktur & Notizen
+            </button>
+            <button 
+              onClick={() => setViewMode('aufmass')}
+              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'aufmass' ? "bg-white text-black shadow-sm" : "bg-white/5 text-white/60 hover:text-white")}
+            >
+              🛒 Material
+            </button>
+          </div>
+        )}
+
+        {/* Section Bar - ALWAYS VISIBLE OVER BOTH MODES */}
+        <SectionBar
+          sections={sections}
+          activeSectionId={activeSectionId}
+          onSelectSection={setActiveSectionId}
+          onAddSection={handleAddSection}
+        />
+
         {viewMode === 'aufmass' ? (
           <>
-            {/* Section Bar */}
-            <SectionBar
-              sections={sections}
-              activeSectionId={activeSectionId}
-              onSelectSection={setActiveSectionId}
-              onAddSection={handleAddSection}
-            />
-
         {/* Search Bar */}
         <div className="px-4 py-3 border-b border-white/5 shrink-0">
           <div className="relative group max-w-full">
@@ -698,7 +867,14 @@ const AufmassPage = () => {
         {/* Article List */}
         <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-none">
-            {viewArticles.length === 0 ? (
+            {isFetchingWholesale ? (
+              <div className="col-span-full text-center py-20 ios-card">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse mx-auto mb-4">
+                   <Package size={24} className="text-emerald-400" />
+                </div>
+                <p className="text-white/40 font-medium">Artikel werden geladen...</p>
+              </div>
+            ) : viewArticles.length === 0 ? (
               <div className="col-span-full text-center py-20 ios-card">
                 {searchQuery
                   ? <Search size={36} className="text-white/20 mx-auto mb-4" />
@@ -854,6 +1030,111 @@ const AufmassPage = () => {
         projectItems={processedSummaryItems}
         projectName={currentProject.name}
      />
+      {/* Edit Project Dialog (Side Panel) */}
+      <ResizableSidePanel
+        isOpen={isEditProjectOpen}
+        onClose={() => setIsEditProjectOpen(false)}
+        title="Baustelle bearbeiten"
+        storageKey="edit-project"
+        defaultWidth={500}
+        minWidth={400}
+        maxWidth={800}
+      >
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4">
+                Grunddaten
+              </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name" className="text-white/70">Projektname / Bauvorhaben <span className="text-red-400">*</span></Label>
+                  <Input
+                    id="edit-name"
+                    value={editProjectData.name}
+                    onChange={(e) => setEditProjectData({ ...editProjectData, name: e.target.value })}
+                    className="glass-input h-11"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-client" className="text-white/70">Auftraggeber (Optional)</Label>
+                    <Input
+                      id="edit-client"
+                      value={editProjectData.client_name}
+                      onChange={(e) => setEditProjectData({ ...editProjectData, client_name: e.target.value })}
+                      className="glass-input h-11"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4 mt-8">
+                Zeitraum & Standort
+              </p>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-address" className="text-white/70">Adresse / Ort (Optional)</Label>
+                  <Input
+                    id="edit-address"
+                    value={editProjectData.address}
+                    onChange={(e) => setEditProjectData({ ...editProjectData, address: e.target.value })}
+                    className="glass-input h-11"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-start" className="text-white/70">Startdatum</Label>
+                    <Input
+                      id="edit-start"
+                      type="date"
+                      value={editProjectData.start_date || ''}
+                      onChange={(e) => setEditProjectData({ ...editProjectData, start_date: e.target.value })}
+                      className="glass-input h-11 [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-end" className="text-white/70">Enddatum</Label>
+                    <Input
+                      id="edit-end"
+                      type="date"
+                      value={editProjectData.end_date || ''}
+                      onChange={(e) => setEditProjectData({ ...editProjectData, end_date: e.target.value })}
+                      className="glass-input h-11 [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4 mt-8">
+                Extras
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="edit-notes" className="text-white/70">Interne Bemerkung (Optional)</Label>
+                <Textarea
+                  id="edit-notes"
+                  value={editProjectData.notes}
+                  onChange={(e) => setEditProjectData({ ...editProjectData, notes: e.target.value })}
+                  className="glass-input min-h-[100px] resize-y"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 p-4 border-t border-white/5 bg-background/50 backdrop-blur-md flex justify-between gap-3">
+          <Button variant="ghost" onClick={() => setIsEditProjectOpen(false)} className="text-white/60 flex-1 sm:flex-none">
+            Abbrechen
+          </Button>
+          <Button onClick={handleSaveProject} disabled={!editProjectData.name.trim()} className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1 sm:flex-none shadow-lg shadow-emerald-900/20">
+            Speichern
+          </Button>
+        </div>
+      </ResizableSidePanel>
         </>
       )}
     </motion.div>

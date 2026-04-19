@@ -173,6 +173,19 @@ export async function batchUpdateCategories(categoriesToUpdate: Partial<Category
 
 // --- Article Functions ---
 
+function mapArticleData(data: any[]): Article[] {
+  return data.map(art => ({
+    ...art,
+    articleNumber: art.article_number,
+    categoryId: art.category_id,
+    supplierId: art.supplier_id,
+    imageUrl: art.image_url ?? undefined,
+    source: art.source ?? 'own',
+    categoryName: art.categories?.name || '',
+    supplierName: art.suppliers?.name || ''
+  })) as Article[];
+}
+
 export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Article[]> {
   let query = supabase
     .from('articles')
@@ -190,16 +203,41 @@ export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Art
     return [];
   }
 
-  return (data as any[]).map(art => ({
-    ...art,
-    articleNumber: art.article_number,
-    categoryId: art.category_id,
-    supplierId: art.supplier_id,
-    imageUrl: art.image_url ?? undefined,
-    source: art.source ?? 'own',
-    categoryName: art.categories?.name || '',
-    supplierName: art.suppliers?.name || ''
-  })) as Article[];
+  return mapArticleData(data);
+}
+
+export async function fetchWholesaleArticlesByCategory(categoryIds: string[]): Promise<Article[]> {
+  if (categoryIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*, categories(name), suppliers(name)')
+    .eq('source', 'wholesale')
+    .in('category_id', categoryIds)
+    .order('order')
+    .limit(1000); // safety limit
+
+  if (error) {
+    console.error("Error fetching wholesale articles:", error);
+    return [];
+  }
+  return mapArticleData(data);
+}
+
+export async function searchWholesaleArticles(query: string): Promise<Article[]> {
+  if (!query.trim()) return [];
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*, categories(name), suppliers(name)')
+    .eq('source', 'wholesale')
+    .or(`name.ilike.%${query}%,article_number.ilike.%${query}%`)
+    .order('name')
+    .limit(150); // limit search results to prevent freezing
+
+  if (error) {
+    console.error("Error searching wholesale articles:", error);
+    return [];
+  }
+  return mapArticleData(data);
 }
 
 export function subscribeToArticles(callback: (articles: Article[]) => void, source?: 'own' | 'wholesale') {

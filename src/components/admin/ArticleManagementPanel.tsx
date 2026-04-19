@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { markImportDraftCompleted, updateImportDraftData } from '@/lib/import-storage';
-import { startAiCatalogImport } from '@/lib/ai-import';
+import { startAiCatalogImport, startAiCatalogImportFromBlob } from '@/lib/ai-import';
 import type { ImportDraft } from '@/lib/import-storage';
 import ImportDraftsDialog from '../dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '../dialogs/ImportReviewDialog';
@@ -49,6 +49,7 @@ interface ArticleManagementPanelProps {
   categoryName: string;
   categoryId: string;
   articles: Article[];
+  allArticles: Article[];
   suppliers: Supplier[];
   onAddNewArticle: (formData: NewArticleFormData) => void;
   onUpdateExistingArticle: (articleId: string, formData: NewArticleFormData) => void;
@@ -64,6 +65,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   categoryName,
   categoryId,
   articles: initialArticles,
+  allArticles,
   suppliers,
   onAddNewArticle,
   onUpdateExistingArticle,
@@ -85,6 +87,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   const { impactMedium, impactLight } = useHapticFeedback();
 
   const [isImportingPdf, setIsImportingPdf] = useState(false);
+  const [isImportingClipboard, setIsImportingClipboard] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,13 +141,38 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       if ((field === 'unit' || field === 'supplierId') && isSyncEditing) {
         return next.map(art => ({ ...art, [field]: value }));
       } else if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
-        const delta = value.length - (String(article[field]) || '').length;
-        const oldSuffixStart = pos - delta;
+        const oldValue = String(article[field]) || '';
+        const newValue = value;
+        
+        // Find common prefix length
+        let commonPrefixLen = 0;
+        while (commonPrefixLen < oldValue.length && commonPrefixLen < newValue.length && oldValue[commonPrefixLen] === newValue[commonPrefixLen]) {
+          commonPrefixLen++;
+        }
+        
+        // Find common suffix length
+        let commonSuffixLen = 0;
+        while (commonSuffixLen < oldValue.length - commonPrefixLen && 
+               commonSuffixLen < newValue.length - commonPrefixLen && 
+               oldValue[oldValue.length - 1 - commonSuffixLen] === newValue[newValue.length - 1 - commonSuffixLen]) {
+          commonSuffixLen++;
+        }
+        
+        const charsToDelete = oldValue.length - commonPrefixLen - commonSuffixLen;
+        const stringToInsert = newValue.substring(commonPrefixLen, newValue.length - commonSuffixLen);
 
         return next.map(art => {
-          const suffix = (String(art[field]) || '').substring(Math.max(0, oldSuffixStart));
-          const newPrefix = value.substring(0, pos);
-          return { ...art, [field]: newPrefix + suffix };
+          if (art.id === id) {
+            return { ...art, [field]: value };
+          }
+          const oldArtVal = String(art[field]) || '';
+          
+          const replaceStart = Math.min(commonPrefixLen, oldArtVal.length);
+          const replaceEnd = Math.min(replaceStart + charsToDelete, oldArtVal.length);
+          
+          const newArtVal = oldArtVal.substring(0, replaceStart) + stringToInsert + oldArtVal.substring(replaceEnd);
+          
+          return { ...art, [field]: newArtVal };
         });
       } else {
         next[articleIndex] = { ...article, [field]: value };
@@ -275,7 +303,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     setIsImportingPdf(true);
     toast({ title: "KI Analyse gestartet", description: "Inhalte werden im Hintergrund extrahiert..." });
 
-    const draftId = await startAiCatalogImport(file, selectedSupplierId, {
+    const draftId = await startAiCatalogImport(file, selectedSupplierId, categoryId, {
       onDraftCreated: () => {
         if (pdfInputRef.current) pdfInputRef.current.value = '';
         setIsImportingPdf(false);
@@ -295,16 +323,86 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     }
   };
 
+  const handleClipboardAiScan = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      let blob: Blob | null = null;
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          blob = await item.getType(imageType);
+          break;
+        }
+      }
+
+      if (!blob) {
+        toast({ title: "Kein Bild in der Zwischenablage", description: "Bitte erst ein Bild kopieren.", variant: "destructive" });
+        return;
+      }
+
+      setIsImportingClipboard(true);
+      impactLight();
+      toast({ title: "KI Analyse gestartet", description: "Bild aus Zwischenablage wird analysiert..." });
+
+      const draftId = await startAiCatalogImportFromBlob(
+        blob,
+        selectedSupplierId,
+        categoryId,
+        {
+          onDraftCreated: () => {
+            setIsImportingClipboard(false);
+          },
+          onSuccess: () => {
+            toast({ title: "KI Analyse abgeschlossen", description: "Ein neuer Entwurf ist bereit zur Prüfung." });
+            impactMedium();
+          },
+          onError: (_id, errorMessage) => {
+            toast({ title: "KI Analyse fehlgeschlagen", description: errorMessage, variant: "destructive" });
+          },
+        }
+      );
+
+      if (!draftId) {
+        toast({ title: "Fehler", description: "Entwurf konnte nicht erstellt werden.", variant: "destructive" });
+        setIsImportingClipboard(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsImportingClipboard(false);
+      toast({ title: "Zwischenablage nicht verfügbar", description: "Bitte gewähren Sie Berechtigungen oder nutzen Sie den Datei-Upload.", variant: "destructive" });
+    }
+  };
+
   const handleSaveDraft = async (id: string, data: any, supplierId: string | null) => {
     await updateImportDraftData(id, data, supplierId);
     toast({ title: "Entwurf gespeichert" });
   };
 
-  const handleConfirmImport = async (id: string, data: any, targetId: string | null, supplierId: string | null) => {
-    const catalogData = data.map((c: any) => ({ ...c, subCategories: [] }));
-    await batchAddCatalog(catalogData, allCategories, targetId, supplierId);
+  const handleConfirmImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
+    if (importMode === 'add_to_existing' && targetId) {
+      // Flatten all articles from all KI categories and add them to the existing target category
+      const allArticles = data.flatMap((c: any) => c.articles || []);
+      const existingCount = initialArticles.length;
+      const articlesToInsert = allArticles.map((art: any, idx: number) => ({
+        name: art.name,
+        article_number: art.articleNumber,
+        unit: art.unit,
+        category_id: targetId,
+        supplier_id: art.supplierId || (supplierId === 'none' ? null : supplierId),
+        order: existingCount + idx,
+      }));
+      
+      if (articlesToInsert.length > 0) {
+        const { supabase } = await import('@/lib/supabase');
+        await supabase.from('articles').insert(articlesToInsert);
+      }
+    } else {
+      // Default: create new subcategories
+      const catalogData = data.map((c: any) => ({ ...c, subCategories: [] }));
+      await batchAddCatalog(catalogData, allCategories, targetId, supplierId);
+    }
+
     await markImportDraftCompleted(id);
-    
     setReviewingDraft(null);
     impactMedium();
     toast({ title: "Import erfolgreich" });
@@ -388,8 +486,18 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                   disabled={isImportingPdf}
                   variant="ghost" 
                   className="hover:bg-white/10 text-emerald-400 h-9 px-3"
+                  title="Datei für KI-Scan hochladen"
                 >
                   {isImportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                </Button>
+                <Button 
+                  onClick={handleClipboardAiScan} 
+                  disabled={isImportingClipboard}
+                  variant="ghost" 
+                  className="hover:bg-white/10 text-amber-400 h-9 px-3"
+                  title="Bild aus Zwischenablage scannen"
+                >
+                  {isImportingClipboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
                 </Button>
                 <div className="w-[1px] h-6 bg-white/10"></div>
                 <Button 
@@ -444,7 +552,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {localArticles.map(article => (
+                        {[...localArticles].sort((a, b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' })).map(article => (
                             <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] group transition-colors">
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
                                 <TableCell className="font-bold text-white/80 p-2">
@@ -547,6 +655,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         onConfirmImport={handleConfirmImport}
         categories={allCategories}
         suppliers={suppliers}
+        articles={allArticles}
         defaultTargetCategoryId={categoryId}
       />
     </div>
