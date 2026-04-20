@@ -354,7 +354,7 @@ const AdminPage = () => {
 
           {/* Mobile Katalog Sheet - triggered from Header burger */}
           <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-            <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
+            <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05)] flex flex-col p-0">
               <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
                 <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                   <BookMarked size={20} className="text-emerald-400" /> Katalog
@@ -452,7 +452,7 @@ const AdminPage = () => {
             
             {/* Drawer: KATEGORIEN + KI */}
             <aside className={cn(
-              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-background/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
+              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
             )}>
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
@@ -542,7 +542,7 @@ const AdminPage = () => {
           </div>
 
           {/* ===== CENTER: ARTICLE PANEL ===== */}
-          <div className="flex-1 min-w-0 overflow-hidden bg-background/40 relative z-0">
+          <div className="flex-1 min-w-0 overflow-hidden bg-transparent relative z-0">
             <div className="absolute inset-0 overflow-y-auto">
               {(() => {
                 const activeCategory = activeCategoryId

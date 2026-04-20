@@ -76,16 +76,28 @@ export function CategoryTree({
           const isExpanded = expandedCategories.has(category.id) || forceExpandedIds.includes(category.id);
           const isFirst = index === 0;
           const isLast = index === columnCategories.length - 1;
+
+          // Only the deepest expanded folder should be sticky
+          const hasExpandedChild = isExpanded && hasChildren && categories
+            .filter(c => c.parentId === category.id)
+            .some(child => {
+              const childHasKids = categories.some(sc => sc.parentId === child.id);
+              const childIsExpanded = expandedCategories.has(child.id) || forceExpandedIds.includes(child.id);
+              return childHasKids && childIsExpanded;
+            });
+          const isDeepestExpanded = isExpanded && hasChildren && !hasExpandedChild;
           
           return (
             <li key={category.id} className="group/item">
               <div 
                 className={cn(
                   "flex justify-between items-start p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
+                  isDeepestExpanded && "sticky top-0 z-10 bg-black/90 backdrop-blur-md border-white/10 text-white shadow-lg",
                   isSelected && !hasChildren
                     ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
-                    : "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10 text-white/70 hover:text-white",
-                  isSelected && hasChildren && "border-white/10 bg-white/[0.04]"
+                    : !isDeepestExpanded && isExpanded
+                      ? "border-white/10 bg-white/[0.04] text-white" 
+                      : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10 text-white/70 hover:text-white"
                 )}
                 onClick={(e) => {
                   if (hasChildren) {
@@ -153,11 +165,10 @@ export function CategoryTree({
                     animate="open"
                     exit="collapsed"
                     variants={{
-                      open: { opacity: 1, height: "auto" },
-                      collapsed: { opacity: 0, height: 0 }
+                      open: { opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } },
+                      collapsed: { opacity: 0, height: 0, overflow: "hidden" }
                     }}
                     transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
-                    className="overflow-hidden"
                   >
                     {renderTree(category.id, depth + 1)}
                   </motion.div>

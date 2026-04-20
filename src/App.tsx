@@ -16,7 +16,7 @@ function App() {
   }, [location.pathname])
 
   return (
-    <div className="h-[100dvh] w-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-[100dvh] w-screen flex flex-col overflow-hidden bg-transparent">
       <Header />
       <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
         <AnimatePresence mode="wait">

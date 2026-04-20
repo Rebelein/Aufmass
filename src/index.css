@@ -98,6 +98,11 @@
   
   body {
     background-color: hsl(var(--background));
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.15), transparent 50%),
+        radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.15), transparent 50%),
+        radial-gradient(circle at 50% 80%, rgba(30, 58, 138, 0.2), transparent 50%);
+    background-attachment: fixed;
     color: var(--color-foreground);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -115,29 +120,32 @@
 
 @layer components {
   /* Sleek Flat Cards & Glassmorphism */
+  /* Liquid Glass UI Cards */
   .glass-card, .ios-card, .card-flat {
-    background-color: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.03); /* Extremely low opacity to let the background shine through */
+    backdrop-filter: blur(40px); /* Deep blur for refraction */
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.08); /* Specular glossy edge */
     border-radius: var(--radius-lg);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transition: all 0.3s ease;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 8px 32px 0 rgba(0, 0, 0, 0.3); /* Inset refraction rim */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   .glass-card:hover, .ios-card:hover, .card-flat:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.18);
-    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25), 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+    transform: translateY(-2px);
   }
   
   .glass-card-light {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
   }
-  
-  /* Modern Flat Buttons */
   .glass-button, .ios-button, .btn-primary {
     background-color: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
@@ -209,11 +217,13 @@
   }
   
   /* Minimal UI Elements */
+  /* Liquid Glass Nav & Headers */
   .glass-nav {
-    background-color: rgba(9, 9, 11, 0.8);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background-color: rgba(9, 9, 11, 0.2);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
   }
   
   .glass-input, .input-light {

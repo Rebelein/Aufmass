@@ -36,7 +36,7 @@ const Header = () => {
   if (isAufmass) return null;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-xl bg-background/80 h-14 md:h-16 flex items-center">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/10 backdrop-blur-[40px] shadow-[inset_0_-1px_0_rgba(255,255,255,0.05)] h-14 md:h-16 flex items-center">
       <div className="w-full px-4 md:px-6 flex items-center justify-between gap-4">
 
         {/* Left: Logo + optional Katalog button */}

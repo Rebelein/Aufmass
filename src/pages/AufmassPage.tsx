@@ -26,7 +26,7 @@ import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { motion } from 'framer-motion';
 import { CsvExportDialog } from '@/components/dialogs/CsvExportDialog';
 import type { ProcessedSummaryItem } from '@/lib/types';
-import Fuse from 'fuse.js';
+
 import { generateAufmassPdf } from '@/lib/pdf-export';
 import { generateAngebotPdf } from '@/lib/pdf-export-angebot';
 import { ArticleCard } from '@/components/aufmass/ArticleCard';
@@ -62,6 +62,14 @@ const AufmassPage = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = localStorage.getItem('aufmass_sidebar_w');
+    return stored ? parseInt(stored) : 288;
+  });
+  const [summaryWidth, setSummaryWidth] = useState(() => {
+    const stored = localStorage.getItem('aufmass_summary_w');
+    return stored ? parseInt(stored) : 320;
+  });
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
   const [isCsvExportDialogOpen, setIsCsvExportDialogOpen] = useState(false);
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
@@ -85,19 +93,59 @@ const AufmassPage = () => {
   // Aktive Daten je nach Quelle (own ist client-side)
   const activeCategories = catalogSource === 'own' ? categories : wholesaleCategories;
 
-  // Fuzzy search (only for own catalog)
-  const fuse = useMemo(() => new Fuse(articlesData, {
-    keys: ['name', 'articleNumber'],
-    threshold: 0.35,
-    distance: 100,
-    ignoreLocation: true,
-  }), [articlesData]);
-
+  // Smart abbreviation-aware search for Monteur workflow
+  // Each term must match somewhere: first tries substring, then subsequence per word
+  // e.g. "ff üg ag" → FlowFit (ff subsequence), Übergang (üg), Außengewinde (ag)
   const searchResults = useMemo(() => {
     if (catalogSource === 'wholesale') return dynamicWholesaleArticles;
     if (!debouncedSearchQuery.trim()) return [];
-    return fuse.search(debouncedSearchQuery).map(r => r.item);
-  }, [debouncedSearchQuery, fuse, catalogSource, dynamicWholesaleArticles]);
+    
+    const terms = debouncedSearchQuery.toLowerCase()
+      .split(/[\s/,]+/)
+      .filter(t => t.length > 0);
+    if (terms.length === 0) return [];
+
+    // Check if term appears as a subsequence in word
+    const isSubsequence = (term: string, word: string): boolean => {
+      let ti = 0;
+      for (let wi = 0; wi < word.length && ti < term.length; wi++) {
+        if (word[wi] === term[ti]) ti++;
+      }
+      return ti === term.length;
+    };
+
+    // Check if a single term matches the article text
+    const termMatches = (term: string, text: string): boolean => {
+      // Pass 1: exact substring (fastest, highest quality)
+      if (text.includes(term)) return true;
+      // Pass 2: subsequence match per word (for abbreviations)
+      const words = text.split(/[\s,.\-/()]+/).filter(Boolean);
+      return words.some(word => isSubsequence(term, word));
+    };
+    
+    // Score articles for sorting: more substring hits = higher relevance
+    const scored = articlesData
+      .map(article => {
+        const text = `${article.name ?? ''} ${article.articleNumber ?? ''}`.toLowerCase();
+        let score = 0;
+        let allMatch = true;
+        for (const term of terms) {
+          if (text.includes(term)) {
+            score += 2; // exact substring = best
+          } else if (termMatches(term, text)) {
+            score += 1; // subsequence = good
+          } else {
+            allMatch = false;
+            break;
+          }
+        }
+        return { article, score, allMatch };
+      })
+      .filter(r => r.allMatch)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.map(r => r.article);
+  }, [debouncedSearchQuery, articlesData, catalogSource, dynamicWholesaleArticles]);
 
   // Load wholesale articles dynamically
   useEffect(() => {
@@ -595,13 +643,42 @@ const AufmassPage = () => {
 
       {/* ===== SIDEBAR CONTAINER (Desktop/Tablet Landscape) ===== */}
       <div className={cn(
-        "hidden lg:block relative shrink-0 transition-[width] duration-300 h-full",
-        viewMode === 'angebot' ? "w-[240px]" : "w-[288px] xl:w-[308px]"
-      )}>
+        "hidden lg:block relative shrink-0 h-full",
+        viewMode === 'angebot' && "w-[240px]"
+      )}
+        style={viewMode !== 'angebot' ? { width: sidebarWidth } : undefined}
+      >
+        
+        {/* Drag handle for sidebar */}
+        {viewMode === 'aufmass' && (
+          <div
+            className="absolute top-0 bottom-0 right-0 w-1.5 cursor-col-resize z-30 group hover:bg-emerald-500/30 active:bg-emerald-500/40 transition-colors"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const startW = sidebarWidth;
+              const onMove = (ev: MouseEvent) => {
+                const newW = Math.max(200, Math.min(500, startW + ev.clientX - startX));
+                setSidebarWidth(newW);
+              };
+              const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                localStorage.setItem('aufmass_sidebar_w', String(sidebarWidth));
+              };
+              document.body.style.cursor = 'col-resize';
+              document.body.style.userSelect = 'none';
+              document.addEventListener('mousemove', onMove);
+              document.addEventListener('mouseup', onUp);
+            }}
+          />
+        )}
         
         {/* Drawer: KATEGORIEN */}
         <aside className={cn(
-          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/5 bg-background/95 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20"
+          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
         )}>
           {viewMode === 'aufmass' ? (
             <>
@@ -609,16 +686,94 @@ const AufmassPage = () => {
                 {catalogSource === 'wholesale' && (
                   <p className="text-[10px] text-amber-400/70 text-center">Großhändler-Katalog aktiv</p>
                 )}
+                <div className="relative group">
+                  <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={14} />
+                  <Input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Artikel oder Nummer suchen..."
+                    className="h-9 pl-8 pr-8 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
+                  />
+                  {searchQuery && (
+                    <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                      <CloseIcon size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto py-3">
-                <CategoryTree
-                  categories={activeCategories}
-                  activeCategoryId={activeCategoryId}
-                  expandedCategories={expandedCategories}
-                  forceExpandedIds={searchExpandedIds}
-                  onSelectCategory={handleSelectCategory}
-                  onToggleExpansion={toggleCategoryExpansion}
-                />
+              {debouncedSearchQuery.trim() ? (
+                <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1">
+                  <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
+                  {searchResults.slice(0, 10).map(article => {
+                    const qty = getQuantityInSection(article.id);
+                    const cat = activeCategories.find(c => c.id === article.categoryId);
+                    return (
+                      <button
+                        key={article.id}
+                        onClick={() => {
+                          setActiveCategoryId(article.categoryId);
+                          // expand parent chain
+                          let currId: string | null | undefined = article.categoryId;
+                          const toExpand: string[] = [];
+                          while (currId) {
+                            const parent = activeCategories.find(c => c.id === currId);
+                            if (parent?.parentId) { toExpand.push(parent.parentId); currId = parent.parentId; } else break;
+                          }
+                          if (toExpand.length > 0) {
+                            setExpandedCategories(prev => {
+                              const next = new Set(prev);
+                              toExpand.forEach(id => next.add(id));
+                              return next;
+                            });
+                          }
+                          setSearchQuery('');
+                        }}
+                        className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.06] transition-all text-left"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                          {article.imageUrl || cat?.imageUrl
+                            ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-cover" />
+                            : <Package size={12} className="text-white/15" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] text-white/85 font-medium leading-tight">{article.name}</p>
+                          <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
+                        </div>
+                        {qty > 0 && (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">{qty}×</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {searchResults.length === 0 && (
+                    <p className="text-xs text-white/20 text-center py-6">Keine Treffer</p>
+                  )}
+                  {searchResults.length > 10 && (
+                    <p className="text-[10px] text-white/25 text-center py-1">+{searchResults.length - 10} weitere</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto py-3">
+                  <CategoryTree
+                    categories={activeCategories}
+                    activeCategoryId={activeCategoryId}
+                    expandedCategories={expandedCategories}
+                    forceExpandedIds={searchExpandedIds}
+                    onSelectCategory={handleSelectCategory}
+                    onToggleExpansion={toggleCategoryExpansion}
+                  />
+                </div>
+              )}
+              <div className="p-3 border-t border-white/5 bg-white/[0.01] shrink-0 flex flex-col gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setSearchQuery(''); }}
+                  disabled={!activeCategoryId && expandedCategories.size === 0 && !searchQuery}
+                  className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8"
+                >
+                  <CloseIcon size={14} className="mr-2 opacity-70" /> Filter zurücksetzen
+                </Button>
               </div>
             </>
           ) : (
@@ -675,9 +830,9 @@ const AufmassPage = () => {
       </div>
 
       {/* ===== CENTER: Main Content ===== */}
-      <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-background/80")}>
+      <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-black/10")}>
         {/* Page header – Unified global/local header */}
-        <header className="shrink-0 border-b border-white/5 bg-background/40 backdrop-blur-sm relative z-30">
+        <header className="shrink-0 border-b border-white/10 bg-black/10 backdrop-blur-[40px] shadow-[inset_0_-1px_0_rgba(255,255,255,0.05)] relative z-30">
           <div className="flex items-center justify-between px-4 h-14 md:h-16 gap-3">
             {/* Left: back, logo + project name/edit */}
             <div className="flex items-center gap-3 min-w-0">
@@ -694,7 +849,7 @@ const AufmassPage = () => {
                     <Menu size={20} className="text-emerald-400" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
+                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
                   {viewMode === 'aufmass' ? (
                     <>
                       <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
@@ -715,9 +870,14 @@ const AufmassPage = () => {
                           />
                         </div>
                       </div>
-                      <div className="p-6 border-t border-white/5 bg-white/[0.02]">
-                        <Button variant="ghost" onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setIsCategorySheetOpen(false); }} className="w-full text-white/50 hover:text-white">
-                          Filter zurücksetzen
+                      <div className="p-4 border-t border-white/5 bg-white/[0.02] flex flex-col gap-2">
+                        <Button 
+                          variant="ghost" 
+                          onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setSearchQuery(''); setIsCategorySheetOpen(false); }}
+                          disabled={!activeCategoryId && expandedCategories.size === 0 && !searchQuery}
+                          className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          <CloseIcon size={16} className="mr-2 opacity-70" /> Filter zurücksetzen
                         </Button>
                       </div>
                     </>
@@ -845,26 +1005,12 @@ const AufmassPage = () => {
 
         {viewMode === 'aufmass' ? (
           <>
-        {/* Search Bar */}
-        <div className="px-4 py-3 border-b border-white/5 shrink-0">
-          <div className="relative group max-w-full">
-            <Search className={cn('absolute left-4 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={18} />
-            <Input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Artikel oder Nummer suchen..."
-              className="h-11 pl-11 pr-10 glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
-            />
-            {searchQuery && (
-              <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-all">
-                <CloseIcon size={16} />
-              </button>
-            )}
+        {/* Category label */}
+        {activeCategory && !searchQuery && (
+          <div className="px-4 py-2 border-b border-white/5 shrink-0">
+            <p className="text-xs text-white/40 uppercase tracking-wider">{activeCategory.name}</p>
           </div>
-          {activeCategory && !searchQuery && (
-            <p className="text-xs text-white/40 mt-2 px-1 uppercase tracking-wider">{activeCategory.name}</p>
-          )}
-        </div>
+        )}
 
         {/* Article List */}
         <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
@@ -924,12 +1070,39 @@ const AufmassPage = () => {
       {viewMode === 'aufmass' && (
         <>
           {/* Desktop/Tablet permanent panel */}
-      <aside className="hidden lg:flex flex-col w-80 xl:w-96 shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10">
+      <aside className="hidden lg:flex flex-col shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10 relative"
+        style={{ width: summaryWidth }}
+      >
+        {/* Drag handle for summary panel */}
+        <div
+          className="absolute top-0 bottom-0 left-0 w-1.5 cursor-col-resize z-30 group hover:bg-emerald-500/30 active:bg-emerald-500/40 transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = summaryWidth;
+            const onMove = (ev: MouseEvent) => {
+              const newW = Math.max(250, Math.min(600, startW - (ev.clientX - startX)));
+              setSummaryWidth(newW);
+            };
+            const onUp = () => {
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              localStorage.setItem('aufmass_summary_w', String(summaryWidth));
+            };
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          }}
+        />
         <div className="p-4 border-b border-white/5 shrink-0">
           <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider">Aufmaß</h2>
           <p className="text-2xl font-bold text-emerald-400 mt-1">{totalArticleCount} <span className="text-sm font-normal text-white/40">Artikel</span></p>
         </div>
         <SummaryList
+                projectId={currentProject.id}
                 sectionItems={currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? []}
                 articleItems={processedSummaryItems.filter(i => i.type === 'article')}
                 activeSectionId={activeSectionId}
@@ -974,6 +1147,7 @@ const AufmassPage = () => {
             <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
           </SheetHeader>
           <SummaryList
+                projectId={currentProject.id}
                 sectionItems={currentProject?.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order) ?? []}
                 articleItems={processedSummaryItems.filter(i => i.type === 'article')}
                 activeSectionId={activeSectionId}

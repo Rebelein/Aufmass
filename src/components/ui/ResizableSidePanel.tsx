@@ -96,7 +96,7 @@ export function ResizableSidePanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 top-14 md:top-16 z-[60] bg-black/50 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -108,7 +108,7 @@ export function ResizableSidePanel({
             exit={{ x: side === 'right' ? '100%' : '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className={cn(
-              "fixed top-0 bottom-0 z-50 flex flex-col bg-background border-white/10 shadow-2xl shadow-black/50",
+              "fixed top-14 md:top-16 bottom-0 z-[60] flex flex-col bg-black/20 backdrop-blur-[60px] border-white/10 shadow-[inset_1px_0_0_rgba(255,255,255,0.05),-10px_0_30px_rgba(0,0,0,0.5)]",
               side === 'right' ? 'right-0 border-l' : 'left-0 border-r',
               className
             )}

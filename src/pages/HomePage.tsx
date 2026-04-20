@@ -123,7 +123,7 @@ export default function HomePage() {
         transition={{ type: 'spring', stiffness: 350, damping: 25 }}
         whileHover={{ scale: 1.02 }} 
         key={project.id} 
-        className="ios-card overflow-hidden transition-colors border-white/5 bg-background shadow-sm hover:border-white/10 group flex flex-col"
+        className="glass-card overflow-hidden group flex flex-col"
       >
         <div className="p-4 space-y-3 flex-1">
           <div className="flex justify-between items-start gap-4">
@@ -145,7 +145,7 @@ export default function HomePage() {
                     <Trash2 size={14} />
                   </Button>
                 </AlertDialogTrigger>
-                <AlertDialogContent className="ios-card border border-white/10 bg-background">
+                <AlertDialogContent className="glass-card sm:max-w-md">
                   <AlertDialogHeader>
                     <AlertDialogTitle className="text-xl font-bold text-white">Baustelle löschen?</AlertDialogTitle>
                     <AlertDialogDescription className="text-white/60">
@@ -241,7 +241,7 @@ export default function HomePage() {
 
   return (
     <motion.div 
-      className="h-full relative flex flex-col overflow-hidden bg-background"
+      className="h-full relative flex flex-col overflow-hidden bg-transparent"
       variants={pageVariants}
       initial="initial"
       animate="animate"
@@ -362,7 +362,7 @@ export default function HomePage() {
 
           {/* Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="ios-card bg-white/[0.02] border border-white/5 p-4 rounded-xl flex items-center gap-4">
+            <div className="glass-card p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                 <BarChart3 size={20} />
               </div>
@@ -371,7 +371,7 @@ export default function HomePage() {
                 <div className="text-2xl font-bold text-white">{stats.total}</div>
               </div>
             </div>
-            <div className="ios-card bg-white/[0.02] border border-white/5 p-4 rounded-xl flex items-center gap-4">
+            <div className="glass-card p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-500 shrink-0">
                 <ClipboardList size={20} />
               </div>
@@ -380,7 +380,7 @@ export default function HomePage() {
                 <div className="text-2xl font-bold text-white">{stats.planning}</div>
               </div>
             </div>
-            <div className="ios-card bg-white/[0.02] border border-white/5 p-4 rounded-xl flex items-center gap-4">
+            <div className="glass-card p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary shrink-0">
                 <Activity size={20} />
               </div>
@@ -389,7 +389,7 @@ export default function HomePage() {
                 <div className="text-2xl font-bold text-white">{stats.active}</div>
               </div>
             </div>
-            <div className="ios-card bg-white/[0.02] border border-white/5 p-4 rounded-xl flex items-center gap-4">
+            <div className="glass-card p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-white/80 shrink-0">
                 <PackageOpen size={20} />
               </div>
