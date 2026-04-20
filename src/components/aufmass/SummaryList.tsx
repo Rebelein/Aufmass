@@ -126,7 +126,7 @@ export function SummaryList({
 
                               {/* Info */}
                               <div className="flex-1 min-w-0">
-                                <p className="text-white/85 text-[12px] font-medium leading-tight truncate">
+                                <p className="text-white/85 text-[12px] font-medium leading-tight">
                                   {item.article?.name ?? (item as any).name ?? 'Manuell'}
                                 </p>
                                 <p className="text-[10px] text-white/30 font-mono truncate">

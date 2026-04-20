@@ -48,7 +48,7 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
         {/* Info */}
         <div className="flex-1 min-w-0 py-0.5">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-semibold text-white/90 text-sm leading-tight line-clamp-1 flex-1" title={article.name}>{article.name}</h3>
+            <h3 className="font-semibold text-white/90 text-sm leading-tight flex-1" title={article.name}>{article.name}</h3>
             <AnimatePresence>
               {quantity > 0 && (
                 <motion.div 

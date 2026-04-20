@@ -236,7 +236,7 @@ export function WholesaleCatalogPanel({
               {articlesToCopy.map(a => (
                 <div key={a.id} className="flex items-center gap-2 text-sm">
                   <CheckSquare size={13} className="text-emerald-400 shrink-0" />
-                  <span className="text-white/80 truncate">{a.name}</span>
+                  <span className="text-white/80">{a.name}</span>
                   <span className="text-white/30 font-mono text-xs shrink-0">{a.articleNumber}</span>
                 </div>
               ))}

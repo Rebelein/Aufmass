@@ -46,7 +46,14 @@ function ReloadPrompt() {
           {needRefresh && (
             <button
               className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
-              onClick={() => updateServiceWorker(true)}
+              onClick={async () => {
+                setNeedRefresh(false);
+                await updateServiceWorker(true);
+                // Fallback reload if the plugin's automatic reload fails
+                setTimeout(() => {
+                  window.location.reload();
+                }, 500);
+              }}
             >
               Aktualisieren
             </button>

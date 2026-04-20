@@ -38,9 +38,13 @@ const ArticleList: React.FC<ArticleListProps> = ({
     });
   };
 
+  const sortedArticles = [...articles].sort((a, b) => 
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  );
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {articles.map((article) => {
+    <div className="flex flex-col gap-4">
+      {sortedArticles.map((article) => {
         const inputQuantity = stagedQuantities.get(article.id) ?? 0;
         const totalInProject = projectSelectedQuantities.get(article.id) ?? 0;
         const isStaged = inputQuantity > 0;
@@ -76,7 +80,7 @@ const ArticleList: React.FC<ArticleListProps> = ({
 
             <div className="flex-grow flex flex-col justify-between min-w-0">
               <div className="space-y-1">
-                  <h3 className="font-bold text-white leading-snug truncate group-hover:text-emerald-300 transition-colors" title={article.name}>
+                  <h3 className="font-bold text-white leading-snug group-hover:text-emerald-300 transition-colors" title={article.name}>
                     {article.name}
                   </h3>
                   <div className="flex items-center gap-2">

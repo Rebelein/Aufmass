@@ -455,7 +455,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                   </Button>
 
                   <div className="space-y-1 min-w-0">
-                      <h2 className="text-xl lg:text-2xl font-bold text-gradient flex items-center gap-2 truncate">
+                      <h2 className="text-xl lg:text-2xl font-bold text-gradient flex items-center gap-2">
                           {categoryName}
                       </h2>
                       <p className="text-white/40 text-[10px] sm:text-xs font-bold uppercase tracking-widest">{initialArticles.length} Artikel</p>

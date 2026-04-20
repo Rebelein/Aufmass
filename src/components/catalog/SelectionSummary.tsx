@@ -137,7 +137,7 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                             />
                         ) : (
                             <div className="space-y-1">
-                                <p className="text-sm font-bold text-white truncate leading-tight">
+                                <p className="text-sm font-bold text-white leading-tight">
                                     {item.article?.name}
                                 </p>
                                 <div className="flex items-center gap-2 text-[10px] text-white/40 font-medium">

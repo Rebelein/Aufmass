@@ -177,7 +177,7 @@ const AufmassPage = () => {
     const unsubCats = subscribeToCategories(cats => { if (isMounted) setCategories(cats); }, 'own');
     const unsubWCats = subscribeToCategories(cats => { if (isMounted) setWholesaleCategories(cats); }, 'wholesale');
     const unsubArts = subscribeToArticles(arts => { if (isMounted) setArticlesData(arts); }, 'own');
-    const unsubWArts = subscribeToArticles(arts => { if (isMounted) setWholesaleArticlesData(arts); }, 'wholesale');
+    const unsubWArts = subscribeToArticles(() => {}, 'wholesale'); // Wholesale-Artikel werden dynamisch pro Kategorie geladen
     const unsubSupps = subscribeToSuppliers(() => {});
 
     const load = async () => {
@@ -247,19 +247,21 @@ const AufmassPage = () => {
   }, [searchResults, dynamicWholesaleArticles, activeCategories, searchQuery, catalogSource]);
 
   const viewArticles = useMemo(() => {
+    let result = [];
     if (catalogSource === 'wholesale') {
-      return dynamicWholesaleArticles;
+      result = dynamicWholesaleArticles;
+    } else if (searchQuery.trim().length > 0) {
+      result = searchResults;
+    } else if (!activeCategoryId) {
+      result = [];
+    } else {
+      const subcats = activeCategories.filter(c => c.parentId === activeCategoryId);
+      const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
+      result = articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId));
     }
-    if (searchQuery.trim().length > 0) return searchResults;
-    if (!activeCategoryId) return [];
-    
-    // Get current cat + subcats
-    const subcats = activeCategories.filter(c => c.parentId === activeCategoryId);
-    const validIds = [activeCategoryId, ...subcats.map(c => c.id)];
-    
-    return articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)).sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }));
-  }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
 
+    return [...result].sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }));
+  }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
   const sections = useMemo(() =>
     (currentProject?.selectedItems ?? []).filter(i => i.type === 'section')
       .sort((a,b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -643,7 +645,7 @@ const AufmassPage = () => {
                     key={s.id}
                     onClick={() => setActiveSectionId(s.id)}
                     className={cn(
-                      "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors truncate", 
+                      "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors", 
                       activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
                     )}
                   >
@@ -743,7 +745,7 @@ const AufmassPage = () => {
                             key={s.id}
                             onClick={() => { setActiveSectionId(s.id); setIsCategorySheetOpen(false); }}
                             className={cn(
-                              "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors truncate", 
+                              "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors", 
                               activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
                             )}
                           >
@@ -866,7 +868,7 @@ const AufmassPage = () => {
 
         {/* Article List */}
         <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-none">
+          <div className="flex flex-col gap-3 max-w-none">
             {isFetchingWholesale ? (
               <div className="col-span-full text-center py-20 ios-card">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse mx-auto mb-4">

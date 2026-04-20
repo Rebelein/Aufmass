@@ -71,28 +71,27 @@
 
 @layer base {
   :root {
-    --background: 220 10% 12%; /* Elegant very dark grey instead of pure black */
+    --background: 220 10% 3%; /* Very dark, almost black background */
     --foreground: 0 0% 98%;
-    --card: 220 10% 16%; /* Lighter card color to distinguish from background */
+    --card: 220 10% 7%; /* Darker card color to match black background */
     --card-foreground: 0 0% 98%;
-    --popover: 220 10% 16%;
+    --popover: 220 10% 7%;
     --popover-foreground: 0 0% 98%;
     --primary: 158 64% 45%; /* Refined company emerald */
     --primary-foreground: 158 100% 10%;
-    --secondary: 220 10% 22%; /* Noticeable grey for secondary elements */
+    --secondary: 220 10% 12%; /* Darker grey for secondary elements */
     --secondary-foreground: 0 0% 98%;
-    --muted: 220 10% 18%; 
-    --muted-foreground: 220 10% 65%;
-    --accent: 220 10% 22%;
+    --muted: 220 10% 9%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 220 10% 12%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 10% 24%; /* Clearer borders */
-    --input: 220 10% 20%;
+    --border: 220 10% 14%; /* Darker borders */
+    --input: 220 10% 10%;
     --ring: 158 64% 45%;
     --radius: 0.75rem; /* Tighter modern radius */
-  }
-  
+  }  
   * {
     border-color: var(--color-border);
   }
