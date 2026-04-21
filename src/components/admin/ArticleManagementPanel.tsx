@@ -57,7 +57,7 @@ interface ArticleManagementPanelProps {
   onDeleteArticles: (articleIds: string[]) => void;
   onAssignSupplier: (articleIds: string[], supplierName: string | undefined) => void;
   allCategories: Category[]; 
-  onAssignImage: (articleIds: string[], imageUrl: string) => void;
+  onAssignImage: (articleIds: string[], imageUrl: string | null) => void;
   onNavigateCategory: (direction: 'prev' | 'next') => void;
 }
 
@@ -90,13 +90,15 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   const [isImportingClipboard, setIsImportingClipboard] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const articleImageInputRef = useRef<HTMLInputElement>(null);
+  const [activeArticleIdForImage, setActiveArticleIdForImage] = useState<string | null>(null);
 
   const [localArticles, setLocalArticles] = useState<Article[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [isSyncEditing, setIsSyncEditing] = useState(true);
   const [cursorInfo, setCursorInfo] = useState<{ id: string, field: string, pos: number } | null>(null);
-  const inputRefs = useRef<Record<string, HTMLInputElement>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement>>({});
 
   const previousCategoryRef = useRef(categoryId);
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges);
@@ -185,6 +187,90 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     }
   };
 
+  const handleArticleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeArticleIdForImage) return;
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 120;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } }
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const base64 = await base64Promise;
+      handleUpdateLocalArticle(activeArticleIdForImage, 'imageUrl', base64);
+      impactMedium();
+      toast({ title: "Artikelbild eingefügt (Bitte Speichern klicken)" });
+      setActiveArticleIdForImage(null);
+    } catch (err) {
+      toast({ title: "Fehler beim Upload", variant: "destructive" });
+    }
+  };
+
+  const handlePasteArticleImage = async (articleId: string) => {
+    try {
+      const items = await navigator.clipboard.read();
+      let blob: Blob | null = null;
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          blob = await item.getType(imageType);
+          break;
+        }
+      }
+
+      if (!blob) {
+        toast({ title: "Kein Bild in der Zwischenablage", variant: "destructive" });
+        return;
+      }
+
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 120;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } }
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      const base64 = await base64Promise;
+      handleUpdateLocalArticle(articleId, 'imageUrl', base64);
+      impactMedium();
+      toast({ title: "Bild aus Zwischenablage eingefügt (Bitte Speichern klicken)" });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Fehler beim Zugriff auf Zwischenablage", description: "Bitte gewähren Sie Berechtigungen oder nutzen Sie den Upload.", variant: "destructive" });
+    }
+  };
+
   const handleSaveBatch = async () => {
     if (!hasUnsavedChanges) return;
     setIsSavingBatch(true);
@@ -194,7 +280,8 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         name: a.name, 
         articleNumber: a.articleNumber, 
         unit: a.unit,
-        supplierId: a.supplierId 
+        supplierId: a.supplierId,
+        imageUrl: a.imageUrl
       }));
       await batchUpdateArticles(changes);
       setHasUnsavedChanges(false);
@@ -510,6 +597,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                 </Button>
               </div>
               <input type="file" ref={pdfInputRef} onChange={handlePdfImport} accept="application/pdf,image/*" className="hidden" />
+              <input type="file" ref={articleImageInputRef} onChange={handleArticleImageUpload} accept="image/*" className="hidden" />
 
               <div className="flex items-center gap-3 bg-white/5 p-1 px-3 rounded-xl border border-white/10">
                 <Checkbox 
@@ -556,12 +644,30 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                             <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] group transition-colors">
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
                                 <TableCell className="font-bold text-white/80 p-2">
-                                  <input 
-                                    ref={el => { if (el) inputRefs.current[`${article.id}-name`] = el; }}
-                                    value={article.name || ''}
-                                    onChange={(e) => handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0)}
-                                    className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all"
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    {article.imageUrl && (
+                                      <img src={article.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
+                                    )}
+                                    <textarea 
+                                      ref={el => { 
+                                        if (el) {
+                                          inputRefs.current[`${article.id}-name`] = el;
+                                          // Auto-resize on mount
+                                          el.style.height = '0px';
+                                          el.style.height = el.scrollHeight + 'px';
+                                        } 
+                                      }}
+                                      rows={1}
+                                      value={article.name || ''}
+                                      onChange={(e) => {
+                                        e.target.style.height = '0px';
+                                        e.target.style.height = e.target.scrollHeight + 'px';
+                                        handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
+                                      }}
+                                      className="w-full bg-white/5 border border-white/10 min-h-[40px] py-2 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
+                                      style={{ fieldSizing: 'content' } as React.CSSProperties}
+                                    />
+                                  </div>
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell p-2">
                                   <input 
@@ -592,6 +698,8 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                 </TableCell>
                                 <TableCell className="text-right p-2">
                                     <div className="flex justify-end gap-1">
+                                        <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild hochladen"><ImagePlus size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
                                         <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/50 hover:text-red-400"><Trash2 size={14}/></Button>
                                     </div>
                                 </TableCell>

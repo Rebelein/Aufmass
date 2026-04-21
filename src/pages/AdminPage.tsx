@@ -213,6 +213,11 @@ const AdminPage = () => {
     await batchUpdateArticles(updates); toast({ title: 'Großhändler aktualisiert' }); await refreshData();
   };
 
+  const handleAssignImageToArticles = async (articleIds: string[], imageUrl: string | null) => {
+    const updates = articleIds.map(id => ({ id, imageUrl }));
+    await batchUpdateArticles(updates); toast({ title: 'Artikelbild aktualisiert' }); await refreshData();
+  };
+
   const toggleCategoryExpansion = (categoryId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedCategories(prev => {
@@ -354,7 +359,9 @@ const AdminPage = () => {
 
           {/* Mobile Katalog Sheet - triggered from Header burger */}
           <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-            <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05)] flex flex-col p-0">
+            <SheetContent side="left" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05)] flex flex-col p-0">
+              {/* Dummy button to catch focus and prevent mobile keyboard from opening */}
+              <button autoFocus className="sr-only" aria-hidden="true" />
               <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
                 <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                   <BookMarked size={20} className="text-emerald-400" /> Katalog
@@ -592,10 +599,9 @@ const AdminPage = () => {
                     onDeleteArticles={handleDeleteArticles}
                     onAssignSupplier={handleAssignSupplierToArticles}
                     allCategories={categories} suppliers={suppliers}
-                    onAssignImage={() => {}} onNavigateCategory={() => {}} />
-                );
-              })()}
-            </div>
+                    onAssignImage={handleAssignImageToArticles} onNavigateCategory={() => {}} />
+                    );
+                    })()}            </div>
           </div>
 
         </div>

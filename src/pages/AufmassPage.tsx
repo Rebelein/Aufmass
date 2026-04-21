@@ -529,6 +529,58 @@ const AufmassPage = () => {
     }
   };
 
+  const handleUpdateSection = async (sectionId: string, newName: string) => {
+    if (!currentProject) return;
+    const section = currentProject.selectedItems.find(i => i.id === sectionId);
+    if (!section) return;
+    
+    const updatedSection = { ...section, text: newName };
+    const result = await upsertProjectItem(updatedSection);
+    if (result) {
+      updateLocalItem(result);
+      impactMedium();
+    }
+  };
+
+  const handleDeleteSection = async (sectionId: string) => {
+    if (!currentProject) return;
+    
+    try {
+      // 1. In der Datenbank alle Items dieses Abschnitts auf "Allgemein" setzen
+      const { error } = await supabase
+        .from('project_items')
+        .update({ section_id: null })
+        .eq('section_id', sectionId);
+      
+      if (error) throw error;
+
+      // 2. Den Abschnitt selbst löschen
+      const success = await deleteProjectItem(sectionId);
+      if (success) {
+        // Lokalen Status aktualisieren
+        setCurrentProject(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            selectedItems: prev.selectedItems
+              .filter(i => i.id !== sectionId) // Abschnitt entfernen
+              .map(i => i.section_id === sectionId ? { ...i, section_id: null } : i) // Items aktualisieren
+          };
+        });
+        
+        if (activeSectionId === sectionId) {
+          setActiveSectionId(null);
+        }
+        
+        impactMedium();
+        toast({ title: 'Abschnitt gelöscht' });
+      }
+    } catch (err) {
+      console.error('Fehler beim Löschen des Abschnitts:', err);
+      toast({ title: 'Fehler beim Löschen', variant: 'destructive' });
+    }
+  };
+
   // Add manual position
   const handleAddManualPosition = async () => {
     if (!currentProject || !manualName.trim()) return;
@@ -849,27 +901,98 @@ const AufmassPage = () => {
                     <Menu size={20} className="text-emerald-400" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
+                <SheetContent side="left" onOpenAutoFocus={(e) => { e.preventDefault(); }} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
+                  {/* Dummy button to catch focus and prevent mobile keyboard from opening */}
+                  <button autoFocus className="sr-only" aria-hidden="true" />
                   {viewMode === 'aufmass' ? (
                     <>
                       <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
                         <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                           <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
                         </SheetTitle>
-                        {/* Mobile Katalog-Toggle (Deaktiviert für reinen "Eigener Katalog" Modus) */}
-                      </SheetHeader>
-                      <div className="overflow-y-auto p-4 flex-1 space-y-6">
-                        <div>
-                          <CategoryTree
-                            categories={activeCategories}
-                            activeCategoryId={activeCategoryId}
-                            expandedCategories={expandedCategories}
-                            forceExpandedIds={searchExpandedIds}
-                            onSelectCategory={(id) => { handleSelectCategory(id); setIsCategorySheetOpen(false); }}
-                            onToggleExpansion={toggleCategoryExpansion}
+                        {catalogSource === 'wholesale' && (
+                          <p className="text-[10px] text-amber-400/70 text-left mt-2">Großhändler-Katalog aktiv</p>
+                        )}
+                        <div className="relative group mt-3">
+                          <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={14} />
+                          <Input
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Artikel oder Nummer suchen..."
+                            className="h-9 pl-8 pr-8 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
                           />
+                          {searchQuery && (
+                            <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                              <CloseIcon size={12} />
+                            </button>
+                          )}
                         </div>
-                      </div>
+                      </SheetHeader>
+                      {debouncedSearchQuery.trim() ? (
+                        <div className="flex-1 overflow-y-auto py-2 px-4 space-y-1">
+                          <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
+                          {searchResults.slice(0, 10).map(article => {
+                            const qty = getQuantityInSection(article.id);
+                            const cat = activeCategories.find(c => c.id === article.categoryId);
+                            return (
+                              <button
+                                key={article.id}
+                                onClick={() => {
+                                  setActiveCategoryId(article.categoryId);
+                                  let currId: string | null | undefined = article.categoryId;
+                                  const toExpand: string[] = [];
+                                  while (currId) {
+                                    const parent = activeCategories.find(c => c.id === currId);
+                                    if (parent?.parentId) { toExpand.push(parent.parentId); currId = parent.parentId; } else break;
+                                  }
+                                  if (toExpand.length > 0) {
+                                    setExpandedCategories(prev => {
+                                      const next = new Set(prev);
+                                      toExpand.forEach(id => next.add(id));
+                                      return next;
+                                    });
+                                  }
+                                  setSearchQuery('');
+                                  setIsCategorySheetOpen(false);
+                                }}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.06] transition-all text-left"
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                                  {article.imageUrl || cat?.imageUrl
+                                    ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-cover" />
+                                    : <Package size={12} className="text-white/15" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[12px] text-white/85 font-medium leading-tight">{article.name}</p>
+                                  <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
+                                </div>
+                                {qty > 0 && (
+                                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">{qty}×</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                          {searchResults.length === 0 && (
+                            <p className="text-xs text-white/20 text-center py-6">Keine Treffer</p>
+                          )}
+                          {searchResults.length > 10 && (
+                            <p className="text-[10px] text-white/25 text-center py-1">+{searchResults.length - 10} weitere</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="overflow-y-auto p-4 flex-1 space-y-6">
+                          <div>
+                            <CategoryTree
+                              categories={activeCategories}
+                              activeCategoryId={activeCategoryId}
+                              expandedCategories={expandedCategories}
+                              forceExpandedIds={searchExpandedIds}
+                              onSelectCategory={(id) => { handleSelectCategory(id); setIsCategorySheetOpen(false); }}
+                              onToggleExpansion={toggleCategoryExpansion}
+                            />
+                          </div>
+                        </div>
+                      )}
                       <div className="p-4 border-t border-white/5 bg-white/[0.02] flex flex-col gap-2">
                         <Button 
                           variant="ghost" 
@@ -1001,6 +1124,8 @@ const AufmassPage = () => {
           activeSectionId={activeSectionId}
           onSelectSection={setActiveSectionId}
           onAddSection={handleAddSection}
+          onDeleteSection={handleDeleteSection}
+          onUpdateSection={handleUpdateSection}
         />
 
         {viewMode === 'aufmass' ? (
@@ -1124,22 +1249,19 @@ const AufmassPage = () => {
 
       {/* Mobile Bottom Summary Sheet */}
       <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10">
-          <div className="flex items-center justify-between p-4">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10 pointer-events-none">
+          <div className="flex items-center justify-end p-4 pointer-events-auto">
             <SheetTrigger asChild>
-              <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg">
-                  <Package size={22} className="text-white" />
-                </div>
-                <div>
+              <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors bg-background/50 backdrop-blur-md border border-white/10">
+                <div className="text-right">
                   <p className="font-semibold text-white text-lg">{totalArticleCount}</p>
                   <p className="text-xs text-white/50">Artikel im Aufmaß</p>
                 </div>
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shrink-0">
+                  <Package size={22} className="text-white" />
+                </div>
               </div>
             </SheetTrigger>
-            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="glass-button">
-              <FileDown size={18} className="mr-2" /> PDF
-            </Button>
           </div>
         </div>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
@@ -1177,7 +1299,7 @@ const AufmassPage = () => {
           <div className="space-y-4 py-2">
             <div>
               <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Bezeichnung *</label>
-              <Input value={manualName} onChange={e => setManualName(e.target.value)} className="glass-input" placeholder="z.B. Sonderteil Bogen 90°" autoFocus />
+              <Input value={manualName} onChange={e => setManualName(e.target.value)} className="glass-input" placeholder="z.B. Sonderteil Bogen 90°" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

@@ -333,6 +333,7 @@ export async function updateArticle(id: string, data: Partial<Omit<Article, 'id'
   if (data.unit) updateData.unit = data.unit;
   if (data.categoryId) updateData.category_id = data.categoryId;
   if ('supplierId' in data) updateData.supplier_id = data.supplierId || null;
+  if ('imageUrl' in data) updateData.image_url = data.imageUrl || null;
   if (data.order !== undefined) updateData.order = data.order;
   if (data.aliases) updateData.aliases = data.aliases;
 

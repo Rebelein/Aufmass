@@ -292,7 +292,7 @@ export default function HomePage() {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label className="text-white/80">Projektname / Bauvorhaben <span className="text-red-400">*</span></Label>
-                        <Input className="glass-input h-11 bg-white/[0.03] border-white/10 focus:bg-white/[0.06] text-white" value={newProject.name} onChange={(e) => setNewProject({ ...newProject, name: e.target.value })} autoFocus placeholder="z.B. EFH Müller Sanierung" />
+                        <Input className="glass-input h-11 bg-white/[0.03] border-white/10 focus:bg-white/[0.06] text-white" value={newProject.name} onChange={(e) => setNewProject({ ...newProject, name: e.target.value })} placeholder="z.B. EFH Müller Sanierung" />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
