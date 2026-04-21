@@ -5,6 +5,7 @@ export interface ProcessedSummaryItem {
   id: string;
   order: number;
   article_id?: string;
+  images?: string[] | null;
   article?: {
     id?: string;
     name?: string;

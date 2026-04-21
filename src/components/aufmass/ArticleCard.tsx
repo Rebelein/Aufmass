@@ -14,9 +14,11 @@ export interface ArticleCardProps {
   onDecrement: () => void;
   onReset: () => void;
   categoryImageUrl?: string;
+  isFromAngebot?: boolean;
+  copyMode?: boolean;
 }
 
-export function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl }: ArticleCardProps) {
+export function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl, isFromAngebot, copyMode }: ArticleCardProps) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const { impactLight } = useHapticFeedback();
@@ -38,8 +40,13 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
 
   return (
     <motion.div 
-      whileHover={{ scale: 1.01 }}
-      className="ios-card overflow-hidden group relative"
+      whileHover={copyMode ? { scale: 1.02 } : { scale: 1.01 }}
+      whileTap={copyMode ? { scale: 0.98 } : {}}
+      onClick={copyMode ? handleCopyArticleNumber : undefined}
+      className={cn(
+        "ios-card overflow-hidden group relative transition-colors",
+        copyMode ? "cursor-pointer hover:bg-white/10 ring-1 ring-white/10" : ""
+      )}
     >
       {/* Copied overlay */}
       <AnimatePresence>
@@ -61,14 +68,19 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
         {/* Article Image */}
         <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/5 flex items-center justify-center overflow-hidden shrink-0 border border-white/10 shadow-inner">
           {imageUrl
-            ? <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+            ? <img src={imageUrl} alt="" className="w-full h-full object-contain p-1" />
             : <Package size={20} className="text-white/15" />}
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0 py-0.5">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="font-semibold text-white/90 text-sm leading-tight flex-1" title={article.name}>{article.name}</h3>
+            <div className="flex-1 min-w-0 flex items-center gap-2">
+              <h3 className="font-semibold text-white/90 text-sm leading-tight truncate" title={article.name}>{article.name}</h3>
+              {isFromAngebot && (
+                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
+              )}
+            </div>
             <AnimatePresence>
               {quantity > 0 && (
                 <motion.div 

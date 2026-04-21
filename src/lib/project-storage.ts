@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { generateUUID } from './utils';
+import { addToOfflineQueue } from './sync-queue';
+import { syncEvents } from './sync-events';
 
 export interface ProjectSection {
   id: string;
@@ -14,6 +16,7 @@ export interface ProjectSelectedItem {
   type: 'article' | 'section';
   order: number;
   section_id?: string | null;
+  is_from_angebot?: boolean;
 
   // For catalog articles
   article_id?: string | null;
@@ -42,6 +45,7 @@ export interface Project {
   start_date?: string | null;
   end_date?: string | null;
   notes?: string | null;
+  documents?: string[];
   selectedItems: ProjectSelectedItem[];
   created_at: string;
   updated_at: string;
@@ -62,16 +66,26 @@ export async function getProjects(): Promise<Project[]> {
   return (data as Project[]).map(p => ({ ...p, selectedItems: [] }));
 }
 
+let lastProjectsCount = 0;
+
 export function subscribeToProjects(callback: (projects: Project[]) => void) {
   const channel = supabase
     .channel('public:projects')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, async () => {
       const projects = await getProjects();
+      const diff = projects.length - lastProjectsCount;
+      if (diff !== 0) {
+        syncEvents.emit({ type: 'complete', label: 'Baustellen aktualisiert', changes: Math.abs(diff) });
+      }
+      lastProjectsCount = projects.length;
       callback(projects);
     })
     .subscribe();
 
-  getProjects().then(callback);
+  getProjects().then(projects => {
+    lastProjectsCount = projects.length;
+    callback(projects);
+  });
   return () => { supabase.removeChannel(channel); };
 }
 
@@ -150,6 +164,19 @@ export async function updateProjectName(projectId: string, name: string): Promis
   return updateProject(projectId, { name });
 }
 
+export async function markProjectItemsAsAngebot(projectId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_items')
+    .update({ is_from_angebot: true })
+    .eq('project_id', projectId)
+    .is('is_from_angebot', false);
+
+  if (error) {
+    console.error('Fehler beim Markieren der Angebots-Artikel:', error);
+  }
+  return !error;
+}
+
 export async function deleteProjectFromSupabase(projectId: string): Promise<boolean> {
   const { error } = await supabase
     .from('projects')
@@ -174,6 +201,7 @@ export async function upsertProjectItem(item: ProjectSelectedItem): Promise<Proj
     order: item.order,
     section_id: item.section_id ?? null,
     quantity: item.quantity ?? null,
+    is_from_angebot: item.is_from_angebot ?? false,
     text: item.text ?? null,
     name: item.name ?? null,
     article_number: item.article_number ?? null,
@@ -186,6 +214,11 @@ export async function upsertProjectItem(item: ProjectSelectedItem): Promise<Proj
   // Only include article_id if present and not null
   if (item.article_id) {
     payload.article_id = item.article_id;
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    addToOfflineQueue('upsert', payload);
+    return item; // Optimistic return
   }
 
   const { data, error } = await supabase
@@ -205,6 +238,11 @@ export async function upsertProjectItem(item: ProjectSelectedItem): Promise<Proj
  * Delete a single project item by id.
  */
 export async function deleteProjectItem(itemId: string): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    addToOfflineQueue('delete', { id: itemId });
+    return true; // Optimistic return
+  }
+
   const { error } = await supabase
     .from('project_items')
     .delete()
@@ -220,6 +258,11 @@ export async function deleteProjectItem(itemId: string): Promise<boolean> {
  * Update only the quantity of an existing project item.
  */
 export async function updateProjectItemQuantity(itemId: string, quantity: number): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    addToOfflineQueue('updateQuantity', { id: itemId, quantity });
+    return true; // Optimistic return
+  }
+
   const { error } = await supabase
     .from('project_items')
     .update({ quantity })

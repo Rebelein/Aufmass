@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,7 @@ const AdminPage = () => {
   const [isSupplierManagementDialogOpen, setIsSupplierManagementDialogOpen] = useState(false);
   const [inlineEditingCategoryId, setInlineEditingCategoryId] = useState<string | null>(null);
   const [inlineEditedCategoryName, setInlineEditedCategoryName] = useState('');
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
   const [importDrafts, setImportDrafts] = useState<ImportDraft[]>([]);
   const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
   const [reviewingDraft, setReviewingDraft] = useState<ImportDraft | null>(null);
@@ -61,6 +62,44 @@ const AdminPage = () => {
   const [collapsedDraftCategories, setCollapsedDraftCategories] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { impactMedium, impactLight } = useHapticFeedback();
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = localStorage.getItem('admin-sidebar-width');
+    return stored ? Math.max(200, Math.min(parseInt(stored, 10), 800)) : 308;
+  });
+  const isResizing = useRef(false);
+
+  const handleSidebarMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(200, Math.min(startWidth + delta, 800));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('admin-sidebar-width', String(Math.round(sidebarWidth)));
+  }, [sidebarWidth]);
 
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -150,15 +189,20 @@ const AdminPage = () => {
 
   const confirmDeleteItem = async () => {
     if (!itemToDelete) return;
-    if (itemToDelete.type === 'category') {
-      const { error } = await supabase.from('categories').delete().eq('id', itemToDelete.id);
-      if (error) toast({ variant: 'destructive', title: 'Fehler', description: error.message });
-      else toast({ title: "Kategorie gelöscht" });
-    } else {
+    if (itemToDelete.type === 'article') {
       await deleteArticles([itemToDelete.id]);
       toast({ title: "Artikel gelöscht" });
     }
     setIsDeleteDialogOpen(false); setItemToDelete(null); await refreshData();
+  };
+
+  const handleConfirmDeleteCategory = async (categoryId: string) => {
+    const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+    if (error) toast({ variant: 'destructive', title: 'Fehler', description: error.message });
+    else toast({ title: "Kategorie gelöscht" });
+    setDeletingCategoryId(null);
+    if (activeCategoryId === categoryId) setActiveCategoryId(null);
+    await refreshData();
   };
 
   const handleSaveEditCategory = async () => {
@@ -181,6 +225,44 @@ const AdminPage = () => {
       await batchUpdateCategories([{ id: categoryToMove.id, order: nextSibling.order }, { id: nextSibling.id, order: categoryToMove.order }]);
     }
     await refreshData();
+  };
+
+  const handleReorderCategory = async (activeId: string, overId: string) => {
+    if (activeId === overId) return;
+    
+    const activeCat = categories.find(c => c.id === activeId);
+    const overCat = categories.find(c => c.id === overId);
+    if (!activeCat || !overCat) return;
+    
+    if (activeCat.parentId !== overCat.parentId) return;
+    
+    const siblings = categories
+      .filter(cat => cat.parentId === activeCat.parentId)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    
+    const oldIndex = siblings.findIndex(s => s.id === activeId);
+    const newIndex = siblings.findIndex(s => s.id === overId);
+    
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const newSiblings = [...siblings];
+      const [removed] = newSiblings.splice(oldIndex, 1);
+      newSiblings.splice(newIndex, 0, removed);
+      
+      const updates = newSiblings.map((cat, index) => ({ id: cat.id, order: index }));
+      
+      // Update local state optimistically
+      setCategories(prev => {
+        const next = [...prev];
+        updates.forEach(u => {
+          const item = next.find(x => x.id === u.id);
+          if (item) item.order = u.order;
+        });
+        return next;
+      });
+
+      await batchUpdateCategories(updates);
+      await refreshData();
+    }
   };
 
   const handleAddSupplierAdmin = async (name: string) => { await addSupplier({ name }); await refreshData(); };
@@ -256,7 +338,7 @@ const AdminPage = () => {
           <Edit3 size={14} className="mr-2" /> Bearbeiten
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-white/10" />
-        <DropdownMenuItem onClick={() => { setItemToDelete({id: category.id, type: 'category'}); setIsDeleteDialogOpen(true); }} className="hover:bg-red-500/20 cursor-pointer focus:bg-red-500/20 text-red-400 focus:text-red-300">
+        <DropdownMenuItem onClick={() => setDeletingCategoryId(category.id)} className="hover:bg-red-500/20 cursor-pointer focus:bg-red-500/20 text-red-400 focus:text-red-300">
           <Trash2 size={14} className="mr-2" /> Löschen
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -383,17 +465,21 @@ const AdminPage = () => {
                   </div>
                 </div>
                 <div className="flex-1 py-3 overflow-y-auto">
-                                    <CategoryTree
+                    <CategoryTree
                     categories={categories}
                     activeCategoryId={activeCategoryId}
                     expandedCategories={expandedCategories}
                     onSelectCategory={handleSelectCategory}
                     onToggleExpansion={toggleCategoryExpansion}
                     renderActions={renderAdminActions}
+                    onReorderCategory={handleReorderCategory}
                     inlineEditingCategoryId={inlineEditingCategoryId}
                     editedCategoryName={inlineEditedCategoryName}
                     onEditedCategoryNameChange={setInlineEditedCategoryName}
                     onSaveEdit={handleSaveEditCategory}
+                    deletingCategoryId={deletingCategoryId}
+                    onConfirmDeleteCategory={handleConfirmDeleteCategory}
+                    onCancelDeleteCategory={() => setDeletingCategoryId(null)}
                     onCancelEdit={() => setInlineEditingCategoryId(null)}
                     inlineCreateParentId={inlineCreateParentId}
                     newSubCategoryName={inlineNewSubCategoryName}
@@ -453,14 +539,21 @@ const AdminPage = () => {
 
           {/* ===== SIDEBAR CONTAINER ===== */}
           <div className={cn(
-            "hidden xl:block relative shrink-0 transition-[width] duration-300 h-full",
-            "w-[288px] xl:w-[308px]"
-          )}>
+            "hidden xl:block relative shrink-0 h-full"
+          )} style={{ width: `${sidebarWidth}px` }}>
             
             {/* Drawer: KATEGORIEN + KI */}
             <aside className={cn(
               "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
             )}>
+              {/* Resize handle */}
+              <div
+                className="absolute top-0 bottom-0 right-0 w-1.5 cursor-col-resize group z-30 hover:bg-emerald-500/30 active:bg-emerald-500/50 transition-colors -mr-0.5"
+                onMouseDown={handleSidebarMouseDown}
+              >
+                <div className="absolute top-1/2 left-0.5 -translate-y-1/2 w-0.5 h-12 rounded-full bg-white/10 group-hover:bg-emerald-400/60 transition-colors" />
+              </div>
+
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
                 <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
@@ -487,6 +580,7 @@ const AdminPage = () => {
                     onSelectCategory={handleSelectCategory}
                     onToggleExpansion={toggleCategoryExpansion}
                     renderActions={catalogSource === 'own' ? renderAdminActions : undefined}
+                    onReorderCategory={catalogSource === 'own' ? handleReorderCategory : undefined}
                     inlineEditingCategoryId={catalogSource === 'own' ? inlineEditingCategoryId : null}
                     editedCategoryName={inlineEditedCategoryName}
                     onEditedCategoryNameChange={setInlineEditedCategoryName}
@@ -497,6 +591,9 @@ const AdminPage = () => {
                     onNewSubCategoryNameChange={setInlineNewSubCategoryName}
                     onSaveNewSubCategory={handleSaveNewSubCategory}
                     onCancelNewSubCategory={() => setInlineCreateParentId(null)}
+                    deletingCategoryId={catalogSource === 'own' ? deletingCategoryId : null}
+                    onConfirmDeleteCategory={handleConfirmDeleteCategory}
+                    onCancelDeleteCategory={() => setDeletingCategoryId(null)}
                   />
                 </div>
               </div>

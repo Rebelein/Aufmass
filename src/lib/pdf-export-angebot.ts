@@ -90,7 +90,10 @@ export function generateAngebotPdf({ project, sectionItems, articleItems }: Ange
   const renderSection = (section: ProjectSelectedItem | null, label: string) => {
     const items = articleItems.filter(i => (i as any).section_id === (section ? section.id : null));
     const description = section?.description;
-    const images = section?.images || [];
+    
+    const sectionImages = section?.images || [];
+    const itemImages = items.filter(i => i.images && i.images.length > 0).flatMap(i => i.images!);
+    const images = [...sectionImages, ...itemImages];
     
     if (items.length === 0 && !description && images.length === 0 && section !== null) return;
     

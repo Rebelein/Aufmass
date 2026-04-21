@@ -212,7 +212,7 @@ export function SummaryList({
                       const flyX = isDesktop ? -300 : -50;
                       const articleNumber = item.article?.articleNumber ?? (item as any).article_number;
                       const supplierName = item.article?.supplierName ?? (item as any).supplier_name;
-                      const imageUrl = item.article?.imageUrl || (item as any).categoryImageUrl;
+                      const imageUrl = item.images?.[0] || item.article?.imageUrl || (item as any).categoryImageUrl;
                       const isCopied = copiedItems.has(item.id);
                       const isAnimating = animatingItem === item.id;
 
@@ -267,7 +267,7 @@ export function SummaryList({
                               {/* Article Image */}
                               <div className="w-8 h-8 rounded-md bg-white/5 flex items-center justify-center overflow-hidden shrink-0 border border-white/10">
                                 {imageUrl
-                                  ? <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+                                  ? <img src={imageUrl} alt="" className="w-full h-full object-contain p-0.5" />
                                   : <Package size={12} className="text-white/15" />}
                               </div>
 

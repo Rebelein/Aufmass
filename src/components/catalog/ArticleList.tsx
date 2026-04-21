@@ -70,7 +70,7 @@ const ArticleList: React.FC<ArticleListProps> = ({
 
             <div className="flex-shrink-0 w-20 h-20 relative rounded-xl overflow-hidden border border-white/10 bg-white/5">
               {article.imageUrl ? (
-                  <img src={article.imageUrl} alt="" fill className="object-cover transition-transform group-hover:scale-110" />
+                  <img src={article.imageUrl} alt="" fill className="object-contain p-1 transition-transform group-hover:scale-110" />
               ) : (
                   <div className="w-full h-full flex items-center justify-center text-white/40">
                       <imgIcon size={32} />

@@ -78,7 +78,8 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   });
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [selectedArticleIds, setSelectedArticleIds] = useState(new Set<string>());
-  const [itemsPendingDelete, setItemsPendingDelete] = useState<string[]>([]);
+  const [itemsPendingBulkDelete, setItemsPendingBulkDelete] = useState<string[]>([]);
+  const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('none');
   const [categoryImage, setCategoryImage] = useState<string | null>(null);
   const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
@@ -111,7 +112,8 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     // Nur resetten, wenn sich die Kategorie ändert ODER der User gerade keine ungespeicherten Daten tippt.
     if (categoryChanged || !hasUnsavedChangesRef.current) {
       setSelectedArticleIds(new Set());
-      setLocalArticles(initialArticles.map(a => ({ ...a })));
+      const sorted = [...initialArticles].sort((a, b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }));
+      setLocalArticles(sorted.map(a => ({ ...a })));
       setHasUnsavedChanges(false);
     }
   }, [categoryId, initialArticles]);
@@ -519,7 +521,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                     className="relative w-12 h-12 lg:w-16 lg:h-16 rounded-2xl bg-white/5 border border-white/10 overflow-hidden cursor-pointer group hover:border-emerald-500/50 transition-all shadow-inner shrink-0"
                   >
                     {categoryImage ? (
-                      <img src={categoryImage} alt="Kategorie" className="w-full h-full object-cover" />
+                      <img src={categoryImage} alt="Kategorie" className="w-full h-full object-contain p-1" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-white/20 group-hover:text-emerald-400 transition-colors">
                         <Camera className="w-5 h-5 lg:w-6 lg:h-6" />
@@ -620,7 +622,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
               )}
 
               {selectedArticleIds.size > 0 && (
-                <Button variant="destructive" onClick={() => setItemsPendingDelete(Array.from(selectedArticleIds))} className="bg-red-500/20 text-red-400 border-red-500/30 rounded-xl flex-1 sm:flex-none">
+                <Button variant="destructive" onClick={() => setItemsPendingBulkDelete(Array.from(selectedArticleIds))} className="bg-red-500/20 text-red-400 border-red-500/30 rounded-xl flex-1 sm:flex-none">
                     <Trash2 className="mr-2 h-4 w-4" /> ({selectedArticleIds.size})
                 </Button>
               )}
@@ -640,15 +642,47 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {[...localArticles].sort((a, b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' })).map(article => (
+                        {localArticles.map(article => (
+                          deletingArticleId === article.id ? (
+                            <TableRow key={article.id} className="border-red-500/30 bg-red-950/20">
+                              <TableCell colSpan={6} className="p-2">
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-red-500/20 text-red-400 border border-red-500/30">
+                                      <Trash2 size={16} />
+                                    </div>
+                                    <span className="text-sm font-semibold text-red-300 truncate">
+                                      "{article.name}" wirklich löschen?
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <Button onClick={() => {
+                                       onDeleteArticles([article.id]);
+                                       setLocalArticles(prev => prev.filter(a => a.id !== article.id));
+                                       setDeletingArticleId(null);
+                                       if (selectedArticleIds.has(article.id)) {
+                                         const nextSelected = new Set(selectedArticleIds);
+                                         nextSelected.delete(article.id);
+                                         setSelectedArticleIds(nextSelected);
+                                       }
+                                       impactMedium();
+                                    }} className="bg-red-500 hover:bg-red-400 text-white font-bold h-9">Löschen</Button>
+                                    <Button variant="ghost" onClick={() => setDeletingArticleId(null)} className="text-white/50 hover:text-white h-9 bg-white/5">Abbrechen</Button>
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : (
                             <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] group transition-colors">
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
                                 <TableCell className="font-bold text-white/80 p-2">
                                   <div className="flex items-center gap-2">
-                                    {article.imageUrl && (
-                                      <img src={article.imageUrl} alt="" className="w-8 h-8 rounded-md object-cover border border-white/10 shrink-0" />
-                                    )}
-                                    <textarea 
+                                   {article.imageUrl && (
+                                     <div className="w-8 h-8 rounded-md border border-white/10 shrink-0 bg-white overflow-hidden flex items-center justify-center">
+                                       <img src={article.imageUrl} alt="" className="w-full h-full object-contain" />
+                                     </div>
+                                   )}
+                                   <textarea 
                                       ref={el => { 
                                         if (el) {
                                           inputRefs.current[`${article.id}-name`] = el;
@@ -700,10 +734,11 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                     <div className="flex justify-end gap-1">
                                         <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild hochladen"><ImagePlus size={14}/></Button>
                                         <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setItemsPendingDelete([article.id])} className="h-8 w-8 text-white/50 hover:text-red-400"><Trash2 size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-white/50 hover:text-red-400"><Trash2 size={14}/></Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
+                          )
                         ))}
                     </TableBody>
                 </Table>
@@ -739,12 +774,20 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={itemsPendingDelete.length > 0} onOpenChange={(open) => { if (!open) setItemsPendingDelete([]); }}>
+      <AlertDialog open={itemsPendingBulkDelete.length > 0} onOpenChange={(open) => { if (!open) setItemsPendingBulkDelete([]); }}>
         <AlertDialogContent className="glass-card bg-gray-900/90 border-white/10 text-white text-center">
-            <AlertDialogHeader><AlertDialogTitle className="text-2xl font-bold text-red-400 mx-auto">Artikel löschen?</AlertDialogTitle></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle className="text-2xl font-bold text-red-400 mx-auto">Artikel löschen?</AlertDialogTitle>
+            <p className="text-white/50 text-sm mt-2">{itemsPendingBulkDelete.length} Artikel markiert zur Löschung.</p>
+            </AlertDialogHeader>
             <AlertDialogFooter className="mt-6 flex-col sm:flex-row gap-3">
-                <AlertDialogCancel onClick={() => setItemsPendingDelete([])} className="bg-white/5 border-white/10 text-white rounded-xl h-12">Abbrechen</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { onDeleteArticles(itemsPendingDelete); setItemsPendingDelete([]); setSelectedArticleIds(new Set()); impactMedium(); }} className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-12 font-bold px-10">Löschen</AlertDialogAction>
+                <AlertDialogCancel onClick={() => setItemsPendingBulkDelete([])} className="bg-white/5 border-white/10 text-white rounded-xl h-12">Abbrechen</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { 
+                  onDeleteArticles(itemsPendingBulkDelete); 
+                  setLocalArticles(prev => prev.filter(a => !itemsPendingBulkDelete.includes(a.id)));
+                  setItemsPendingBulkDelete([]); 
+                  setSelectedArticleIds(new Set()); 
+                  impactMedium(); 
+                }} className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-12 font-bold px-10">Löschen</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

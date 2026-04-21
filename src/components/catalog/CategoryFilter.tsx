@@ -99,7 +99,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 >
                     {previewImageUrl ? (
                         <div className="relative w-6 h-6 shrink-0 rounded-lg overflow-hidden border border-white/10">
-                            <img src={previewImageUrl} alt="" className="w-full h-full object-cover" />
+                            <img src={previewImageUrl} alt="" className="w-full h-full object-contain p-1" />
                         </div>
                     ) : (
                         <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-white/50")} />

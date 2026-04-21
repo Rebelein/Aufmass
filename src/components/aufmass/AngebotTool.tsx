@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Camera, FileText, Plus, Image as ImageIcon, Trash2, X, BookMarked, PenLine } from 'lucide-react';
+import { Camera, FileText, Plus, Image as ImageIcon, Trash2, X, BookMarked, PenLine, ImagePlus } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
 import { upsertProjectItem, deleteProjectItem, addSection } from '@/lib/project-storage';
@@ -10,6 +10,7 @@ import { generateUUID } from '@/lib/utils';
 import { generateAngebotPdf } from '@/lib/pdf-export-angebot';
 import type { ProcessedSummaryItem } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { NoteEditorDialog } from '@/components/dialogs/NoteEditorDialog';
 
 interface AngebotToolProps {
   project: Project;
@@ -20,72 +21,38 @@ interface AngebotToolProps {
 
 export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRemoveLocalItem }: AngebotToolProps) {
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeUploadSection, setActiveUploadSection] = useState<string | null>(null);
+  const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
 
-  // Compression helper
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6)); // 0.6 quality for size reduction
-        };
-        img.onerror = (error) => reject(error);
-      };
-      reader.onerror = (error) => reject(error);
-    });
+  const handleDeleteSection = async () => {
+    if (!activeSectionId) return;
+    const id = activeSectionId;
+    onRemoveLocalItem(id);
+    await deleteProjectItem(id);
+    toast({ title: "Gelöscht", description: "Der Bauabschnitt wurde entfernt." });
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!activeUploadSection || !e.target.files || e.target.files.length === 0) return;
-    
-    const file = e.target.files[0];
-    try {
-      const base64 = await compressImage(file);
-      const section = project.selectedItems.find(s => s.id === activeUploadSection);
-      if (section) {
-        const newImages = [...(section.images || []), base64];
-        const updated = await upsertProjectItem({ ...section, images: newImages });
-        if (updated) onUpdateLocalItem(updated);
-      }
-    } catch (error) {
-      console.error("Compression failed", error);
-      toast({ title: "Fehler", description: "Bild konnte nicht verarbeitet werden.", variant: "destructive" });
+  const handleSaveNote = async (base64Image: string) => {
+    if (!project) return;
+    const newItem: ProjectSelectedItem = {
+      id: generateUUID(),
+      project_id: project.id,
+      type: 'article',
+      order: project.selectedItems.length,
+      article_id: null,
+      quantity: 1,
+      name: 'Skizze / Foto',
+      unit: 'Stk',
+      images: [base64Image],
+      section_id: activeSectionId ?? null,
+    };
+    onUpdateLocalItem(newItem);
+    const saved = await upsertProjectItem(newItem);
+    if (!saved) {
+      onRemoveLocalItem(newItem.id);
+      toast({ title: 'Fehler', description: 'Skizze konnte nicht gespeichert werden.', variant: 'destructive' });
+    } else {
+      toast({ title: 'Skizze gespeichert', description: 'Sie erscheint nun auch in der Materialliste.' });
     }
-    
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    setActiveUploadSection(null);
-  };
-
-  const triggerCamera = (sectionId: string) => {
-    setActiveUploadSection(sectionId);
-    fileInputRef.current?.click();
   };
 
   const deleteImage = async (section: ProjectSelectedItem, imageIndex: number) => {
@@ -107,14 +74,6 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
     if (updated) onUpdateLocalItem(updated);
   };
 
-  const handleDeleteSection = async () => {
-    if (!activeSectionId) return;
-    const id = activeSectionId;
-    onRemoveLocalItem(id);
-    await deleteProjectItem(id);
-    toast({ title: "Gelöscht", description: "Der Bauabschnitt wurde entfernt." });
-  };
-
   const activeSection = project.selectedItems.find(i => i.id === activeSectionId && i.type === 'section');
 
   if (!activeSection) {
@@ -129,15 +88,6 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background/50 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-8">
-      <input 
-        type="file" 
-        accept="image/*" 
-        capture="environment" 
-        ref={fileInputRef} 
-        style={{ display: 'none' }} 
-        onChange={handleFileChange} 
-      />
-
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start gap-4">
         <div className="flex-1 w-full relative">
@@ -175,8 +125,8 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
                </AlertDialogFooter>
              </AlertDialogContent>
            </AlertDialog>
-           <Button onClick={() => triggerCamera(activeSection.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
-             <Camera className="w-5 h-5 mr-2" /> Foto aufnehmen
+           <Button onClick={() => setIsNoteEditorOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
+             <ImagePlus className="w-5 h-5 mr-2" /> Foto / Skizze
            </Button>
         </div>
       </div>
@@ -197,31 +147,62 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
       {/* GALERIE */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={`gal-${activeSection.id}`} className="space-y-3 pb-8">
         <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-          <ImageIcon className="w-3.5 h-3.5" /> Galerie ({activeSection.images?.length || 0})
+          <ImageIcon className="w-3.5 h-3.5" /> Galerie & Skizzen
         </h3>
-        {activeSection.images && activeSection.images.length > 0 ? (
-           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-             {activeSection.images.map((img, idx) => (
+        
+        {/* Combine images from section and from individual sketch items */}
+        {(() => {
+          const sectionImages = activeSection.images?.map((img, idx) => ({ url: img, type: 'section', index: idx })) || [];
+          const itemImages = project.selectedItems
+            .filter(i => i.section_id === activeSection.id && i.type === 'article' && i.images && i.images.length > 0)
+            .flatMap(i => i.images!.map(img => ({ url: img, type: 'item', id: i.id, name: i.name })));
+          
+          const allImages = [...sectionImages, ...itemImages];
+
+          if (allImages.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center p-16 text-white/30 border-2 border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                <ImageIcon className="w-12 h-12 mb-4 opacity-30" />
+                <p className="text-sm font-medium">Noch keine Fotos oder Skizzen hinterlegt.</p>
+                <p className="text-xs text-white/40 mt-1">Erstelle eine Skizze oder nimm ein Foto auf.</p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+              {allImages.map((imgObj, idx) => (
                 <div key={`${activeSection.id}-img-${idx}`} className="relative group aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-black/40">
-                  <img src={img} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Capture" />
+                  <img src={imgObj.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Capture" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-[10px] text-white font-medium">{(imgObj as any).name || 'Foto'}</p>
+                  </div>
                   <button 
-                    onClick={() => deleteImage(activeSection, idx)}
+                    onClick={() => {
+                      if (imgObj.type === 'section') {
+                        deleteImage(activeSection, imgObj.index!);
+                      } else {
+                        onRemoveLocalItem(imgObj.id!);
+                        deleteProjectItem(imgObj.id!);
+                      }
+                    }}
                     className="absolute bottom-3 right-3 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-2.5 opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 shadow-xl"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-             ))}
-           </div>
-        ) : (
-           <div className="flex flex-col items-center justify-center p-16 text-white/30 border-2 border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
-             <ImageIcon className="w-12 h-12 mb-4 opacity-30" />
-             <p className="text-sm font-medium">Noch keine Fotos hinterlegt.</p>
-             <p className="text-xs text-white/40 mt-1">Nimm ein Foto auf, um Details visuell zu dokumentieren.</p>
-           </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </motion.div>
+
+      <NoteEditorDialog
+        open={isNoteEditorOpen}
+        onOpenChange={setIsNoteEditorOpen}
+        onSave={handleSaveNote}
+      />
 
     </div>
   );

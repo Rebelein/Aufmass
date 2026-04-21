@@ -1,42 +1,252 @@
 import type { Category } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Package, FolderPlus, ChevronRight, Check, X } from 'lucide-react';
+import { Package, FolderPlus, ChevronRight, Check, X, GripVertical, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent, DragOverlay } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useState, useCallback } from 'react';
 
 export interface CategoryTreeProps {
   categories: Category[];
   activeCategoryId: string | null;
   expandedCategories: Set<string>;
-  /** Additional category IDs to force-expand (e.g. from search) */
   forceExpandedIds?: string[];
   onSelectCategory: (categoryId: string) => void;
   onToggleExpansion: (categoryId: string, e: React.MouseEvent) => void;
-  /** Optional render function for additional actions per category (e.g. admin context menu) */
   renderActions?: (category: Category, meta: { isFirst: boolean; isLast: boolean }) => React.ReactNode;
+  
+  onReorderCategory?: (activeId: string, overId: string) => void;
 
-  /** Inline edit state */
   inlineEditingCategoryId?: string | null;
   editedCategoryName?: string;
   onEditedCategoryNameChange?: (name: string) => void;
   onSaveEdit?: () => void;
   onCancelEdit?: () => void;
 
-  /** Inline create state */
   inlineCreateParentId?: string | null;
   newSubCategoryName?: string;
   onNewSubCategoryNameChange?: (name: string) => void;
   onSaveNewSubCategory?: () => void;
   onCancelNewSubCategory?: () => void;
+
+  deletingCategoryId?: string | null;
+  onConfirmDeleteCategory?: (categoryId: string) => void;
+  onCancelDeleteCategory?: () => void;
 }
 
-export function CategoryTree({
+interface CategoryWithMeta extends Category {
+  hasChildren: boolean;
+  isDeepestExpanded: boolean;
+}
+
+const SortableCategoryItem = ({ 
+  id, 
+  category, 
+  index, 
+  siblingCount,
+  activeCategoryId, 
+  expandedCategories, 
+  forceExpandedIds, 
+  onSelectCategory, 
+  onToggleExpansion, 
+  renderActions, 
+  onReorderCategory, 
+  inlineEditingCategoryId, 
+  editedCategoryName, 
+  onEditedCategoryNameChange, 
+  onSaveEdit, 
+  onCancelEdit,
+  deletingCategoryId,
+  onConfirmDeleteCategory,
+  onCancelDeleteCategory,
+  children
+}: { 
+  id: string, 
+  category: CategoryWithMeta, 
+  index: number, 
+  siblingCount: number,
+  activeCategoryId: string | null, 
+  expandedCategories: Set<string>, 
+  forceExpandedIds: string[], 
+  onSelectCategory: (id: string) => void, 
+  onToggleExpansion: (id: string, e: React.MouseEvent) => void, 
+  renderActions: CategoryTreeProps['renderActions'], 
+  onReorderCategory: CategoryTreeProps['onReorderCategory'], 
+  inlineEditingCategoryId: string | null | undefined, 
+  editedCategoryName: string | undefined, 
+  onEditedCategoryNameChange: ((name: string) => void) | undefined, 
+  onSaveEdit: (() => void) | undefined, 
+  onCancelEdit: (() => void) | undefined,
+  deletingCategoryId: string | null | undefined,
+  onConfirmDeleteCategory: ((categoryId: string) => void) | undefined,
+  onCancelDeleteCategory: (() => void) | undefined,
+  children: React.ReactNode 
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+    position: isDragging ? 'relative' : 'static' as any,
+  };
+
+  const isSelected = activeCategoryId === category.id;
+  const isExpanded = expandedCategories.has(category.id) || forceExpandedIds.includes(category.id);
+  const isFirst = index === 0;
+  const isLast = index === siblingCount - 1;
+  const hasChildren = category.hasChildren;
+  const isDeepestExpanded = category.isDeepestExpanded;
+  const isDeleting = deletingCategoryId === category.id;
+
+  return (
+    <li ref={setNodeRef} style={style} className="group/item relative list-none">
+      {isDeleting ? (
+        /* Inline Delete Confirmation */
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.15 }}
+          className="flex items-center gap-2 p-2 rounded-xl border border-red-500/30 bg-red-950/40 backdrop-blur-sm"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-red-500/20 text-red-400">
+            <Trash2 size={14} />
+          </div>
+          <span className="flex-1 text-xs font-semibold text-red-300 truncate min-w-0">
+            {category.name} löschen?
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => onConfirmDeleteCategory?.(category.id)}
+              className="px-2.5 py-1 rounded-lg bg-red-500/90 hover:bg-red-500 text-white text-xs font-bold transition-colors"
+            >
+              Löschen
+            </button>
+            <button
+              type="button"
+              onClick={() => onCancelDeleteCategory?.()}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              title="Abbrechen"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </motion.div>
+      ) : (
+        /* Normal Category Row */
+        <div 
+          className={cn(
+            "flex justify-between items-center p-2.5 min-h-[44px] rounded-xl cursor-pointer transition-all duration-200 border",
+            onReorderCategory ? "pl-9" : "",
+            isDeepestExpanded && "sticky top-0 z-10 bg-black/90 backdrop-blur-md border-white/10 text-white shadow-lg",
+            isSelected && !hasChildren
+              ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
+              : !isDeepestExpanded && isExpanded
+                ? "border-white/10 bg-white/[0.04] text-white" 
+                : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10 text-white/70 hover:text-white"
+          )}
+          onClick={(e) => {
+            if (hasChildren) {
+              onToggleExpansion(category.id, e);
+            } else {
+              onSelectCategory(category.id);
+            }
+          }}
+        >
+          {onReorderCategory && (
+            <div 
+              className="absolute left-1.5 top-0 bottom-0 w-7 flex items-center justify-center cursor-grab active:cursor-grabbing z-20" 
+              {...attributes} 
+              {...listeners}
+              onClick={e => e.stopPropagation()}
+            >
+              <GripVertical size={14} className="text-white/20 group-hover/item:text-emerald-400/70 transition-colors" />
+            </div>
+          )}
+
+          <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
+            <div className={cn(
+                "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
+                isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
+            )}>
+                {category.imageUrl ? (
+                  <img src={category.imageUrl} alt="" className="w-full h-full object-contain p-0.5" />
+                ) : (
+                  hasChildren ? <FolderPlus size={14} /> : <Package size={14} />
+                )}
+            </div>
+            {inlineEditingCategoryId === category.id ? (
+              <div className="flex-1 flex items-center gap-2 min-w-0" onClick={e => e.stopPropagation()}>
+                <input 
+                  autoFocus
+                  value={editedCategoryName || ''}
+                  onChange={e => onEditedCategoryNameChange?.(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') onSaveEdit?.();
+                    if (e.key === 'Escape') onCancelEdit?.();
+                  }}
+                  className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
+                />
+              </div>
+            ) : (
+              <span className={cn(
+                  "font-semibold whitespace-normal break-words transition-colors text-sm leading-tight"
+              )}>
+                  {category.name}
+              </span>
+            )}
+            {hasChildren && (
+              <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-primary" : "text-white/20")} />
+            )}
+          </div>
+
+          {inlineEditingCategoryId === category.id ? (
+            <div className="shrink-0 flex items-center gap-1 ml-2" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Speichern"><Check size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
+            </div>
+          ) : (
+            renderActions && (
+              <div className="shrink-0 flex items-start" onClick={e => e.stopPropagation()}>
+                {renderActions(category, { isFirst, isLast })}
+              </div>
+            )
+          )}
+        </div>
+      )}
+      {children}
+    </li>
+  );
+};
+
+/** A drag overlay label shown while dragging a category */
+const DragOverlayContent = ({ category }: { category: CategoryWithMeta }) => (
+  <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-500/40 bg-gray-900/95 backdrop-blur-md shadow-2xl text-white max-w-[280px]">
+    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-emerald-500/20 text-emerald-400">
+      {category.hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
+    </div>
+    <span className="font-semibold text-sm leading-tight truncate">{category.name}</span>
+  </div>
+);
+
+/**
+ * A self-contained sortable group for one level of siblings.
+ * Each group gets its own DndContext so drag operations never cross parent boundaries.
+ */
+const SortableSiblingGroup = ({
+  parentId,
   categories,
   activeCategoryId,
   expandedCategories,
-  forceExpandedIds = [],
+  forceExpandedIds,
   onSelectCategory,
   onToggleExpansion,
   renderActions,
+  onReorderCategory,
   inlineEditingCategoryId,
   editedCategoryName,
   onEditedCategoryNameChange,
@@ -47,165 +257,215 @@ export function CategoryTree({
   onNewSubCategoryNameChange,
   onSaveNewSubCategory,
   onCancelNewSubCategory,
-}: CategoryTreeProps) {
+  deletingCategoryId,
+  onConfirmDeleteCategory,
+  onCancelDeleteCategory,
+  depth,
+}: {
+  parentId: string | null;
+  categories: Category[];
+  depth: number;
+} & Omit<CategoryTreeProps, 'categories'>) => {
 
-  const renderTree = (parentId: string | null = null, depth = 0): JSX.Element => {
-    const columnCategories = categories
-      .filter(category => category.parentId === parentId)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    
-    const isAddingHere = inlineCreateParentId !== undefined && inlineCreateParentId !== null && inlineCreateParentId === parentId;
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-    if (columnCategories.length === 0 && !isAddingHere) {
-      if (parentId === null) {
-        return (
-          <div className="py-16 text-center space-y-4">
-            <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
-          </div>
-        );
-      }
-      return <></>;
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const columnCategories = categories
+    .filter(category => category.parentId === parentId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  const isAddingHere = inlineCreateParentId !== undefined && inlineCreateParentId !== null && inlineCreateParentId === parentId;
+
+  const handleDragStart = useCallback((event: { active: { id: string | number } }) => {
+    setActiveDragId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (over && active.id !== over.id) {
+      onReorderCategory?.(active.id as string, over.id as string);
     }
+  }, [onReorderCategory]);
 
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null);
+  }, []);
+
+  if (columnCategories.length === 0 && !isAddingHere) {
+    if (parentId === null) {
+      return (
+        <div className="py-16 text-center space-y-4">
+          <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
+        </div>
+      );
+    }
+    return <></>;
+  }
+
+  const activeDragCategory = activeDragId 
+    ? columnCategories.find(c => c.id === activeDragId) 
+    : null;
+
+  const content = (
+    <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
+      {columnCategories.map((category, index) => {
+        const isAddingChildToThis = inlineCreateParentId === category.id;
+        const hasChildren = categories.some(subCat => subCat.parentId === category.id) || isAddingChildToThis;
+        const isExpanded = expandedCategories.has(category.id) || (forceExpandedIds || []).includes(category.id);
+
+        const hasExpandedChild = isExpanded && hasChildren && categories
+          .filter(c => c.parentId === category.id)
+          .some(child => {
+            const childHasKids = categories.some(sc => sc.parentId === child.id);
+            const childIsExpanded = expandedCategories.has(child.id) || (forceExpandedIds || []).includes(child.id);
+            return childHasKids && childIsExpanded;
+          });
+        const isDeepestExpanded = isExpanded && hasChildren && !hasExpandedChild;
+        
+        const categoryWithMeta: CategoryWithMeta = { ...category, hasChildren, isDeepestExpanded };
+        
+        return (
+          <SortableCategoryItem 
+            key={category.id} 
+            id={category.id}
+            category={categoryWithMeta}
+            index={index}
+            siblingCount={columnCategories.length}
+            activeCategoryId={activeCategoryId}
+            expandedCategories={expandedCategories}
+            forceExpandedIds={forceExpandedIds || []}
+            onSelectCategory={onSelectCategory}
+            onToggleExpansion={onToggleExpansion}
+            renderActions={renderActions}
+            onReorderCategory={onReorderCategory}
+            inlineEditingCategoryId={inlineEditingCategoryId}
+            editedCategoryName={editedCategoryName}
+            onEditedCategoryNameChange={onEditedCategoryNameChange}
+            onSaveEdit={onSaveEdit}
+            onCancelEdit={onCancelEdit}
+            deletingCategoryId={deletingCategoryId}
+            onConfirmDeleteCategory={onConfirmDeleteCategory}
+            onCancelDeleteCategory={onCancelDeleteCategory}
+          >
+            <AnimatePresence initial={false}>
+              {hasChildren && isExpanded && (
+                <motion.div
+                  key="content"
+                  initial="collapsed"
+                  animate="open"
+                  exit="collapsed"
+                  variants={{
+                    open: { opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } },
+                    collapsed: { opacity: 0, height: 0, overflow: "hidden" }
+                  }}
+                  transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                >
+                  <SortableSiblingGroup
+                    parentId={category.id}
+                    categories={categories}
+                    activeCategoryId={activeCategoryId}
+                    expandedCategories={expandedCategories}
+                    forceExpandedIds={forceExpandedIds}
+                    onSelectCategory={onSelectCategory}
+                    onToggleExpansion={onToggleExpansion}
+                    renderActions={renderActions}
+                    onReorderCategory={onReorderCategory}
+                    inlineEditingCategoryId={inlineEditingCategoryId}
+                    editedCategoryName={editedCategoryName}
+                    onEditedCategoryNameChange={onEditedCategoryNameChange}
+                    onSaveEdit={onSaveEdit}
+                    onCancelEdit={onCancelEdit}
+                    inlineCreateParentId={inlineCreateParentId}
+                    newSubCategoryName={newSubCategoryName}
+                    onNewSubCategoryNameChange={onNewSubCategoryNameChange}
+                    onSaveNewSubCategory={onSaveNewSubCategory}
+                    onCancelNewSubCategory={onCancelNewSubCategory}
+                    deletingCategoryId={deletingCategoryId}
+                    onConfirmDeleteCategory={onConfirmDeleteCategory}
+                    onCancelDeleteCategory={onCancelDeleteCategory}
+                    depth={depth + 1}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </SortableCategoryItem>
+        );
+      })}
+      {isAddingHere && (
+        <li className="group/item mt-1 list-none">
+          <div className="flex justify-between items-center p-2.5 rounded-xl border border-white/20 bg-white/[0.08] ml-0">
+             <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
+               <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-white/5 text-white/40">
+                  <Package size={14} />
+               </div>
+               <input 
+                 autoFocus
+                 placeholder="Name..."
+                 value={newSubCategoryName || ''}
+                 onChange={e => onNewSubCategoryNameChange?.(e.target.value)}
+                 onKeyDown={e => {
+                   if (e.key === 'Enter') onSaveNewSubCategory?.();
+                   if (e.key === 'Escape') onCancelNewSubCategory?.();
+                 }}
+                 className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
+               />
+             </div>
+             <div className="flex items-center gap-1 ml-2 shrink-0" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Erstellen"><Check size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
+             </div>
+          </div>
+        </li>
+      )}
+    </ul>
+  );
+
+  // If reordering is enabled, wrap this sibling level in its own DndContext
+  if (onReorderCategory) {
     return (
-      <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
-        {columnCategories.map((category, index) => {
-          const isAddingChildToThis = inlineCreateParentId === category.id;
-          const hasChildren = categories.some(subCat => subCat.parentId === category.id) || isAddingChildToThis;
-          const isSelected = activeCategoryId === category.id;
-          const isExpanded = expandedCategories.has(category.id) || forceExpandedIds.includes(category.id);
-          const isFirst = index === 0;
-          const isLast = index === columnCategories.length - 1;
-
-          // Only the deepest expanded folder should be sticky
-          const hasExpandedChild = isExpanded && hasChildren && categories
-            .filter(c => c.parentId === category.id)
-            .some(child => {
-              const childHasKids = categories.some(sc => sc.parentId === child.id);
-              const childIsExpanded = expandedCategories.has(child.id) || forceExpandedIds.includes(child.id);
-              return childHasKids && childIsExpanded;
-            });
-          const isDeepestExpanded = isExpanded && hasChildren && !hasExpandedChild;
-          
-          return (
-            <li key={category.id} className="group/item">
-              <div 
-                className={cn(
-                  "flex justify-between items-start p-2.5 rounded-xl cursor-pointer transition-all duration-200 border",
-                  isDeepestExpanded && "sticky top-0 z-10 bg-black/90 backdrop-blur-md border-white/10 text-white shadow-lg",
-                  isSelected && !hasChildren
-                    ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
-                    : !isDeepestExpanded && isExpanded
-                      ? "border-white/10 bg-white/[0.04] text-white" 
-                      : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10 text-white/70 hover:text-white"
-                )}
-                onClick={(e) => {
-                  if (hasChildren) {
-                    onToggleExpansion(category.id, e);
-                  } else {
-                    onSelectCategory(category.id);
-                  }
-                }}
-              >
-                <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
-                  <div className={cn(
-                      "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
-                      isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
-                  )}>
-                      {category.imageUrl ? (
-                        <img src={category.imageUrl} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        hasChildren ? <FolderPlus size={14} /> : <Package size={14} />
-                      )}
-                  </div>
-                  {inlineEditingCategoryId === category.id ? (
-                    <div className="flex-1 flex items-center gap-2 min-w-0" onClick={e => e.stopPropagation()}>
-                      <input 
-                        autoFocus
-                        value={editedCategoryName || ''}
-                        onChange={e => onEditedCategoryNameChange?.(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') onSaveEdit?.();
-                          if (e.key === 'Escape') onCancelEdit?.();
-                        }}
-                        className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
-                      />
-                    </div>
-                  ) : (
-                    <span className={cn(
-                        "font-semibold whitespace-normal break-words transition-colors text-sm leading-tight"
-                    )}>
-                        {category.name}
-                    </span>
-                  )}
-                  {hasChildren && (
-                    <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-primary" : "text-white/20")} />
-                  )}
-                </div>
-
-                {/* Optional actions (admin mode) */}
-                {inlineEditingCategoryId === category.id ? (
-                  <div className="shrink-0 flex items-center gap-1 ml-2" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-                     <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Speichern"><Check size={16}/></button>
-                     <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
-                  </div>
-                ) : (
-                  renderActions && (
-                    <div className="shrink-0 flex items-start" onClick={e => e.stopPropagation()}>
-                      {renderActions(category, { isFirst, isLast })}
-                    </div>
-                  )
-                )}
-              </div>
-              <AnimatePresence initial={false}>
-                {hasChildren && isExpanded && (
-                  <motion.div
-                    key="content"
-                    initial="collapsed"
-                    animate="open"
-                    exit="collapsed"
-                    variants={{
-                      open: { opacity: 1, height: "auto", transitionEnd: { overflow: "visible" } },
-                      collapsed: { opacity: 0, height: 0, overflow: "hidden" }
-                    }}
-                    transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
-                  >
-                    {renderTree(category.id, depth + 1)}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </li>
-          );
-        })}
-        {isAddingHere && (
-          <li className="group/item mt-1">
-            <div className="flex justify-between items-center p-2.5 rounded-xl border border-white/20 bg-white/[0.08]">
-               <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
-                 <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-white/5 text-white/40">
-                    <Package size={14} />
-                 </div>
-                 <input 
-                   autoFocus
-                   placeholder="Name..."
-                   value={newSubCategoryName || ''}
-                   onChange={e => onNewSubCategoryNameChange?.(e.target.value)}
-                   onKeyDown={e => {
-                     if (e.key === 'Enter') onSaveNewSubCategory?.();
-                     if (e.key === 'Escape') onCancelNewSubCategory?.();
-                   }}
-                   className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
-                 />
-               </div>
-               <div className="flex items-center gap-1 ml-2 shrink-0" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-                 <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Erstellen"><Check size={16}/></button>
-                 <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
-               </div>
-            </div>
-          </li>
-        )}
-      </ul>
+      <DndContext 
+        sensors={sensors} 
+        collisionDetection={closestCenter} 
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <SortableContext items={columnCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          {content}
+        </SortableContext>
+        <DragOverlay dropAnimation={{
+          duration: 200,
+          easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+        }}>
+          {activeDragCategory ? (
+            <DragOverlayContent category={{ ...activeDragCategory, hasChildren: categories.some(c => c.parentId === activeDragCategory.id), isDeepestExpanded: false }} />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     );
-  };
+  }
 
-  return renderTree();
+  // Without reorder, just render items directly (no DnD)
+  return content;
+};
+
+export function CategoryTree(props: CategoryTreeProps) {
+  return (
+    <SortableSiblingGroup
+      {...props}
+      parentId={null}
+      depth={0}
+    />
+  );
 }

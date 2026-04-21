@@ -50,6 +50,21 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
 
   const inputRefs = useRef<Record<string, HTMLInputElement>>({});
 
+  const categoryTree = React.useMemo(() => {
+    const buildTree = (cats: Category[], parentId: string | null = null, level: number = 0): { cat: Category; level: number }[] => {
+      const result: { cat: Category; level: number }[] = [];
+      const children = cats
+        .filter((c) => (c.parentId || null) === parentId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+      for (const child of children) {
+        result.push({ cat: child, level });
+        result.push(...buildTree(cats, child.id, level + 1));
+      }
+      return result;
+    };
+    return buildTree(categories);
+  }, [categories]);
+
   useEffect(() => {
     if (draft && isOpen) {
       setLocalData(JSON.parse(JSON.stringify(draft.extracted_data)));
@@ -220,10 +235,15 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
               <SelectTrigger className="glass-input h-9 text-xs">
                 <SelectValue placeholder="Wählen..." />
               </SelectTrigger>
-              <SelectContent className="bg-background border-white/10 text-white max-h-[300px]">
+              <SelectContent className="bg-background border-white/10 text-white max-h-[300px] z-[100]">
                 <SelectItem value="root">Hauptverzeichnis (Root)</SelectItem>
-                {categories.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                {categoryTree.map(({ cat, level }) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    <div className="flex items-center gap-2">
+                      {level > 0 && <span className="text-white/30" style={{ paddingLeft: `${level * 12}px` }}>└</span>}
+                      <span>{cat.name}</span>
+                    </div>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -234,7 +254,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
               <SelectTrigger className="glass-input h-9 text-xs">
                 <SelectValue placeholder="Wählen..." />
               </SelectTrigger>
-              <SelectContent className="bg-background border-white/10 text-white">
+              <SelectContent className="bg-background border-white/10 text-white z-[100]">
                 <SelectItem value="none">Keiner</SelectItem>
                 {suppliers.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>

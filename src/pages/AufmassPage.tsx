@@ -17,13 +17,13 @@ import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import {
   ChevronLeft, FileDown, Menu, Package, Sparkles,
   FileSpreadsheet, BookMarked, Search, X as CloseIcon,
-  PenLine, Edit3, Sun, Moon
+  PenLine, Edit3, Sun, Moon, Mic, Copy, ImagePlus, FileText, Database
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn, generateUUID } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CsvExportDialog } from '@/components/dialogs/CsvExportDialog';
 import type { ProcessedSummaryItem } from '@/lib/types';
 
@@ -34,6 +34,11 @@ import { SectionBar } from '@/components/aufmass/SectionBar';
 import { SummaryList } from '@/components/aufmass/SummaryList';
 import { CategoryTree } from '@/components/catalog/CategoryTree';
 import { AngebotTool } from '@/components/aufmass/AngebotTool';
+import { useSpeechRecognition } from '@/hooks/use-speech';
+import { useOfflineSync } from '@/lib/sync-queue';
+import { useSyncStatus } from '@/hooks/use-sync-status';
+import { CloudOff } from 'lucide-react';
+import { preloadCatalog } from '@/lib/catalog-storage';
 
 // --- Main Page ---
 
@@ -51,8 +56,26 @@ const AufmassPage = () => {
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isCatalogDrawerOpen, setIsCatalogDrawerOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isCopyMode, setIsCopyMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  useOfflineSync(() => {
+    toast({ title: 'Online', description: 'Änderungen wurden synchronisiert.' });
+    setIsOffline(false);
+  });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Debounce search
   useEffect(() => {
@@ -71,6 +94,7 @@ const AufmassPage = () => {
     return stored ? parseInt(stored) : 320;
   });
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [isInfoHubOpen, setIsInfoHubOpen] = useState(false);
   const [isCsvExportDialogOpen, setIsCsvExportDialogOpen] = useState(false);
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [editProjectData, setEditProjectData] = useState({ name: '', client_name: '', address: '', notes: '', start_date: '', end_date: '' });
@@ -83,6 +107,12 @@ const AufmassPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { impactMedium, impactLight } = useHapticFeedback();
+  const { status, hideStatus } = useSyncStatus();
+
+  const { isRecording, isProcessing, toggleRecording } = useSpeechRecognition((text) => {
+    setSearchQuery(text);
+    impactLight();
+  });
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -608,7 +638,6 @@ const AufmassPage = () => {
     setIsManualDialogOpen(false);
   };
 
-
   // Open Edit Project
   const handleOpenEditProject = () => {
     if (!currentProject) return;
@@ -744,13 +773,23 @@ const AufmassPage = () => {
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Artikel oder Nummer suchen..."
-                    className="h-9 pl-8 pr-8 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
+                    className="h-9 pl-8 pr-16 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
                   />
-                  {searchQuery && (
-                    <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
-                      <CloseIcon size={12} />
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {searchQuery && (
+                      <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                        <CloseIcon size={12} />
+                      </button>
+                    )}
+                    <button 
+                      onClick={toggleRecording} 
+                      className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-white/30 hover:text-white hover:bg-white/10")}
+                      title="Spracheingabe"
+                    >
+                      <Mic size={12} className={cn(isRecording && "animate-pulse")} />
+                      {isProcessing && <div className="absolute inset-0 border-2 border-emerald-400/50 border-t-emerald-400 rounded animate-spin" />}
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
               {debouncedSearchQuery.trim() ? (
@@ -758,6 +797,8 @@ const AufmassPage = () => {
                   <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
                   {searchResults.slice(0, 10).map(article => {
                     const qty = getQuantityInSection(article.id);
+                    const item = getItemInSection(article.id);
+                    const isFromAngebot = item?.is_from_angebot || false;
                     const cat = activeCategories.find(c => c.id === article.categoryId);
                     return (
                       <button
@@ -784,11 +825,16 @@ const AufmassPage = () => {
                       >
                         <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                           {article.imageUrl || cat?.imageUrl
-                            ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-cover" />
+                            ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-contain p-1" />
                             : <Package size={12} className="text-white/15" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] text-white/85 font-medium leading-tight">{article.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-[12px] text-white/85 font-medium leading-tight truncate">{article.name}</p>
+                            {isFromAngebot && (
+                              <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
+                            )}
+                          </div>
                           <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
                         </div>
                         {qty > 0 && (
@@ -919,13 +965,23 @@ const AufmassPage = () => {
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Artikel oder Nummer suchen..."
-                            className="h-9 pl-8 pr-8 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
+                            className="h-9 pl-8 pr-16 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
                           />
-                          {searchQuery && (
-                            <button onClick={() => { setSearchQuery(''); impactLight(); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
-                              <CloseIcon size={12} />
+                          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                            {searchQuery && (
+                              <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                                <CloseIcon size={12} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={toggleRecording} 
+                              className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-white/30 hover:text-white hover:bg-white/10")}
+                              title="Spracheingabe"
+                            >
+                              <Mic size={12} className={cn(isRecording && "animate-pulse")} />
+                              {isProcessing && <div className="absolute inset-0 border-2 border-emerald-400/50 border-t-emerald-400 rounded animate-spin" />}
                             </button>
-                          )}
+                          </div>
                         </div>
                       </SheetHeader>
                       {debouncedSearchQuery.trim() ? (
@@ -933,6 +989,8 @@ const AufmassPage = () => {
                           <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
                           {searchResults.slice(0, 10).map(article => {
                             const qty = getQuantityInSection(article.id);
+                            const item = getItemInSection(article.id);
+                            const isFromAngebot = item?.is_from_angebot || false;
                             const cat = activeCategories.find(c => c.id === article.categoryId);
                             return (
                               <button
@@ -959,11 +1017,16 @@ const AufmassPage = () => {
                               >
                                 <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
                                   {article.imageUrl || cat?.imageUrl
-                                    ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-cover" />
+                                    ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-contain p-1" />
                                     : <Package size={12} className="text-white/15" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-[12px] text-white/85 font-medium leading-tight">{article.name}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-[12px] text-white/85 font-medium leading-tight truncate">{article.name}</p>
+                                    {isFromAngebot && (
+                                      <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
+                                    )}
+                                  </div>
                                   <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
                                 </div>
                                 {qty > 0 && (
@@ -1052,6 +1115,11 @@ const AufmassPage = () => {
                 <div className="flex items-center gap-1.5 cursor-pointer hover:bg-white/5 p-1 -ml-1 rounded-md" onClick={handleOpenEditProject}>
                   <h1 className="font-semibold text-white text-sm md:text-base truncate">{currentProject.name}</h1>
                   <Edit3 size={14} className="text-emerald-400 shrink-0" />
+                  {isOffline && (
+                    <span className="shrink-0 flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ml-1">
+                      <CloudOff size={10} /> Offline
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel verplant</p>
               </div>
@@ -1077,6 +1145,75 @@ const AufmassPage = () => {
 
             {/* Right: manual position + theme */}
             <div className="flex items-center gap-1 shrink-0">
+              {/* Mobile Summary Trigger in Header */}
+              <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="sm" className="xl:hidden h-8 px-2 gap-1.5 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 mr-1 relative">
+                    <Package size={15} />
+                    <span className="font-bold text-xs">{totalArticleCount}</span>
+                  </Button>
+                </SheetTrigger>
+                {/* Content rendering is kept further down... */}
+              </Sheet>
+
+              <div className="relative group/sync">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => preloadCatalog(true)}
+                  className={cn(
+                    "h-8 w-8 rounded-full transition-all relative",
+                    status.isVisible && !status.isInitialSync ? "text-emerald-400 bg-emerald-500/10" : "text-white/40 hover:text-emerald-400 hover:bg-white/10"
+                  )}
+                  title="Datenbank manuell synchronisieren"
+                >
+                  <Database size={15} className={cn(status.isVisible && !status.isInitialSync && status.changesCount === 0 && "animate-spin")} />
+                  
+                  {/* Subtle status dot */}
+                  <AnimatePresence>
+                    {status.isVisible && !status.isInitialSync && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        exit={{ scale: 0 }}
+                        className={cn(
+                          "absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background",
+                          status.changesCount > 0 ? "bg-emerald-500" : "bg-blue-500"
+                        )}
+                      />
+                    )}
+                  </AnimatePresence>
+                </Button>
+              </div>
+
+              {viewMode === 'aufmass' && (
+                <Button
+                  onClick={() => { setIsCopyMode(!isCopyMode); impactLight(); }}
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-8 px-2.5 gap-1.5 transition-all border",
+                    isCopyMode 
+                      ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30 shadow-inner" 
+                      : "text-white/50 hover:text-white hover:bg-white/10 border-transparent"
+                  )}
+                  title="Kopiermodus (Tablet Split-Screen)"
+                >
+                  <Copy size={15} />
+                  <span className="hidden xl:inline text-xs">Kopiermodus</span>
+                </Button>
+              )}
+              <Button
+                onClick={() => setIsInfoHubOpen(true)}
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2.5 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
+                title="Info-Hub (Dokumente)"
+              >
+                <FileText size={15} />
+                <span className="hidden xl:inline text-xs">Info</span>
+              </Button>
+              <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
               <Button
                 onClick={() => setIsManualDialogOpen(true)}
                 variant="ghost"
@@ -1085,7 +1222,7 @@ const AufmassPage = () => {
                 title="Manuelle Position"
               >
                 <PenLine size={15} />
-                <span className="hidden sm:inline text-xs">Manuell</span>
+                <span className="hidden xl:inline text-xs">Manuell</span>
               </Button>
               <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
               <Button
@@ -1164,6 +1301,8 @@ const AufmassPage = () => {
             ) : (
               viewArticles.map(article => {
                 const qty = getQuantityInSection(article.id);
+                const item = getItemInSection(article.id);
+                const isFromAngebot = item?.is_from_angebot || false;
                 const cat = activeCategories.find(c => c.id === article.categoryId);
                 return (
                   <ArticleCard
@@ -1174,6 +1313,8 @@ const AufmassPage = () => {
                     onDecrement={() => handleDecrement(article)}
                     onReset={() => handleResetArticle(article)}
                     categoryImageUrl={cat?.imageUrl}
+                    isFromAngebot={isFromAngebot}
+                    copyMode={isCopyMode}
                   />
                 );
               })
@@ -1195,7 +1336,7 @@ const AufmassPage = () => {
       {viewMode === 'aufmass' && (
         <>
           {/* Desktop/Tablet permanent panel */}
-      <aside className="hidden lg:flex flex-col shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10 relative"
+      <aside className="hidden xl:flex flex-col shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10 relative"
         style={{ width: summaryWidth }}
       >
         {/* Drag handle for summary panel */}
@@ -1247,23 +1388,8 @@ const AufmassPage = () => {
         </div>
       </aside>
 
-      {/* Mobile Bottom Summary Sheet */}
+      {/* Mobile Bottom Summary Sheet content is triggered from header now */}
       <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 glass-nav border-t border-white/10 pointer-events-none">
-          <div className="flex items-center justify-end p-4 pointer-events-auto">
-            <SheetTrigger asChild>
-              <div className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 -m-2 rounded-2xl transition-colors bg-background/50 backdrop-blur-md border border-white/10">
-                <div className="text-right">
-                  <p className="font-semibold text-white text-lg">{totalArticleCount}</p>
-                  <p className="text-xs text-white/50">Artikel im Aufmaß</p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shrink-0">
-                  <Package size={22} className="text-white" />
-                </div>
-              </div>
-            </SheetTrigger>
-          </div>
-        </div>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
           <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
             <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
@@ -1284,6 +1410,83 @@ const AufmassPage = () => {
             <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 rounded-2xl transition-colors">
               <FileSpreadsheet size={20} className="mr-2 opacity-50" /> CSV
             </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+        </>
+      )}
+
+      {/* Info Hub Sheet */}
+      <Sheet open={isInfoHubOpen} onOpenChange={setIsInfoHubOpen}>
+        <SheetContent side="right" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[500px] border-l border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
+          <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+            <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
+              <FileText size={20} className="text-emerald-400" /> Info-Hub
+            </SheetTitle>
+            <p className="text-sm text-white/50 text-left">
+              Technische Dokumente und Baustellenskizzen
+            </p>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col space-y-6">
+            {(() => {
+              const docs = currentProject?.documents || [];
+              const sketches = currentProject?.selectedItems
+                .filter(item => item.images && item.images.length > 0)
+                .flatMap(item => item.images!.map(img => ({ url: img, name: item.name || item.text || 'Skizze' }))) || [];
+                
+              const hasContent = docs.length > 0 || sketches.length > 0;
+
+              if (!hasContent) {
+                return (
+                  <div className="flex-1 flex flex-col items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-white/5 border-2 border-dashed border-white/10 flex items-center justify-center mb-4">
+                      <FileText size={24} className="text-white/20" />
+                    </div>
+                    <p className="text-center text-white/40 text-sm max-w-[250px]">
+                      Noch keine Dokumente (PDFs, Datenblätter) oder Skizzen für dieses Projekt hinterlegt.
+                    </p>
+                    {/* File upload would normally be handled here, simplified for now */}
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  {docs.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider">Dokumente</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {docs.map((docUrl, idx) => (
+                          <a key={idx} href={docUrl} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-white/5 hover:border-emerald-500/50 transition-colors flex items-center justify-center">
+                            <FileText size={32} className="text-white/20 group-hover:text-emerald-400 transition-colors" />
+                            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-md">
+                              <p className="text-xs text-white truncate">Dokument {idx + 1}</p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {sketches.length > 0 && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider">Skizzen & Fotos</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {sketches.map((sketch, idx) => (
+                          <a key={idx} href={sketch.url} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-white/5 hover:border-emerald-500/50 transition-colors flex items-center justify-center">
+                            <img src={sketch.url} alt={sketch.name} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
+                              <p className="text-xs text-white truncate">{sketch.name}</p>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </SheetContent>
       </Sheet>
@@ -1433,8 +1636,6 @@ const AufmassPage = () => {
           </Button>
         </div>
       </ResizableSidePanel>
-        </>
-      )}
     </motion.div>
   );
 };

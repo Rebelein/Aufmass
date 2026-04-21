@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Label } from '@/components/ui/label';
-import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText } from 'lucide-react';
-import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId } from '@/lib/project-storage';
+import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus } from 'lucide-react';
+import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId, markProjectItemsAsAngebot } from '@/lib/project-storage';
+import { preloadCatalog } from '@/lib/catalog-storage';
 import type { Project } from '@/lib/project-storage';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -26,6 +27,7 @@ export default function HomePage() {
 
   useEffect(() => {
     setIsLoading(true);
+    preloadCatalog();
     const unsubscribe = subscribeToProjects((loadedProjects) => {
       setProjects(loadedProjects);
       setIsLoading(false);
@@ -93,6 +95,9 @@ export default function HomePage() {
     try {
       const success = await updateProject(project.id, { status: newStatus });
       if (success) {
+        if (project.status === 'planning' && newStatus === 'active') {
+          await markProjectItemsAsAngebot(project.id);
+        }
         toast({ title: "Status aktualisiert", description: `${project.name} verschoben.` });
       }
     } catch (error) {
@@ -125,7 +130,7 @@ export default function HomePage() {
         key={project.id} 
         className="glass-card overflow-hidden group flex flex-col"
       >
-        <div className="p-4 space-y-3 flex-1">
+        <div className="p-3 md:p-4 space-y-2 md:space-y-3 flex-1">
           <div className="flex justify-between items-start gap-4">
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-white leading-tight break-words flex items-center gap-2">
@@ -161,14 +166,14 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-2 py-1.5 rounded-md text-xs text-white/60">
+          <div className="flex flex-wrap gap-2 mt-1 md:mt-2">
+            <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-2 py-1 rounded-md text-[10px] sm:text-xs text-white/60">
               <ListChecks size={12} className="text-primary" />
-              <span>{articleCount} Artikel</span>
+              <span>{articleCount} Art.</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-2 py-1.5 rounded-md text-xs text-white/60">
+            <div className="flex items-center gap-1.5 bg-white/[0.03] border border-white/5 px-2 py-1 rounded-md text-[10px] sm:text-xs text-white/60">
               <FolderOpen size={12} className="text-primary" />
-              <span>{sectionCount} Ordner</span>
+              <span>{sectionCount} Ord.</span>
             </div>
           </div>
 
@@ -257,9 +262,13 @@ export default function HomePage() {
               <p className="text-white/50">Projekt- und Aufmaßverwaltung</p>
             </div>
             
-            <Button onClick={() => setIsNewProjectSheetOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl shadow-lg border border-primary/20 transition-all h-11 px-6">
-                  <FolderOpen className="mr-2 h-5 w-5" /> Neue Baustelle anlegen
-                </Button>
+            <Button 
+              onClick={() => setIsNewProjectSheetOpen(true)} 
+              className="fixed bottom-6 right-6 md:static md:bottom-auto md:right-auto z-50 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-full md:rounded-xl shadow-lg shadow-primary/20 border border-primary/20 transition-all h-14 w-14 md:h-11 md:w-11 p-0 flex items-center justify-center"
+              title="Neue Baustelle anlegen"
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
             <ResizableSidePanel
               isOpen={isNewProjectSheetOpen}
               onClose={() => setIsNewProjectSheetOpen(false)}
@@ -326,7 +335,7 @@ export default function HomePage() {
                         <Label className="text-white/80">Adresse / Ort (Optional)</Label>
                         <Input className="glass-input h-11 bg-white/[0.03] border-white/10 text-white" value={newProject.address} onChange={(e) => setNewProject({ ...newProject, address: e.target.value })} placeholder="Musterstraße 1, 12345 Stadt" />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2">
                           <Label className="text-white/80">Startdatum</Label>
                           <div className="relative">
@@ -361,7 +370,7 @@ export default function HomePage() {
           </div>
 
           {/* Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="glass-card p-4 flex items-center gap-4">
               <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                 <BarChart3 size={20} />
@@ -401,7 +410,7 @@ export default function HomePage() {
           </div>
 
           {/* Kanban Columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pt-4">
             
             {/* Column: Planung */}
             <div className="flex flex-col gap-4">

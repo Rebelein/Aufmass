@@ -3,6 +3,32 @@
 import { supabase } from './supabase';
 import type { Article, Category, Supplier } from './data';
 import type { ProposedCategory } from '@/lib/types';
+import { syncEvents } from './sync-events';
+
+// --- Cache Helpers ---
+
+const CACHE_KEYS = {
+  CATEGORIES: (source?: string) => `cat_cache_categories_${source ?? 'all'}`,
+  ARTICLES: (source?: string) => `cat_cache_articles_${source ?? 'all'}`,
+  SUPPLIERS: 'cat_cache_suppliers'
+};
+
+function saveToCache(key: string, data: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn("Failed to save to local cache (quota exceeded?)", e);
+  }
+}
+
+function loadFromCache<T>(key: string): T | null {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? JSON.parse(cached) : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // --- Supplier Functions ---
 
@@ -14,12 +40,18 @@ export async function getSuppliersList(): Promise<Supplier[]> {
 
   if (error) {
     console.error("Error fetching suppliers:", error);
-    return [];
+    return loadFromCache<Supplier[]>(CACHE_KEYS.SUPPLIERS) || [];
   }
+  
+  saveToCache(CACHE_KEYS.SUPPLIERS, data);
   return data as Supplier[];
 }
 
 export function subscribeToSuppliers(callback: (suppliers: Supplier[]) => void) {
+  // 1. Instant load from cache
+  const cached = loadFromCache<Supplier[]>(CACHE_KEYS.SUPPLIERS);
+  if (cached) callback(cached);
+
   const channel = supabase
     .channel('public:suppliers')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, async () => {
@@ -30,6 +62,34 @@ export function subscribeToSuppliers(callback: (suppliers: Supplier[]) => void) 
 
   getSuppliersList().then(callback);
   return () => { supabase.removeChannel(channel); };
+}
+
+export async function preloadCatalog(force: boolean = false): Promise<void> {
+  const isInitDone = localStorage.getItem('cat_init_done') === 'true';
+  
+  if (!isInitDone || force) {
+    syncEvents.emit({ type: 'startInitial', label: 'Lade Katalog-Daten...' });
+    
+    // Simulate steps for better UX progress
+    syncEvents.emit({ type: 'progress', current: 10, total: 100 });
+    const categories = await getCategoriesList();
+    
+    syncEvents.emit({ type: 'progress', current: 40, total: 100 });
+    const articles = await getArticlesList();
+    
+    syncEvents.emit({ type: 'progress', current: 80, total: 100 });
+    const suppliers = await getSuppliersList();
+    
+    syncEvents.emit({ type: 'progress', current: 100, total: 100 });
+    
+    localStorage.setItem('cat_init_done', 'true');
+    syncEvents.emit({ type: 'complete', label: 'Datenbank bereit', changes: articles.length });
+  } else {
+    // Background check
+    getCategoriesList();
+    getArticlesList();
+    getSuppliersList();
+  }
 }
 
 export async function addSupplier(supplierData: Omit<Supplier, 'id'>): Promise<Supplier | null> {
@@ -63,6 +123,14 @@ export async function deleteSupplier(supplierId: string): Promise<boolean> {
 // --- Category Functions ---
 
 export async function getCategoriesList(source?: 'own' | 'wholesale'): Promise<Category[]> {
+  const cacheKey = CACHE_KEYS.CATEGORIES(source);
+  const cachedData = loadFromCache<Category[]>(cacheKey);
+  const isFirstRun = !cachedData;
+
+  if (isFirstRun) {
+    syncEvents.emit({ type: 'startInitial', label: 'Lade Kategorien...' });
+  }
+
   let query = supabase
     .from('categories')
     .select('*')
@@ -76,18 +144,36 @@ export async function getCategoriesList(source?: 'own' | 'wholesale'): Promise<C
 
   if (error) {
     console.error("Error fetching categories:", error);
-    return [];
+    return cachedData || [];
   }
+  
   // Map database snake_case to UI camelCase for compatibility
-  return (data as any[]).map(cat => ({
+  const mapped = (data as any[]).map(cat => ({
     ...cat,
     parentId: cat.parent_id,
     imageUrl: cat.image_url,
     source: cat.source ?? 'own',
   })) as Category[];
+
+  if (isFirstRun) {
+    syncEvents.emit({ type: 'complete', label: 'Kategorien initialisiert', changes: mapped.length });
+  } else {
+    // Compare with cache to see if there are changes
+    const diff = mapped.length - (cachedData?.length || 0);
+    if (diff !== 0) {
+       syncEvents.emit({ type: 'complete', label: 'Katalog aktualisiert', changes: Math.abs(diff) });
+    }
+  }
+
+  saveToCache(cacheKey, mapped);
+  return mapped;
 }
 
 export function subscribeToCategories(callback: (categories: Category[]) => void, source?: 'own' | 'wholesale') {
+  // 1. Instant load from cache
+  const cached = loadFromCache<Category[]>(CACHE_KEYS.CATEGORIES(source));
+  if (cached) callback(cached);
+
   const channel = supabase
     .channel(`public:categories:${source ?? 'all'}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, async () => {
@@ -187,6 +273,14 @@ function mapArticleData(data: any[]): Article[] {
 }
 
 export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Article[]> {
+  const cacheKey = CACHE_KEYS.ARTICLES(source);
+  const cachedData = loadFromCache<Article[]>(cacheKey);
+  const isFirstRun = !cachedData;
+
+  if (isFirstRun) {
+    syncEvents.emit({ type: 'startInitial', label: 'Lade Artikel-Datenbank...' });
+  }
+
   let query = supabase
     .from('articles')
     .select('*, categories(name), suppliers(name)')
@@ -200,10 +294,22 @@ export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Art
 
   if (error) {
     console.error("Error fetching articles:", error);
-    return [];
+    return cachedData || [];
   }
 
-  return mapArticleData(data);
+  const mapped = mapArticleData(data);
+  
+  if (isFirstRun) {
+    syncEvents.emit({ type: 'complete', label: 'Artikel initialisiert', changes: mapped.length });
+  } else {
+    const diff = mapped.length - (cachedData?.length || 0);
+    if (diff !== 0) {
+      syncEvents.emit({ type: 'complete', label: 'Neue Artikel verfügbar', changes: Math.abs(diff) });
+    }
+  }
+
+  saveToCache(cacheKey, mapped);
+  return mapped;
 }
 
 export async function fetchWholesaleArticlesByCategory(categoryIds: string[]): Promise<Article[]> {
@@ -241,6 +347,10 @@ export async function searchWholesaleArticles(query: string): Promise<Article[]>
 }
 
 export function subscribeToArticles(callback: (articles: Article[]) => void, source?: 'own' | 'wholesale') {
+  // 1. Instant load from cache
+  const cached = loadFromCache<Article[]>(CACHE_KEYS.ARTICLES(source));
+  if (cached) callback(cached);
+
   const channel = supabase
     .channel(`public:articles:${source ?? 'all'}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'articles' }, async () => {
