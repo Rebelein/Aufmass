@@ -365,9 +365,16 @@ const AdminPage = () => {
   };
 
   const handleConfirmReviewImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
-    if (importMode === 'add_to_existing' && targetId) {
+    if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
+      const { supabase } = await import('@/lib/supabase');
+
+      if (importMode === 'replace_all') {
+        // Delete all existing articles in the target category
+        await supabase.from('articles').delete().eq('category_id', targetId);
+      }
+
       const allArticles = data.flatMap((c: any) => c.articles || []);
-      const existingCount = articlesAdmin.filter(a => a.categoryId === targetId).length;
+      const existingCount = importMode === 'replace_all' ? 0 : articlesAdmin.filter(a => a.categoryId === targetId).length;
       const articlesToInsert = allArticles.map((art: any, idx: number) => ({
         name: art.name,
         article_number: art.articleNumber,
@@ -378,7 +385,6 @@ const AdminPage = () => {
       }));
       
       if (articlesToInsert.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
         await supabase.from('articles').insert(articlesToInsert);
       }
     } else {

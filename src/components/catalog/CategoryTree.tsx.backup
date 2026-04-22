@@ -234,8 +234,8 @@ const DragOverlayContent = ({ category }: { category: CategoryWithMeta }) => (
 );
 
 /**
- * A group for one level of siblings.
- * Uses SortableContext to define sortable items for this level.
+ * A self-contained sortable group for one level of siblings.
+ * Each group gets its own DndContext so drag operations never cross parent boundaries.
  */
 const SortableSiblingGroup = ({
   parentId,
@@ -267,11 +267,46 @@ const SortableSiblingGroup = ({
   depth: number;
 } & Omit<CategoryTreeProps, 'categories'>) => {
 
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const columnCategories = categories
     .filter(category => category.parentId === parentId)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   const isAddingHere = inlineCreateParentId !== undefined && inlineCreateParentId !== null && inlineCreateParentId === parentId;
+
+  const handleDragStart = useCallback((event: { active: { id: string | number } }) => {
+    setActiveDragId(String(event.active.id));
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (over && active.id !== over.id) {
+      onReorderCategory?.(active.id as string, over.id as string);
+    }
+  }, [onReorderCategory]);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null);
+  }, []);
 
   if (columnCategories.length === 0 && !isAddingHere) {
     if (parentId === null) {
@@ -283,6 +318,10 @@ const SortableSiblingGroup = ({
     }
     return <></>;
   }
+
+  const activeDragCategory = activeDragId 
+    ? columnCategories.find(c => c.id === activeDragId) 
+    : null;
 
   const content = (
     <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
@@ -398,93 +437,41 @@ const SortableSiblingGroup = ({
     </ul>
   );
 
-  // If reordering is enabled, wrap this sibling level in its own SortableContext
+  // If reordering is enabled, wrap this sibling level in its own DndContext
   if (onReorderCategory) {
     return (
-      <SortableContext id={`sortable-context-${parentId ?? 'root'}`} items={columnCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
-        {content}
-      </SortableContext>
-    );
-  }
-
-  return content;
-};
-
-export function CategoryTree(props: CategoryTreeProps) {
-  const [activeDragId, setActiveDragId] = useState<string | null>(null);
-
-  const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 200,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragStart = useCallback((event: { active: { id: string | number } }) => {
-    setActiveDragId(String(event.active.id));
-  }, []);
-
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragId(null);
-    if (over && active.id !== over.id) {
-      // Check if they are in the same parent group (siblings)
-      const activeCategory = props.categories.find(c => c.id === active.id);
-      const overCategory = props.categories.find(c => c.id === over.id);
-      
-      if (activeCategory && overCategory && activeCategory.parentId === overCategory.parentId) {
-        props.onReorderCategory?.(active.id as string, over.id as string);
-      }
-    }
-  }, [props.onReorderCategory, props.categories]);
-
-  const handleDragCancel = useCallback(() => {
-    setActiveDragId(null);
-  }, []);
-
-  const activeDragCategory = activeDragId 
-    ? props.categories.find(c => c.id === activeDragId) 
-    : null;
-
-  const content = (
-    <SortableSiblingGroup
-      {...props}
-      parentId={null}
-      depth={0}
-    />
-  );
-
-  if (props.onReorderCategory) {
-    return (
       <DndContext
+        id={`dnd-context-${parentId ?? 'root'}`}
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
-      >
-        {content}
+      >        <SortableContext items={columnCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
+          {content}
+        </SortableContext>
         <DragOverlay dropAnimation={{
           duration: 200,
           easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
         }}>
           {activeDragCategory ? (
-            <DragOverlayContent category={{ ...activeDragCategory, hasChildren: props.categories.some(c => c.parentId === activeDragCategory.id), isDeepestExpanded: false }} />
+            <DragOverlayContent category={{ ...activeDragCategory, hasChildren: categories.some(c => c.parentId === activeDragCategory.id), isDeepestExpanded: false }} />
           ) : null}
         </DragOverlay>
       </DndContext>
     );
   }
 
+  // Without reorder, just render items directly (no DnD)
   return content;
+};
+
+export function CategoryTree(props: CategoryTreeProps) {
+  return (
+    <SortableSiblingGroup
+      {...props}
+      parentId={null}
+      depth={0}
+    />
+  );
 }

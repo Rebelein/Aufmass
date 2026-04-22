@@ -17,7 +17,7 @@ import { startAiCatalogImport, startAiCatalogImportFromBlob } from '@/lib/ai-imp
 import type { ImportDraft } from '@/lib/import-storage';
 import ImportDraftsDialog from '../dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '../dialogs/ImportReviewDialog';
-import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp, Loader2, Trash2, Edit3, Package, BookMarked, Camera, ImagePlus, FileText, ClipboardPaste } from 'lucide-react';
+import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp, Loader2, Trash2, Edit3, Package, BookMarked, Camera, ImagePlus, FileText, ClipboardPaste, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn, generateUUID } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -468,10 +468,17 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   };
 
   const handleConfirmImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
-    if (importMode === 'add_to_existing' && targetId) {
+    if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
+      const { supabase } = await import('@/lib/supabase');
+
+      if (importMode === 'replace_all') {
+        // Delete all existing articles in the target category
+        await supabase.from('articles').delete().eq('category_id', targetId);
+      }
+
       // Flatten all articles from all KI categories and add them to the existing target category
       const allArticles = data.flatMap((c: any) => c.articles || []);
-      const existingCount = initialArticles.length;
+      const existingCount = importMode === 'replace_all' ? 0 : initialArticles.length;
       const articlesToInsert = allArticles.map((art: any, idx: number) => ({
         name: art.name,
         article_number: art.articleNumber,
@@ -482,7 +489,6 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       }));
       
       if (articlesToInsert.length > 0) {
-        const { supabase } = await import('@/lib/supabase');
         await supabase.from('articles').insert(articlesToInsert);
       }
     } else {
@@ -638,7 +644,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                             <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
                             <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
                             <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
-                            <TableHead className="text-right text-white/40 font-bold uppercase text-[10px] tracking-wider">Aktionen</TableHead>
+                            <TableHead className="text-right text-white/40 font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -676,40 +682,72 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                             <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] group transition-colors">
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
                                 <TableCell className="font-bold text-white/80 p-2">
-                                  <div className="flex items-center gap-2">
-                                   {article.imageUrl && (
-                                     <div className="w-8 h-8 rounded-md border border-white/10 shrink-0 bg-white overflow-hidden flex items-center justify-center">
-                                       <img src={article.imageUrl} alt="" className="w-full h-full object-contain" />
-                                     </div>
-                                   )}
-                                   <textarea 
-                                      ref={el => { 
-                                        if (el) {
-                                          inputRefs.current[`${article.id}-name`] = el;
-                                          // Auto-resize on mount
-                                          el.style.height = '0px';
-                                          el.style.height = el.scrollHeight + 'px';
-                                        } 
-                                      }}
-                                      rows={1}
-                                      value={article.name || ''}
-                                      onChange={(e) => {
-                                        e.target.style.height = '0px';
-                                        e.target.style.height = e.target.scrollHeight + 'px';
-                                        handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
-                                      }}
-                                      className="w-full bg-white/5 border border-white/10 min-h-[40px] py-2 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
-                                      style={{ fieldSizing: 'content' } as React.CSSProperties}
-                                    />
+                                  <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-2">
+                                     {article.imageUrl && (
+                                       <div className="w-8 h-8 rounded-md border border-white/10 shrink-0 bg-white overflow-hidden flex items-center justify-center">
+                                         <img src={article.imageUrl} alt="" className="w-full h-full object-contain" />
+                                       </div>
+                                     )}
+                                     <textarea 
+                                        ref={el => { 
+                                          if (el) {
+                                            inputRefs.current[`${article.id}-name`] = el;
+                                            // Auto-resize on mount
+                                            el.style.height = '0px';
+                                            el.style.height = el.scrollHeight + 'px';
+                                          } 
+                                        }}
+                                        rows={1}
+                                        value={article.name || ''}
+                                        onChange={(e) => {
+                                          e.target.style.height = '0px';
+                                          e.target.style.height = e.target.scrollHeight + 'px';
+                                          handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
+                                        }}
+                                        className="w-full bg-white/5 border border-white/10 min-h-[40px] py-2 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
+                                        style={{ fieldSizing: 'content' } as React.CSSProperties}
+                                      />
+                                    </div>
+                                    
+                                    {/* Actions for tablet/mobile - visible below article name */}
+                                    <div className="flex xl:hidden items-center gap-2 ml-1 sm:ml-10">
+                                        <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-white/40 hover:text-emerald-400 bg-white/5 hover:bg-emerald-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                          <ImagePlus size={12}/> Bild
+                                        </Button>
+                                        <Button variant="ghost" size="sm" onClick={() => handlePasteArticleImage(article.id)} className="h-8 px-2 text-white/40 hover:text-emerald-400 bg-white/5 hover:bg-emerald-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                          <ClipboardPaste size={12}/> Einfügen
+                                        </Button>
+                                        <Button variant="ghost" size="sm" onClick={() => setDeletingArticleId(article.id)} className="h-8 px-2 text-white/40 hover:text-red-400 bg-white/5 hover:bg-red-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 ml-auto sm:ml-0">
+                                          <Trash2 size={12}/> Löschen
+                                        </Button>
+                                    </div>
                                   </div>
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell p-2">
-                                  <input 
-                                    ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
-                                    value={article.articleNumber || ''}
-                                    onChange={(e) => handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                                    className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-all"
-                                  />
+                                  <div className="relative flex items-center">
+                                    <input 
+                                      ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
+                                      value={article.articleNumber || ''}
+                                      onChange={(e) => handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
+                                      className="w-full bg-white/5 border border-white/10 h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-all"
+                                    />
+                                    {article.articleNumber && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          navigator.clipboard.writeText(article.articleNumber || '');
+                                          toast({ title: 'Kopiert', description: 'Artikelnummer in die Zwischenablage kopiert.' });
+                                        }}
+                                        className="absolute right-1 text-white/30 hover:text-white/70 transition-colors p-1.5 rounded-md hover:bg-white/10"
+                                        title="Artikelnummer kopieren"
+                                      >
+                                        <Copy size={14} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-white/60 text-xs font-medium p-2">
                                   <input 
@@ -730,7 +768,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
-                                <TableCell className="text-right p-2">
+                                <TableCell className="text-right p-2 hidden xl:table-cell">
                                     <div className="flex justify-end gap-1">
                                         <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild hochladen"><ImagePlus size={14}/></Button>
                                         <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>

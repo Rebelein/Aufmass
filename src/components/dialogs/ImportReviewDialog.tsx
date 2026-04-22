@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import type { Category, Supplier, Article } from '@/lib/data';
 import type { ImportDraft } from '@/lib/import-storage';
 
-export type ImportMode = 'add_to_existing' | 'create_new';
+export type ImportMode = 'add_to_existing' | 'create_new' | 'replace_all';
 
 interface ImportReviewDialogProps {
   draft: ImportDraft | null;
@@ -157,11 +157,8 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   const handleConfirmClick = () => {
     const finalTargetId = targetCategoryId === 'root' ? null : targetCategoryId;
     if (finalTargetId) {
-      const existingArticles = articles.filter(a => a.categoryId === finalTargetId);
-      if (existingArticles.length > 0) {
-        setShowImportModeDialog(true);
-        return;
-      }
+      setShowImportModeDialog(true);
+      return;
     }
     executeImport('create_new');
   };
@@ -171,10 +168,13 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     setIsImporting(true);
     const finalTargetId = targetCategoryId === 'root' ? null : targetCategoryId;
     const finalSupplierId = supplierId === 'none' ? null : supplierId;
-    await onConfirmImport(draft.id, localData, finalTargetId, finalSupplierId, mode);
+    await onConfirmImport(draft?.id || '', localData, finalTargetId, finalSupplierId, mode);
     setIsImporting(false);
     onClose();
   };
+
+  const finalTargetId = targetCategoryId === 'root' ? null : targetCategoryId;
+  const hasExistingArticles = finalTargetId ? articles.some(a => a.categoryId === finalTargetId) : false;
 
   const toggleCategory = (idx: number) => {
     const next = new Set(collapsedCategories);
@@ -373,18 +373,32 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
         <AlertDialogHeader>
           <AlertDialogTitle className="text-xl font-bold text-center">Artikel importieren</AlertDialogTitle>
           <p className="text-white/50 text-sm text-center mt-2">
-            Die Zielkategorie <span className="text-emerald-400 font-semibold">"{categories.find(c => c.id === targetCategoryId)?.name}"</span> enthält bereits Artikel. Wie möchtest du importieren?
+            Zielkategorie: <span className="text-emerald-400 font-semibold">"{categories.find(c => c.id === targetCategoryId)?.name}"</span>
+            <br />
+            {hasExistingArticles ? "Diese Kategorie enthält bereits Artikel. Wie möchtest du importieren?" : "Wie möchtest du die KI-Gruppen importieren?"}
           </p>
         </AlertDialogHeader>
         <div className="space-y-3 py-4">
+          {hasExistingArticles && (
+            <Button
+              onClick={() => executeImport('replace_all')}
+              className="w-full h-14 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-xl flex items-center justify-start gap-3 px-4"
+            >
+              <Trash2 size={20} />
+              <div className="text-left">
+                <p className="font-bold text-sm">Gesamte Artikelliste erneuern</p>
+                <p className="text-[10px] text-red-400/60">Bestehende Artikel werden gelöscht und durch neue ersetzt</p>
+              </div>
+            </Button>
+          )}
           <Button
             onClick={() => executeImport('add_to_existing')}
             className="w-full h-14 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 rounded-xl flex items-center justify-start gap-3 px-4"
           >
             <ListPlus size={20} />
             <div className="text-left">
-              <p className="font-bold text-sm">Zu bestehender Kategorie hinzufügen</p>
-              <p className="text-[10px] text-emerald-400/60">Artikel werden direkt in die Kategorie eingefügt</p>
+              <p className="font-bold text-sm">Direkt in die Kategorie einfügen</p>
+              <p className="text-[10px] text-emerald-400/60">Artikel werden eingefügt, KI-Gruppen werden ignoriert (flach)</p>
             </div>
           </Button>
           <Button
