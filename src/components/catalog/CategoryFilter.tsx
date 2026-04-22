@@ -74,13 +74,13 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 {hasChildren ? (
                     <button
                         onClick={(e) => { e.stopPropagation(); onToggleExpand(category.id); }}
-                        className="h-8 w-8 shrink-0 flex items-center justify-center text-white/50 hover:text-emerald-400 transition-colors"
+                        className="h-8 w-8 shrink-0 flex items-center justify-center text-muted-foreground hover:text-emerald-400 transition-colors"
                     >
                         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
                 ) : (
                     <div className="w-8 shrink-0 flex items-center justify-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-emerald-500/40 transition-colors" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-muted group-hover:bg-emerald-500/40 transition-colors" />
                     </div>
                 )}
 
@@ -94,15 +94,15 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                         "flex-grow text-left px-3 py-2 rounded-xl transition-all duration-300 flex items-center gap-3 overflow-hidden border",
                         isSelected 
                             ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.1)]" 
-                            : "bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:text-white"
+                            : "bg-muted border-transparent text-muted-foreground hover:bg-muted hover:text-accent-foreground"
                     )}
                 >
                     {previewImageUrl ? (
-                        <div className="relative w-6 h-6 shrink-0 rounded-lg overflow-hidden border border-white/10">
+                        <div className="relative w-6 h-6 shrink-0 rounded-lg overflow-hidden border border-border">
                             <img src={previewImageUrl} alt="" className="w-full h-full object-contain p-1" />
                         </div>
                     ) : (
-                        <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-white/50")} />
+                        <LayoutGrid size={14} className={cn("shrink-0", isSelected ? "text-emerald-400" : "text-muted-foreground")} />
                     )}
                     <span className="truncate text-sm font-medium">{category.name}</span>
                 </button>
@@ -124,15 +124,15 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
         <h2 className="text-2xl font-bold tracking-tight text-gradient">Katalog</h2>
         <Button
             onClick={onOpenSearchDialog}
-            className="w-full glass-input justify-start gap-3 h-12 hover:bg-white/10 transition-colors group"
+            className="w-full bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md justify-start gap-3 h-12 hover:bg-muted transition-colors group"
         >
-            <Search size={18} className="text-white/50 group-hover:text-emerald-400 transition-colors" />
-            <span className="text-white/40 group-hover:text-white transition-colors">Suchen...</span>
+            <Search size={18} className="text-muted-foreground group-hover:text-emerald-400 transition-colors" />
+            <span className="text-muted-foreground group-hover:text-accent-foreground transition-colors">Suchen...</span>
         </Button>
       </div>
 
       <div className="flex-grow flex flex-col min-h-0">
-        <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/50 mb-4 px-2">Kategorien</h3>
+        <h3 className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-4 px-2">Kategorien</h3>
         <ScrollArea className="flex-grow -mx-2 px-2 no-scrollbar">
             <div className="space-y-1.5 pb-20" ref={scrollContainerRef}>
                 {renderCategoryButtons(null, 0)}

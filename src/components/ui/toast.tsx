@@ -29,7 +29,7 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-white/10 bg-slate-900/60 backdrop-blur-xl text-white shadow-[0_8px_30px_rgb(0,0,0,0.3)]",
+        default: "border-border bg-background/80 backdrop-blur-xl text-foreground shadow-[0_8px_30px_rgb(0,0,0,0.3)]",
         destructive:
           "destructive group border-red-500/20 bg-red-950/60 backdrop-blur-xl text-red-50 shadow-[0_8px_30px_rgb(220,38,38,0.2)]",
       },
@@ -77,7 +77,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-white/50 opacity-0 transition-opacity hover:text-white hover:bg-white/10 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:hover:bg-red-500/20 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      "absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground hover:bg-accent focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:hover:bg-red-500/20 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
       className
     )}
     toast-close=""

@@ -96,7 +96,7 @@ export function ResizableSidePanel({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 top-14 md:top-16 z-[60] bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 top-14 md:top-16 z-[60] bg-background/50 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -108,7 +108,7 @@ export function ResizableSidePanel({
             exit={{ x: side === 'right' ? '100%' : '-100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className={cn(
-              "fixed top-14 md:top-16 bottom-0 z-[60] flex flex-col bg-black/20 backdrop-blur-[60px] border-white/10 shadow-[inset_1px_0_0_rgba(255,255,255,0.05),-10px_0_30px_rgba(0,0,0,0.5)]",
+              "fixed top-14 md:top-16 bottom-0 z-[60] flex flex-col bg-background/80 backdrop-blur-[60px] border-border shadow-2xl",
               side === 'right' ? 'right-0 border-l' : 'left-0 border-r',
               className
             )}
@@ -124,18 +124,18 @@ export function ResizableSidePanel({
               onMouseDown={handleMouseDown}
             >
               <div className={cn(
-                "absolute top-1/2 -translate-y-1/2 w-0.5 h-12 rounded-full bg-white/10 group-hover:bg-emerald-400/60 transition-colors",
+                "absolute top-1/2 -translate-y-1/2 w-0.5 h-12 rounded-full bg-border group-hover:bg-emerald-400/60 transition-colors",
                 side === 'right' ? 'left-0.5' : 'right-0.5'
               )} />
             </div>
 
             {/* Header */}
             {title && (
-              <div className="p-5 bg-white/[0.02] border-b border-white/5 shrink-0 flex items-start justify-between gap-4">
+              <div className="p-5 bg-muted/50 border-b border-border shrink-0 flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">{title}</div>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all shrink-0 mt-0.5"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-accent-foreground hover:bg-accent transition-all shrink-0 mt-0.5"
                 >
                   <X size={18} />
                 </button>
@@ -149,7 +149,7 @@ export function ResizableSidePanel({
 
             {/* Footer */}
             {footer && (
-              <div className="border-t border-white/10 bg-white/[0.02] shrink-0">
+              <div className="border-t border-border bg-muted/50 shrink-0">
                 {footer}
               </div>
             )}

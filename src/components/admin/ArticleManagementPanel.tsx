@@ -517,24 +517,24 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
   return (
     <div className="h-full flex flex-col items-stretch space-y-0">
-      <div className="ios-card bg-gray-900/40 border-white/10 text-white p-0 overflow-hidden flex flex-col h-full rounded-2xl shadow-none border-0 sm:border">
+      <div className="bg-card text-card-foreground border-border shadow-sm rounded-xl p-0 overflow-hidden flex flex-col h-full rounded-2xl shadow-none border-0 sm:border">
         {/* Header */}
-        <div className="p-4 sm:p-5 lg:p-6 border-b border-white/5 bg-white/[0.02] shrink-0">
+        <div className="p-4 sm:p-5 lg:p-6 border-b border-border bg-muted/50 shrink-0">
           <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
                   <div 
                     onClick={() => imageInputRef.current?.click()}
-                    className="relative w-12 h-12 lg:w-16 lg:h-16 rounded-2xl bg-white/5 border border-white/10 overflow-hidden cursor-pointer group hover:border-emerald-500/50 transition-all shadow-inner shrink-0"
+                    className="relative w-12 h-12 lg:w-16 lg:h-16 rounded-2xl bg-muted/50 border border-border overflow-hidden cursor-pointer group hover:border-primary/50 transition-all shadow-inner shrink-0"
                   >
                     {categoryImage ? (
                       <img src={categoryImage} alt="Kategorie" className="w-full h-full object-contain p-1" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/20 group-hover:text-emerald-400 transition-colors">
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
                         <Camera className="w-5 h-5 lg:w-6 lg:h-6" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <ImagePlus size={20} className="text-white" />
+                    <div className="absolute inset-0 bg-muted opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <ImagePlus size={20} className="text-foreground" />
                     </div>
                   </div>
                   <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
@@ -544,16 +544,16 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                     size="icon"
                     onClick={handlePasteImage}
                     title="Aus Zwischenablage einfügen"
-                    className="h-8 w-8 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all shrink-0 self-center"
+                    className="h-8 w-8 rounded-lg bg-muted/50 border border-border text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0 self-center"
                   >
                     <ClipboardPaste size={16} />
                   </Button>
 
                   <div className="space-y-1 min-w-0">
-                      <h2 className="text-xl lg:text-2xl font-bold text-gradient flex items-center gap-2">
+                      <h2 className="text-xl lg:text-2xl font-bold text-foreground flex items-center gap-2">
                           {categoryName}
                       </h2>
-                      <p className="text-white/40 text-[10px] sm:text-xs font-bold uppercase tracking-widest">{initialArticles.length} Artikel</p>
+                      <p className="text-muted-foreground text-[10px] sm:text-xs font-bold uppercase tracking-widest">{initialArticles.length} Artikel</p>
                   </div>
               </div>
           </div>
@@ -561,26 +561,26 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
         <div className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6 flex-1 overflow-hidden flex flex-col min-h-0">
             <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <Button onClick={() => { setEditingArticle(null); setArticleFormData({name:'', articleNumber:'', unit:'', supplierId: ''}); setIsArticleFormDialogOpen(true); }} className="btn-primary flex-1 sm:flex-none">
+              <Button onClick={() => { setEditingArticle(null); setArticleFormData({name:'', articleNumber:'', unit:'', supplierId: ''}); setIsArticleFormDialogOpen(true); }} className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 sm:flex-none shadow-sm">
                 <PlusCircle className="mr-2 h-4 w-4" /> Hinzufügen
               </Button>
               
-              <div className="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/10 flex-1 sm:flex-none">
+              <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-xl border border-border flex-1 sm:flex-none">
                 <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-                  <SelectTrigger className="w-full sm:w-[200px] border-none bg-transparent text-white focus:ring-0 h-9">
+                  <SelectTrigger className="w-full sm:w-[200px] border-none bg-transparent text-foreground focus:ring-0 h-9">
                     <SelectValue placeholder="Großhändler" />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-white/10 text-white">
-                    <SelectItem value="none" className="text-white/50">Kein Großhändler</SelectItem>
+                  <SelectContent className="bg-card border-border text-foreground">
+                    <SelectItem value="none" className="text-muted-foreground">Kein Großhändler</SelectItem>
                     {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <div className="hidden sm:block w-[1px] h-6 bg-white/10"></div>
+                <div className="hidden sm:block w-[1px] h-6 bg-border"></div>
                 <Button 
                   onClick={() => pdfInputRef.current?.click()} 
                   disabled={isImportingPdf}
                   variant="ghost" 
-                  className="hover:bg-white/10 text-emerald-400 h-9 px-3"
+                  className="hover:bg-muted/50 text-primary h-9 px-3"
                   title="Datei für KI-Scan hochladen"
                 >
                   {isImportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
@@ -589,16 +589,16 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                   onClick={handleClipboardAiScan} 
                   disabled={isImportingClipboard}
                   variant="ghost" 
-                  className="hover:bg-white/10 text-amber-400 h-9 px-3"
+                  className="hover:bg-muted/50 text-amber-400 h-9 px-3"
                   title="Bild aus Zwischenablage scannen"
                 >
                   {isImportingClipboard ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
                 </Button>
-                <div className="w-[1px] h-6 bg-white/10"></div>
+                <div className="w-[1px] h-6 bg-border"></div>
                 <Button 
                   onClick={() => setIsDraftsDialogOpen(true)}
                   variant="ghost" 
-                  className="hover:bg-white/10 text-white/70 h-9 px-3"
+                  className="hover:bg-muted/50 text-muted-foreground h-9 px-3"
                   title="KI Entwürfe öffnen"
                 >
                   <FileText className="h-4 w-4" />
@@ -607,7 +607,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
               <input type="file" ref={pdfInputRef} onChange={handlePdfImport} accept="application/pdf,image/*" className="hidden" />
               <input type="file" ref={articleImageInputRef} onChange={handleArticleImageUpload} accept="image/*" className="hidden" />
 
-              <div className="flex items-center gap-3 bg-white/5 p-1 px-3 rounded-xl border border-white/10">
+              <div className="flex items-center gap-3 bg-muted/30 p-1 px-3 rounded-xl border border-border">
                 <Checkbox 
                   id="sync-edit-toggle" 
                   checked={isSyncEditing} 
@@ -620,7 +620,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                 <Button 
                   onClick={handleSaveBatch} 
                   disabled={isSavingBatch}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1 sm:flex-none ml-auto"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground flex-1 sm:flex-none ml-auto"
                 >
                   {isSavingBatch ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Edit3 className="mr-2 h-4 w-4" />}
                   Speichern
@@ -628,36 +628,36 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
               )}
 
               {selectedArticleIds.size > 0 && (
-                <Button variant="destructive" onClick={() => setItemsPendingBulkDelete(Array.from(selectedArticleIds))} className="bg-red-500/20 text-red-400 border-red-500/30 rounded-xl flex-1 sm:flex-none">
+                <Button variant="destructive" onClick={() => setItemsPendingBulkDelete(Array.from(selectedArticleIds))} className="bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20 rounded-xl flex-1 sm:flex-none">
                     <Trash2 className="mr-2 h-4 w-4" /> ({selectedArticleIds.size})
                 </Button>
               )}
             </div>
 
-            <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.01] flex-1">
+            <div className="border border-border rounded-2xl overflow-hidden bg-muted/10 flex-1">
               <ScrollArea className="h-full">
                 <Table>
-                    <TableHeader className="bg-white/[0.03] sticky top-0 z-10">
-                        <TableRow className="border-white/5 hover:bg-transparent">
+                    <TableHeader className="bg-muted/30 sticky top-0 z-10">
+                        <TableRow className="border-border hover:bg-transparent">
                             <TableHead className="w-12 text-center"><Checkbox checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}/></TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
-                            <TableHead className="text-white/40 font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
-                            <TableHead className="text-right text-white/40 font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
+                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
+                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
+                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
+                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
+                            <TableHead className="text-right text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {localArticles.map(article => (
                           deletingArticleId === article.id ? (
-                            <TableRow key={article.id} className="border-red-500/30 bg-red-950/20">
+                            <TableRow key={article.id} className="border-destructive/30 bg-destructive/10">
                               <TableCell colSpan={6} className="p-2">
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-2">
                                   <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-red-500/20 text-red-400 border border-red-500/30">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-destructive/20 text-destructive border border-destructive/30">
                                       <Trash2 size={16} />
                                     </div>
-                                    <span className="text-sm font-semibold text-red-300 truncate">
+                                    <span className="text-sm font-semibold text-destructive/80 truncate">
                                       "{article.name}" wirklich löschen?
                                     </span>
                                   </div>
@@ -672,20 +672,20 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                          setSelectedArticleIds(nextSelected);
                                        }
                                        impactMedium();
-                                    }} className="bg-red-500 hover:bg-red-400 text-white font-bold h-9">Löschen</Button>
-                                    <Button variant="ghost" onClick={() => setDeletingArticleId(null)} className="text-white/50 hover:text-white h-9 bg-white/5">Abbrechen</Button>
+                                    }} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold h-9">Löschen</Button>
+                                    <Button variant="ghost" onClick={() => setDeletingArticleId(null)} className="text-muted-foreground hover:text-foreground h-9 bg-muted/50">Abbrechen</Button>
                                   </div>
                                 </div>
                               </TableCell>
                             </TableRow>
                           ) : (
-                            <TableRow key={article.id} className="border-white/5 hover:bg-white/[0.03] group transition-colors">
+                            <TableRow key={article.id} className="border-border hover:bg-muted/30 group transition-colors">
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
-                                <TableCell className="font-bold text-white/80 p-2">
+                                <TableCell className="font-bold text-foreground p-2">
                                   <div className="flex flex-col gap-1.5">
                                     <div className="flex items-center gap-2">
                                      {article.imageUrl && (
-                                       <div className="w-8 h-8 rounded-md border border-white/10 shrink-0 bg-white overflow-hidden flex items-center justify-center">
+                                       <div className="w-8 h-8 rounded-md border border-border shrink-0 bg-background overflow-hidden flex items-center justify-center">
                                          <img src={article.imageUrl} alt="" className="w-full h-full object-contain" />
                                        </div>
                                      )}
@@ -705,20 +705,20 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                           e.target.style.height = e.target.scrollHeight + 'px';
                                           handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
                                         }}
-                                        className="w-full bg-white/5 border border-white/10 min-h-[40px] py-2 px-3 rounded-lg text-sm text-white focus:border-emerald-500/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
+                                        className="w-full bg-background/50 border border-border min-h-[40px] py-2 px-3 rounded-lg text-sm text-foreground focus:border-primary/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
                                         style={{ fieldSizing: 'content' } as React.CSSProperties}
                                       />
                                     </div>
                                     
                                     {/* Actions for tablet/mobile - visible below article name */}
                                     <div className="flex xl:hidden items-center gap-2 ml-1 sm:ml-10">
-                                        <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-white/40 hover:text-emerald-400 bg-white/5 hover:bg-emerald-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                        <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
                                           <ImagePlus size={12}/> Bild
                                         </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handlePasteArticleImage(article.id)} className="h-8 px-2 text-white/40 hover:text-emerald-400 bg-white/5 hover:bg-emerald-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                        <Button variant="ghost" size="sm" onClick={() => handlePasteArticleImage(article.id)} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
                                           <ClipboardPaste size={12}/> Einfügen
                                         </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => setDeletingArticleId(article.id)} className="h-8 px-2 text-white/40 hover:text-red-400 bg-white/5 hover:bg-red-500/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 ml-auto sm:ml-0">
+                                        <Button variant="ghost" size="sm" onClick={() => setDeletingArticleId(article.id)} className="h-8 px-2 text-muted-foreground hover:text-destructive bg-muted/30 hover:bg-destructive/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 ml-auto sm:ml-0">
                                           <Trash2 size={12}/> Löschen
                                         </Button>
                                     </div>
@@ -730,7 +730,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                       ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
                                       value={article.articleNumber || ''}
                                       onChange={(e) => handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                                      className="w-full bg-white/5 border border-white/10 h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-emerald-400 focus:border-emerald-500/50 outline-none transition-all"
+                                      className="w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-primary focus:border-primary/50 outline-none transition-all"
                                     />
                                     {article.articleNumber && (
                                       <button
@@ -741,7 +741,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                           navigator.clipboard.writeText(article.articleNumber || '');
                                           toast({ title: 'Kopiert', description: 'Artikelnummer in die Zwischenablage kopiert.' });
                                         }}
-                                        className="absolute right-1 text-white/30 hover:text-white/70 transition-colors p-1.5 rounded-md hover:bg-white/10"
+                                        className="absolute right-1 text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
                                         title="Artikelnummer kopieren"
                                       >
                                         <Copy size={14} />
@@ -749,30 +749,30 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                     )}
                                   </div>
                                 </TableCell>
-                                <TableCell className="hidden md:table-cell text-white/60 text-xs font-medium p-2">
+                                <TableCell className="hidden md:table-cell text-muted-foreground text-xs font-medium p-2">
                                   <input 
                                     ref={el => { if (el) inputRefs.current[`${article.id}-unit`] = el; }}
                                     value={article.unit || ''}
                                     onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value, e.target.selectionStart || 0)}
-                                    className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white/70 focus:border-emerald-500/50 outline-none transition-all"
+                                    className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all"
                                   />
                                 </TableCell>
-                                <TableCell className="hidden lg:table-cell text-white/60 text-xs p-2">
+                                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs p-2">
                                   <Select value={article.supplierId || 'none'} onValueChange={(val) => handleUpdateLocalArticle(article.id, 'supplierId', val === 'none' ? '' : val)}>
-                                    <SelectTrigger className="w-full bg-white/5 border border-white/10 h-10 px-3 rounded-lg text-sm text-white/70 focus:border-emerald-500/50 outline-none transition-all">
+                                    <SelectTrigger className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all">
                                       <SelectValue placeholder="-" />
                                     </SelectTrigger>
-                                    <SelectContent className="bg-gray-900 border-white/10 text-white">
-                                      <SelectItem value="none" className="text-white/50">-</SelectItem>
+                                    <SelectContent className="bg-card border-border text-foreground">
+                                      <SelectItem value="none" className="text-muted-foreground">-</SelectItem>
                                       {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
                                 <TableCell className="text-right p-2 hidden xl:table-cell">
                                     <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild hochladen"><ImagePlus size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-white/50 hover:text-emerald-400" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-white/50 hover:text-red-400"><Trash2 size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild hochladen"><ImagePlus size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
+                                        <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive"><Trash2 size={14}/></Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -780,52 +780,52 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                         ))}
                     </TableBody>
                 </Table>
-                {initialArticles.length === 0 && <div className="py-20 text-center text-white/50 font-medium">Keine Artikel vorhanden.</div>}
+                {initialArticles.length === 0 && <div className="py-20 text-center text-muted-foreground font-medium">Keine Artikel vorhanden.</div>}
               </ScrollArea>
             </div>
           </div>
       </div>
 
       <Dialog open={isArticleFormDialogOpen} onOpenChange={setIsArticleFormDialogOpen}>
-        <DialogContent className="glass-card bg-gray-900/90 border-white/10 text-white">
-          <DialogHeader><DialogTitle className="text-xl font-bold flex items-center gap-2"><PackagePlus size={20} className="text-emerald-400" /> {editingArticle ? 'Bearbeiten' : 'Neu'}</DialogTitle></DialogHeader>
+        <DialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl">
+          <DialogHeader><DialogTitle className="text-xl font-bold flex items-center gap-2"><PackagePlus size={20} className="text-primary" /> {editingArticle ? 'Bearbeiten' : 'Neu'}</DialogTitle></DialogHeader>
           <form onSubmit={handleArticleFormSubmit} className="space-y-4 py-4">
-            <div className="space-y-2"><Label className="text-white/40 text-xs uppercase font-bold tracking-widest ml-1">Bezeichnung</Label><Input name="name" value={articleFormData.name} onChange={(e) => setArticleFormData({...articleFormData, name: e.target.value})} className="glass-input h-12" required /></div>
+            <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Bezeichnung</Label><Input name="name" value={articleFormData.name} onChange={(e) => setArticleFormData({...articleFormData, name: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
             <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label className="text-white/40 text-xs uppercase font-bold tracking-widest ml-1">Art-Nr.</Label><Input name="articleNumber" value={articleFormData.articleNumber} onChange={(e) => setArticleFormData({...articleFormData, articleNumber: e.target.value})} className="glass-input h-12" required /></div>
-                <div className="space-y-2"><Label className="text-white/40 text-xs uppercase font-bold tracking-widest ml-1">Einheit</Label><Input name="unit" value={articleFormData.unit} onChange={(e) => setArticleFormData({...articleFormData, unit: e.target.value})} className="glass-input h-12" required /></div>
+                <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Art-Nr.</Label><Input name="articleNumber" value={articleFormData.articleNumber} onChange={(e) => setArticleFormData({...articleFormData, articleNumber: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
+                <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Einheit</Label><Input name="unit" value={articleFormData.unit} onChange={(e) => setArticleFormData({...articleFormData, unit: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
             </div>
             <div className="space-y-2">
-              <Label className="text-white/40 text-xs uppercase font-bold tracking-widest ml-1">Großhändler</Label>
+              <Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Großhändler</Label>
               <Select value={articleFormData.supplierId || 'none'} onValueChange={(val) => setArticleFormData({...articleFormData, supplierId: val === 'none' ? undefined : val})}>
-                <SelectTrigger className="w-full glass-input h-12">
+                <SelectTrigger className="w-full bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12">
                   <SelectValue placeholder="Kein Großhändler" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-900 border-white/10 text-white">
-                  <SelectItem value="none" className="text-white/50">Kein Großhändler</SelectItem>
+                <SelectContent className="bg-card border-border text-foreground">
+                  <SelectItem value="none" className="text-muted-foreground">Kein Großhändler</SelectItem>
                   {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter className="pt-6"><Button variant="ghost" type="button" onClick={() => setIsArticleFormDialogOpen(false)} className="text-white/50">Abbrechen</Button><Button type="submit" className="btn-primary px-10">Speichern</Button></DialogFooter>
+            <DialogFooter className="pt-6"><Button variant="ghost" type="button" onClick={() => setIsArticleFormDialogOpen(false)} className="text-muted-foreground">Abbrechen</Button><Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90 px-10">Speichern</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={itemsPendingBulkDelete.length > 0} onOpenChange={(open) => { if (!open) setItemsPendingBulkDelete([]); }}>
-        <AlertDialogContent className="glass-card bg-gray-900/90 border-white/10 text-white text-center">
-            <AlertDialogHeader><AlertDialogTitle className="text-2xl font-bold text-red-400 mx-auto">Artikel löschen?</AlertDialogTitle>
-            <p className="text-white/50 text-sm mt-2">{itemsPendingBulkDelete.length} Artikel markiert zur Löschung.</p>
+        <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl text-center">
+            <AlertDialogHeader><AlertDialogTitle className="text-2xl font-bold text-destructive mx-auto">Artikel löschen?</AlertDialogTitle>
+            <p className="text-muted-foreground text-sm mt-2">{itemsPendingBulkDelete.length} Artikel markiert zur Löschung.</p>
             </AlertDialogHeader>
             <AlertDialogFooter className="mt-6 flex-col sm:flex-row gap-3">
-                <AlertDialogCancel onClick={() => setItemsPendingBulkDelete([])} className="bg-white/5 border-white/10 text-white rounded-xl h-12">Abbrechen</AlertDialogCancel>
+                <AlertDialogCancel onClick={() => setItemsPendingBulkDelete([])} className="bg-muted border-border text-foreground rounded-xl h-12">Abbrechen</AlertDialogCancel>
                 <AlertDialogAction onClick={() => { 
                   onDeleteArticles(itemsPendingBulkDelete); 
                   setLocalArticles(prev => prev.filter(a => !itemsPendingBulkDelete.includes(a.id)));
                   setItemsPendingBulkDelete([]); 
                   setSelectedArticleIds(new Set()); 
                   impactMedium(); 
-                }} className="bg-red-500 hover:bg-red-600 text-white rounded-xl h-12 font-bold px-10">Löschen</AlertDialogAction>
+                }} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl h-12 font-bold px-10">Löschen</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

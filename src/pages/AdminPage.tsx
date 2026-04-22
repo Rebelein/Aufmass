@@ -319,25 +319,25 @@ const AdminPage = () => {
   const renderAdminActions = (category: Category, { isFirst, isLast }: { isFirst: boolean; isLast: boolean }) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10 rounded-md">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md">
           <MoreVertical size={16} />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 bg-gray-900 border-white/10 text-white shadow-xl">
-        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst} className="hover:bg-white/10 cursor-pointer focus:bg-white/10">
-          <ArrowUp size={14} className="mr-2 text-white/50" /> Nach oben
+      <DropdownMenuContent align="end" className="w-48 bg-popover border-border text-foreground shadow-xl">
+        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'up')} disabled={isFirst} className="hover:bg-muted cursor-pointer focus:bg-muted">
+          <ArrowUp size={14} className="mr-2 text-muted-foreground" /> Nach oben
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast} className="hover:bg-white/10 cursor-pointer focus:bg-white/10">
-          <ArrowDown size={14} className="mr-2 text-white/50" /> Nach unten
+        <DropdownMenuItem onClick={() => handleMoveCategory(category.id, 'down')} disabled={isLast} className="hover:bg-muted cursor-pointer focus:bg-muted">
+          <ArrowDown size={14} className="mr-2 text-muted-foreground" /> Nach unten
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-white/10" />
-        <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); setExpandedCategories(prev => new Set(prev).add(category.id)); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-orange-400 focus:text-orange-300">
+        <DropdownMenuSeparator className="bg-muted" />
+        <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); setExpandedCategories(prev => new Set(prev).add(category.id)); }} className="hover:bg-muted cursor-pointer focus:bg-muted text-orange-400 focus:text-orange-300">
           <PackagePlus size={14} className="mr-2" /> Unterkategorie
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="hover:bg-white/10 cursor-pointer focus:bg-white/10 text-blue-400 focus:text-blue-300">
+        <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="hover:bg-muted cursor-pointer focus:bg-muted text-blue-400 focus:text-blue-300">
           <Edit3 size={14} className="mr-2" /> Bearbeiten
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuSeparator className="bg-muted" />
         <DropdownMenuItem onClick={() => setDeletingCategoryId(category.id)} className="hover:bg-red-500/20 cursor-pointer focus:bg-red-500/20 text-red-400 focus:text-red-300">
           <Trash2 size={14} className="mr-2" /> Löschen
         </DropdownMenuItem>
@@ -447,25 +447,25 @@ const AdminPage = () => {
 
           {/* Mobile Katalog Sheet - triggered from Header burger */}
           <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
-            <SheetContent side="left" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05)] flex flex-col p-0">
+            <SheetContent side="left" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-border bg-background backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05)] flex flex-col p-0">
               {/* Dummy button to catch focus and prevent mobile keyboard from opening */}
               <button autoFocus className="sr-only" aria-hidden="true" />
-              <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+              <SheetHeader className="p-6 pb-4 border-b border-border shrink-0">
                 <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                   <BookMarked size={20} className="text-emerald-400" /> Katalog
                 </SheetTitle>
               </SheetHeader>
               
               <div className="overflow-y-auto flex-1 flex flex-col">
-                <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0">
+                <div className="p-4 border-b border-border bg-card shrink-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 mb-2.5 flex items-center gap-2">
                     <ListPlus size={14} /> Hauptgruppen
                   </p>
                   <div className="flex gap-2">
                     <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
-                      placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
+                      placeholder="Neue Gruppe…" className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-9 text-xs flex-1 min-w-0"
                       onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
-                    <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
+                    <Button onClick={handleAddMainCategory} className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md h-9 w-9 p-0 shrink-0">
                       <PlusCircle size={16} />
                     </Button>
                   </div>
@@ -497,16 +497,16 @@ const AdminPage = () => {
               </div>
               
               {/* Bottom: KI + Stammdaten inside Sheet */}
-              <div className="p-4 border-t border-white/10 bg-background space-y-3 shrink-0 flex flex-col">
+              <div className="p-4 border-t border-border bg-background space-y-3 shrink-0 flex flex-col">
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5 mb-2">
                     <Sparkles size={10} className="text-emerald-400" /> KI-Management
                   </p>
                   <div className="space-y-2">
                     <div onClick={() => { setIsDraftsDialogOpen(true); setIsCategorySheetOpen(false); }}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
+                      className="p-3 rounded-xl bg-card border border-border cursor-pointer hover:bg-muted transition-all group">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                        <span className="text-xs font-semibold text-accent-foreground group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
                         <div className="flex items-center gap-1.5">
                           {importDrafts.filter(d => d.status === 'processing').length > 0 && (
                             <Badge variant="outline" className="text-[10px] px-2 py-0 border bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse">
@@ -517,24 +517,24 @@ const AdminPage = () => {
                           <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
                             importDrafts.some(d => d.status === 'ready_for_review')
                               ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                              : "bg-transparent text-white/40 border-white/10")}>
+                              : "bg-transparent text-muted-foreground border-border")}>
                             {importDrafts.filter(d => d.status === 'ready_for_review').length}
                           </Badge>
                         </div>
                       </div>
                     </div>
                     <div onClick={() => fileInputRef.current?.click()}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group flex items-center gap-2">
+                      className="p-3 rounded-xl bg-card border border-border cursor-pointer hover:bg-muted transition-all group flex items-center gap-2">
                       <FileUp size={14} className="text-emerald-400" />
-                      <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">CSV Import</span>
+                      <span className="text-xs font-semibold text-accent-foreground group-hover:text-emerald-400 transition-colors">CSV Import</span>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5 mb-2">
                     <Settings2 size={10} className="text-teal-400" /> Stammdaten
                   </p>
-                  <Button onClick={() => { setIsSupplierManagementDialogOpen(true); setIsCategorySheetOpen(false); }} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 justify-start gap-2 h-9 text-xs">
+                  <Button onClick={() => { setIsSupplierManagementDialogOpen(true); setIsCategorySheetOpen(false); }} className="w-full bg-card hover:bg-muted border border-border hover:border-input text-accent-foreground justify-start gap-2 h-9 text-xs">
                     <FolderPlus size={14} className="text-teal-400 shrink-0" />
                     Großhändler / Lieferanten
                   </Button>
@@ -550,26 +550,26 @@ const AdminPage = () => {
             
             {/* Drawer: KATEGORIEN + KI */}
             <aside className={cn(
-              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
+              "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-border bg-background backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
             )}>
               {/* Resize handle */}
               <div
                 className="absolute top-0 bottom-0 right-0 w-1.5 cursor-col-resize group z-30 hover:bg-emerald-500/30 active:bg-emerald-500/50 transition-colors -mr-0.5"
                 onMouseDown={handleSidebarMouseDown}
               >
-                <div className="absolute top-1/2 left-0.5 -translate-y-1/2 w-0.5 h-12 rounded-full bg-white/10 group-hover:bg-emerald-400/60 transition-colors" />
+                <div className="absolute top-1/2 left-0.5 -translate-y-1/2 w-0.5 h-12 rounded-full bg-muted group-hover:bg-emerald-400/60 transition-colors" />
               </div>
 
               {/* Top 75%: Hauptgruppen */}
               <div className="flex-[3] min-h-0 flex flex-col relative overflow-hidden">
-                <div className="px-4 pt-4 pb-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
+                <div className="px-4 pt-4 pb-3 border-b border-border bg-card shrink-0 space-y-3">
                   {/* Katalog-Tab-Switcher (Deaktiviert für reinen "Eigener Katalog" Modus) */}
                   {catalogSource === 'own' && (
                     <div className="flex gap-2">
                       <Input value={newMainCategoryName} onChange={(e) => setNewMainCategoryName(e.target.value)}
-                        placeholder="Neue Gruppe…" className="glass-input h-9 text-xs flex-1 min-w-0"
+                        placeholder="Neue Gruppe…" className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-9 text-xs flex-1 min-w-0"
                         onKeyDown={e => { if (e.key === 'Enter') handleAddMainCategory(); }} />
-                      <Button onClick={handleAddMainCategory} className="glass-button h-9 w-9 p-0 shrink-0">
+                      <Button onClick={handleAddMainCategory} className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md h-9 w-9 p-0 shrink-0">
                         <PlusCircle size={16} />
                       </Button>
                     </div>
@@ -605,16 +605,16 @@ const AdminPage = () => {
               </div>
 
               {/* Bottom 25%: KI + Stammdaten */}
-              <div className="flex-[1] min-h-[140px] border-t border-white/10 bg-background p-4 space-y-3 shrink-0 flex flex-col overflow-y-auto">
+              <div className="flex-[1] min-h-[140px] border-t border-border bg-background p-4 space-y-3 shrink-0 flex flex-col overflow-y-auto">
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5 mb-2">
                     <Sparkles size={10} className="text-emerald-400" /> KI-Management
                   </p>
                   <div className="space-y-2">
                     <div onClick={() => setIsDraftsDialogOpen(true)}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group">
+                      className="p-3 rounded-xl bg-card border border-border cursor-pointer hover:bg-muted transition-all group">
                       <div className="flex justify-between items-center">
-                        <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
+                        <span className="text-xs font-semibold text-accent-foreground group-hover:text-emerald-400 transition-colors">KI-Scans prüfen</span>
                         <div className="flex items-center gap-1.5">
                           {importDrafts.filter(d => d.status === 'processing').length > 0 && (
                             <Badge variant="outline" className="text-[10px] px-2 py-0 border bg-amber-500/20 text-amber-400 border-amber-500/30 animate-pulse">
@@ -625,24 +625,24 @@ const AdminPage = () => {
                           <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border",
                             importDrafts.some(d => d.status === 'ready_for_review')
                               ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                              : "bg-transparent text-white/40 border-white/10")}>
+                              : "bg-transparent text-muted-foreground border-border")}>
                             {importDrafts.filter(d => d.status === 'ready_for_review').length}
                           </Badge>
                         </div>
                       </div>
                     </div>
                     <div onClick={() => fileInputRef.current?.click()}
-                      className="p-3 rounded-xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-all group flex items-center gap-2">
+                      className="p-3 rounded-xl bg-card border border-border cursor-pointer hover:bg-muted transition-all group flex items-center gap-2">
                       <FileUp size={14} className="text-emerald-400" />
-                      <span className="text-xs font-semibold text-white/80 group-hover:text-emerald-400 transition-colors">CSV Import</span>
+                      <span className="text-xs font-semibold text-accent-foreground group-hover:text-emerald-400 transition-colors">CSV Import</span>
                     </div>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/30 flex items-center gap-1.5 mb-2">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5 mb-2">
                     <Settings2 size={10} className="text-teal-400" /> Stammdaten
                   </p>
-                  <Button onClick={() => setIsSupplierManagementDialogOpen(true)} className="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 justify-start gap-2 h-9 text-xs">
+                  <Button onClick={() => setIsSupplierManagementDialogOpen(true)} className="w-full bg-card hover:bg-muted border border-border hover:border-input text-accent-foreground justify-start gap-2 h-9 text-xs">
                     <FolderPlus size={14} className="text-teal-400 shrink-0" />
                     Großhändler / Lieferanten
                   </Button>
@@ -662,14 +662,14 @@ const AdminPage = () => {
                 if (!activeCategory) {
                   return (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                      <div className="w-20 h-20 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
-                        <Package size={36} className={catalogSource === 'wholesale' ? 'text-amber-500/20' : 'text-white/15'} />
+                      <div className="w-20 h-20 rounded-2xl bg-card border border-border flex items-center justify-center">
+                        <Package size={36} className={catalogSource === 'wholesale' ? 'text-amber-500/20' : 'text-muted-foreground'} />
                       </div>
                       <div className="space-y-1.5">
-                        <h3 className="text-lg font-semibold text-white/50">
+                        <h3 className="text-lg font-semibold text-muted-foreground">
                           {catalogSource === 'wholesale' ? 'Großhändler-Katalog' : 'Katalog Leerlauf'}
                         </h3>
-                        <p className="text-sm text-white/30 max-w-[300px] leading-relaxed">
+                        <p className="text-sm text-muted-foreground max-w-[300px] leading-relaxed">
                           {catalogSource === 'wholesale'
                             ? 'Wähle eine Kategorie aus dem Großhändler-Katalog, um Artikel zu durchsuchen und in den eigenen Katalog zu übernehmen.'
                             : 'Wähle links im Baummenü eine Haupt- oder Untergruppe aus, um Artikel zu verwalten.'}
@@ -713,14 +713,14 @@ const AdminPage = () => {
       {/* ===== DIALOGS ===== */}
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
+        <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-bold text-red-400">Element löschen?</AlertDialogTitle>
-            <p className="text-white/50">Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
+            <p className="text-muted-foreground">Dieser Vorgang kann nicht rückgängig gemacht werden.</p>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 mt-4">
-            <AlertDialogCancel className="ios-button-secondary">Abbrechen</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteItem} className="bg-red-500/90 hover:bg-red-500 text-white rounded-xl font-bold px-6">Löschen</AlertDialogAction>
+            <AlertDialogCancel className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md-secondary">Abbrechen</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteItem} className="bg-red-500/90 hover:bg-red-500 text-foreground rounded-xl font-bold px-6">Löschen</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

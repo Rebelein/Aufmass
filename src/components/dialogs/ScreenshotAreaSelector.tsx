@@ -106,7 +106,7 @@ const ScreenshotAreaSelector: React.FC<ScreenshotAreaSelectorProps> = ({ onCompl
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleDragEnd}
-            className="fixed inset-0 z-[1000] bg-black/20 cursor-crosshair touch-none"
+            className="fixed inset-0 z-[1000] bg-muted cursor-crosshair touch-none"
         >
             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-background p-3 rounded-lg shadow-lg text-foreground font-body select-none">
                 <p>Klicken und ziehen, um einen Bereich auszuwählen.</p>

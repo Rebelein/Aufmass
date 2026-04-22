@@ -122,14 +122,14 @@ const SortableCategoryItem = ({
             <button
               type="button"
               onClick={() => onConfirmDeleteCategory?.(category.id)}
-              className="px-2.5 py-1 rounded-lg bg-red-500/90 hover:bg-red-500 text-white text-xs font-bold transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-red-500/90 hover:bg-red-500 text-destructive-foreground text-xs font-bold transition-colors"
             >
               Löschen
             </button>
             <button
               type="button"
               onClick={() => onCancelDeleteCategory?.()}
-              className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-accent-foreground transition-colors"
               title="Abbrechen"
             >
               <X size={14} />
@@ -142,12 +142,12 @@ const SortableCategoryItem = ({
           className={cn(
             "flex justify-between items-center p-2.5 min-h-[44px] rounded-xl cursor-pointer transition-all duration-200 border",
             onReorderCategory ? "pl-9" : "",
-            isDeepestExpanded && "sticky top-0 z-10 bg-black/90 backdrop-blur-md border-white/10 text-white shadow-lg",
+            isDeepestExpanded && "sticky top-0 z-10 bg-background backdrop-blur-md border-border text-foreground shadow-lg",
             isSelected && !hasChildren
               ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
               : !isDeepestExpanded && isExpanded
-                ? "border-white/10 bg-white/[0.04] text-white" 
-                : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10 text-white/70 hover:text-white"
+                ? "border-border bg-muted text-foreground" 
+                : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-muted hover:border-border text-muted-foreground hover:text-accent-foreground"
           )}
           onClick={(e) => {
             if (hasChildren) {
@@ -164,14 +164,14 @@ const SortableCategoryItem = ({
               {...listeners}
               onClick={e => e.stopPropagation()}
             >
-              <GripVertical size={14} className="text-white/20 group-hover/item:text-emerald-400/70 transition-colors" />
+              <GripVertical size={14} className="text-muted-foreground group-hover/item:text-emerald-400/70 transition-colors" />
             </div>
           )}
 
           <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
             <div className={cn(
                 "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
-                isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-white/5 text-white/40 group-hover/item:bg-white/10 group-hover/item:text-white/70"
+                isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover/item:bg-muted group-hover/item:text-muted-foreground"
             )}>
                 {category.imageUrl ? (
                   <img src={category.imageUrl} alt="" className="w-full h-full object-contain p-0.5" />
@@ -189,7 +189,7 @@ const SortableCategoryItem = ({
                     if (e.key === 'Enter') onSaveEdit?.();
                     if (e.key === 'Escape') onCancelEdit?.();
                   }}
-                  className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
+                  className="flex-1 bg-muted border border-input h-7 px-2 rounded text-sm text-foreground focus:outline-none focus:border-emerald-500 w-full min-w-0"
                 />
               </div>
             ) : (
@@ -200,14 +200,14 @@ const SortableCategoryItem = ({
               </span>
             )}
             {hasChildren && (
-              <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-primary" : "text-white/20")} />
+              <ChevronRight size={14} className={cn("ml-auto shrink-0 transition-transform", isExpanded && "rotate-90", isSelected ? "text-primary" : "text-muted-foreground")} />
             )}
           </div>
 
           {inlineEditingCategoryId === category.id ? (
             <div className="shrink-0 flex items-center gap-1 ml-2" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Speichern"><Check size={16}/></button>
-               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-muted rounded text-emerald-400" title="Speichern"><Check size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelEdit?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-muted rounded text-red-400" title="Abbrechen"><X size={16}/></button>
             </div>
           ) : (
             renderActions && (
@@ -225,7 +225,7 @@ const SortableCategoryItem = ({
 
 /** A drag overlay label shown while dragging a category */
 const DragOverlayContent = ({ category }: { category: CategoryWithMeta }) => (
-  <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-500/40 bg-gray-900/95 backdrop-blur-md shadow-2xl text-white max-w-[280px]">
+  <div className="flex items-center gap-2.5 p-2.5 rounded-xl border border-emerald-500/40 bg-background backdrop-blur-md shadow-2xl text-foreground max-w-[280px]">
     <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-emerald-500/20 text-emerald-400">
       {category.hasChildren ? <FolderPlus size={14} /> : <Package size={14} />}
     </div>
@@ -277,7 +277,7 @@ const SortableSiblingGroup = ({
     if (parentId === null) {
       return (
         <div className="py-16 text-center space-y-4">
-          <p className="text-white/60 font-medium text-xs">Keine Kategorien vorhanden</p>
+          <p className="text-muted-foreground font-medium text-xs">Keine Kategorien vorhanden</p>
         </div>
       );
     }
@@ -371,9 +371,9 @@ const SortableSiblingGroup = ({
       })}
       {isAddingHere && (
         <li className="group/item mt-1 list-none">
-          <div className="flex justify-between items-center p-2.5 rounded-xl border border-white/20 bg-white/[0.08] ml-0">
+          <div className="flex justify-between items-center p-2.5 rounded-xl border border-input bg-muted ml-0">
              <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
-               <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-white/5 text-white/40">
+               <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-muted text-muted-foreground">
                   <Package size={14} />
                </div>
                <input 
@@ -385,12 +385,12 @@ const SortableSiblingGroup = ({
                    if (e.key === 'Enter') onSaveNewSubCategory?.();
                    if (e.key === 'Escape') onCancelNewSubCategory?.();
                  }}
-                 className="flex-1 bg-black/20 border border-white/20 h-7 px-2 rounded text-sm text-white focus:outline-none focus:border-emerald-500 w-full min-w-0"
+                 className="flex-1 bg-muted border border-input h-7 px-2 rounded text-sm text-foreground focus:outline-none focus:border-emerald-500 w-full min-w-0"
                />
              </div>
              <div className="flex items-center gap-1 ml-2 shrink-0" onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
-               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-emerald-400" title="Erstellen"><Check size={16}/></button>
-               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-white/10 rounded text-red-400" title="Abbrechen"><X size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onSaveNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-muted rounded text-emerald-400" title="Erstellen"><Check size={16}/></button>
+               <button type="button" onMouseDown={e => { e.preventDefault(); e.stopPropagation(); onCancelNewSubCategory?.(); }} onClick={e => e.stopPropagation()} className="p-1 hover:bg-muted rounded text-red-400" title="Abbrechen"><X size={16}/></button>
              </div>
           </div>
         </li>

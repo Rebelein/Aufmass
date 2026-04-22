@@ -16,17 +16,17 @@ export function SyncIndicator() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-2xl px-6"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-2xl px-6"
         >
-          <div className="max-w-md w-full glass-card border-white/10 p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl">
+          <div className="max-w-md w-full bg-card text-card-foreground border-border border p-8 rounded-[2rem] flex flex-col items-center text-center shadow-2xl">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/20">
-              <Database size={40} className="text-white animate-pulse" />
+              <Database size={40} className="text-primary-foreground animate-pulse" />
             </div>
             
-            <h2 className="text-2xl font-black text-white mb-2 leading-tight">
+            <h2 className="text-2xl font-black text-foreground mb-2 leading-tight">
               Datenbank initialisieren
             </h2>
-            <p className="text-white/50 text-sm mb-8">
+            <p className="text-muted-foreground text-sm mb-8">
               Wir laden den aktuellen Katalog für die Offline-Nutzung herunter. Bitte bleib kurz online.
             </p>
 
@@ -35,10 +35,10 @@ export function SyncIndicator() {
                 <span>{status.lastUpdateLabel}</span>
                 <span>{status.progress}%</span>
               </div>
-              <Progress value={status.progress} className="h-2 bg-white/5 border border-white/5" />
+              <Progress value={status.progress} className="h-2 bg-muted border border-border" />
             </div>
 
-            <div className="mt-10 flex items-center gap-2 text-white/30 text-xs italic">
+            <div className="mt-10 flex items-center gap-2 text-muted-foreground text-xs italic">
               <RefreshCw size={12} className="animate-spin" />
               Synchronisierung läuft...
             </div>

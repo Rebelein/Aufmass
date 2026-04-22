@@ -195,8 +195,8 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-[800px] h-[90vh] sm:h-[80vh] flex flex-col p-0 gap-0 ios-card border-white/10 bg-background overflow-hidden" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader className="p-4 border-b border-white/5 shrink-0 bg-white/[0.02]">
+      <DialogContent className="max-w-[95vw] w-[800px] h-[90vh] sm:h-[80vh] flex flex-col p-0 gap-0 bg-card text-card-foreground border-border shadow-sm rounded-xl border-border bg-background overflow-hidden" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader className="p-4 border-b border-border shrink-0 bg-muted">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl text-gradient-emerald">Foto / Notiz</DialogTitle>
             <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
                 variant="ghost" 
                 size="sm" 
                 onClick={handleClear}
-                className="text-white/50 hover:text-red-400 hover:bg-red-500/10 h-8 px-2"
+                className="text-muted-foreground hover:text-red-400 hover:bg-red-500/10 h-8 px-2"
                 title="Blatt leeren"
               >
                 <Trash2 size={16} className="sm:mr-2" />
@@ -215,13 +215,13 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
         </DialogHeader>
 
         {/* Toolbar */}
-        <div className="p-2 border-b border-white/5 flex items-center justify-between bg-black/20 overflow-x-auto no-scrollbar shrink-0">
+        <div className="p-2 border-b border-border flex items-center justify-between bg-muted overflow-x-auto no-scrollbar shrink-0">
           <div className="flex items-center gap-1 sm:gap-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => { setMode('draw'); impactLight(); }}
-              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'draw' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-white/60 hover:text-white hover:bg-white/10")}
+              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'draw' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
             >
               <Pen size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Stift</span>
@@ -230,13 +230,13 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="icon"
               onClick={() => { setMode('erase'); impactLight(); }}
-              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'erase' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-white/60 hover:text-white hover:bg-white/10")}
+              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'erase' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
             >
               <Eraser size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Radierer</span>
             </Button>
             
-            <div className="w-px h-6 bg-white/10 mx-1" />
+            <div className="w-px h-6 bg-muted mx-1" />
             
             <div className="flex items-center gap-1">
               {['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#000000'].map(c => (
@@ -252,14 +252,14 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               ))}
             </div>
             
-            <div className="w-px h-6 bg-white/10 mx-1" />
+            <div className="w-px h-6 bg-muted mx-1" />
             
             <Button
               variant="ghost"
               size="icon"
               onClick={handleUndo}
               disabled={history.length <= 1}
-              className="h-9 w-9 rounded-xl text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 transition-all"
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-accent-foreground hover:bg-muted disabled:opacity-30 transition-all"
               title="Rückgängig"
             >
               <Undo size={16} />
@@ -286,7 +286,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="sm"
               onClick={() => cameraInputRef.current?.click()}
-              className="h-9 px-2 sm:px-3 rounded-xl bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all border border-white/5"
+              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-all border border-border"
             >
               <Camera size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Foto machen</span>
@@ -295,7 +295,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              className="h-9 px-2 sm:px-3 rounded-xl bg-white/5 text-white/80 hover:text-white hover:bg-white/15 transition-all border border-white/5"
+              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-all border border-border"
             >
               <ImagePlus size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Hochladen</span>
@@ -323,8 +323,8 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
           />
         </div>
 
-        <DialogFooter className="p-4 border-t border-white/5 shrink-0 bg-white/[0.02] flex-row justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-white/60 hover:text-white flex-1 sm:flex-none">Abbrechen</Button>
+        <DialogFooter className="p-4 border-t border-border shrink-0 bg-muted flex-row justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-accent-foreground flex-1 sm:flex-none">Abbrechen</Button>
           <Button onClick={handleSave} className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-lg shadow-emerald-500/20 flex-1 sm:flex-none">
             <Save size={16} className="mr-2" /> Speichern
           </Button>

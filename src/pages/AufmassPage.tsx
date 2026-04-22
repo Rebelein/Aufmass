@@ -40,6 +40,12 @@ import { useSyncStatus } from '@/hooks/use-sync-status';
 import { CloudOff } from 'lucide-react';
 import { preloadCatalog } from '@/lib/catalog-storage';
 
+import { SpotlightCard } from '@/components/ui/SpotlightCard';
+import { ShinyText } from '@/components/ui/ShinyText';
+import { MotionNumber } from '@/components/ui/MotionNumber';
+import { Magnetic } from '@/components/ui/Magnetic';
+import { AnimatedBackground } from '@/components/ui/AnimatedBackground';
+
 // --- Main Page ---
 
 const AufmassPage = () => {
@@ -701,7 +707,7 @@ const AufmassPage = () => {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse">
             <Sparkles className="w-8 h-8 text-emerald-400" />
           </div>
-          <p className="text-white/50 font-medium">Projekt wird geladen...</p>
+          <p className="text-muted-foreground font-medium">Projekt wird geladen...</p>
         </div>
       </div>
     );
@@ -711,6 +717,30 @@ const AufmassPage = () => {
     initial: { opacity: 0, y: 15 },
     animate: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
     exit: { opacity: 0, y: -10, transition: { duration: 0.2 } }
+  };
+
+  const listContainerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.04
+      }
+    }
+  };
+
+  const listItemVariants = {
+    hidden: { opacity: 0, y: 15, scale: 0.98 },
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      scale: 1,
+      transition: {
+        type: "spring",
+        stiffness: 260,
+        damping: 20
+      }
+    }
   };
 
   return (
@@ -759,31 +789,31 @@ const AufmassPage = () => {
         
         {/* Drawer: KATEGORIEN */}
         <aside className={cn(
-          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-white/10 bg-black/20 backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
+          "absolute top-0 bottom-0 left-0 w-full flex flex-col border-r border-border bg-background backdrop-blur-[60px] shadow-[inset_1px_0_0_rgba(255,255,255,0.05),10px_0_30px_rgba(0,0,0,0.5)] z-20"
         )}>
           {viewMode === 'aufmass' ? (
             <>
-              <div className="p-3 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-2">
+              <div className="p-3 border-b border-border bg-card shrink-0 space-y-2">
                 {catalogSource === 'wholesale' && (
                   <p className="text-[10px] text-amber-400/70 text-center">Großhändler-Katalog aktiv</p>
                 )}
                 <div className="relative group">
-                  <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={14} />
+                  <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-muted-foreground')} size={14} />
                   <Input
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="Artikel oder Nummer suchen..."
-                    className="h-9 pl-8 pr-16 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
+                    className="h-9 pl-8 pr-16 text-xs bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md border-border group-hover:border-emerald-500/20 transition-all"
                   />
                   <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                     {searchQuery && (
-                      <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                      <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                         <CloseIcon size={12} />
                       </button>
                     )}
                     <button 
                       onClick={toggleRecording} 
-                      className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-white/30 hover:text-white hover:bg-white/10")}
+                      className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
                       title="Spracheingabe"
                     >
                       <Mic size={12} className={cn(isRecording && "animate-pulse")} />
@@ -794,7 +824,7 @@ const AufmassPage = () => {
               </div>
               {debouncedSearchQuery.trim() ? (
                 <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1">
-                  <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
+                  <p className="text-[10px] text-muted-foreground px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
                   {searchResults.slice(0, 10).map(article => {
                     const qty = getQuantityInSection(article.id);
                     const item = getItemInSection(article.id);
@@ -821,21 +851,21 @@ const AufmassPage = () => {
                           }
                           setSearchQuery('');
                         }}
-                        className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.06] transition-all text-left"
+                        className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-card transition-all text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center overflow-hidden shrink-0">
                           {article.imageUrl || cat?.imageUrl
                             ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-contain p-1" />
-                            : <Package size={12} className="text-white/15" />}
+                            : <Package size={12} className="text-muted-foreground" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-[12px] text-white/85 font-medium leading-tight truncate">{article.name}</p>
+                            <p className="text-[12px] text-accent-foreground font-medium leading-tight truncate">{article.name}</p>
                             {isFromAngebot && (
                               <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
                             )}
                           </div>
-                          <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{article.articleNumber}</p>
                         </div>
                         {qty > 0 && (
                           <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">{qty}×</span>
@@ -844,10 +874,10 @@ const AufmassPage = () => {
                     );
                   })}
                   {searchResults.length === 0 && (
-                    <p className="text-xs text-white/20 text-center py-6">Keine Treffer</p>
+                    <p className="text-xs text-muted-foreground text-center py-6">Keine Treffer</p>
                   )}
                   {searchResults.length > 10 && (
-                    <p className="text-[10px] text-white/25 text-center py-1">+{searchResults.length - 10} weitere</p>
+                    <p className="text-[10px] text-muted-foreground text-center py-1">+{searchResults.length - 10} weitere</p>
                   )}
                 </div>
               ) : (
@@ -862,7 +892,7 @@ const AufmassPage = () => {
                   />
                 </div>
               )}
-              <div className="p-3 border-t border-white/5 bg-white/[0.01] shrink-0 flex flex-col gap-1">
+              <div className="p-3 border-t border-border bg-card shrink-0 flex flex-col gap-1">
                 <Button 
                   variant="ghost" 
                   size="sm"
@@ -876,7 +906,7 @@ const AufmassPage = () => {
             </>
           ) : (
             <>
-              <div className="p-4 border-b border-white/5 bg-white/[0.02] shrink-0 space-y-3">
+              <div className="p-4 border-b border-border bg-card shrink-0 space-y-3">
                 <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
                   <BookMarked size={14} /> Projekt-Struktur
                 </h2>
@@ -899,28 +929,30 @@ const AufmassPage = () => {
                     onClick={() => setActiveSectionId(s.id)}
                     className={cn(
                       "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors", 
-                      activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
+                      activeSectionId === s.id ? "bg-muted text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-card"
                     )}
                   >
                     {s.text}
                   </button>
                 ))}
                 {sections.length === 0 && (
-                  <p className="text-xs text-white/30 text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
+                  <p className="text-xs text-muted-foreground text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
                 )}
               </div>
-              <div className="p-4 border-t border-white/5 bg-white/[0.02] shrink-0">
-                <Button onClick={() => {
-                   if (!currentProject) return;
-                   try {
-                     generateAngebotPdf({ project: currentProject, sectionItems: sections, articleItems: processedSummaryItems.filter(i => i.type === 'article') });
-                     toast({ title: "Erfolgreich", description: "PDF wurde generiert." });
-                   } catch(e) {
-                     toast({ title: "Fehler", variant: "destructive", description: "PDF Generierung fehlgeschlagen." });
-                   }
-                }} className="w-full bg-white text-black hover:bg-white/90">
-                  <FileDown size={16} className="mr-2" /> PDF exportieren
-                </Button>
+              <div className="p-4 border-t border-border bg-card shrink-0">
+                <Magnetic strength={0.1}>
+                  <Button onClick={() => {
+                     if (!currentProject) return;
+                     try {
+                       generateAngebotPdf({ project: currentProject, sectionItems: sections, articleItems: processedSummaryItems.filter(i => i.type === 'article') });
+                       toast({ title: "Erfolgreich", description: "PDF wurde generiert." });
+                     } catch(e) {
+                       toast({ title: "Fehler", variant: "destructive", description: "PDF Generierung fehlgeschlagen." });
+                     }
+                  }} className="w-full bg-primary text-primary-foreground hover:bg-accent">
+                    <FileDown size={16} className="mr-2" /> PDF exportieren
+                  </Button>
+                </Magnetic>
               </div>
             </>
           )}
@@ -928,31 +960,31 @@ const AufmassPage = () => {
       </div>
 
       {/* ===== CENTER: Main Content ===== */}
-      <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-black/10")}>
+      <div className={cn("flex-1 flex flex-col overflow-hidden z-20 min-w-0", viewMode === 'angebot' && "bg-background")}>
         {/* Page header – Unified global/local header */}
-        <header className="shrink-0 border-b border-white/10 bg-black/10 backdrop-blur-[40px] shadow-[inset_0_-1px_0_rgba(255,255,255,0.05)] relative z-30">
+        <header className="shrink-0 border-b border-border bg-background backdrop-blur-[40px] shadow-[inset_0_-1px_0_rgba(255,255,255,0.05)] relative z-30">
           <div className="flex items-center justify-between px-4 h-14 md:h-16 gap-3">
             {/* Left: back, logo + project name/edit */}
             <div className="flex items-center gap-3 min-w-0">
               <button
                 onClick={() => navigate('/')}
-                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all shrink-0"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all shrink-0"
               >
                 <ChevronLeft size={20} />
               </button>
               
               <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="lg:hidden p-1.5 shrink-0 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all">
+                  <Button variant="ghost" size="sm" className="lg:hidden p-1.5 shrink-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                     <Menu size={20} className="text-emerald-400" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" onOpenAutoFocus={(e) => { e.preventDefault(); }} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
+                <SheetContent side="left" onOpenAutoFocus={(e) => { e.preventDefault(); }} className="w-[85vw] sm:w-[400px] rounded-r-3xl border-r border-border bg-background backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
                   {/* Dummy button to catch focus and prevent mobile keyboard from opening */}
                   <button autoFocus className="sr-only" aria-hidden="true" />
                   {viewMode === 'aufmass' ? (
                     <>
-                      <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0">
+                      <SheetHeader className="p-5 pb-3 border-b border-border shrink-0">
                         <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
                           <BookMarked size={20} className="text-emerald-400" /> Artikelkatalog
                         </SheetTitle>
@@ -960,22 +992,22 @@ const AufmassPage = () => {
                           <p className="text-[10px] text-amber-400/70 text-left mt-2">Großhändler-Katalog aktiv</p>
                         )}
                         <div className="relative group mt-3">
-                          <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-white/30')} size={14} />
+                          <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-300', searchQuery ? 'text-emerald-400' : 'text-muted-foreground')} size={14} />
                           <Input
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             placeholder="Artikel oder Nummer suchen..."
-                            className="h-9 pl-8 pr-16 text-xs glass-input border-white/5 group-hover:border-emerald-500/20 transition-all"
+                            className="h-9 pl-8 pr-16 text-xs bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md border-border group-hover:border-emerald-500/20 transition-all"
                           />
                           <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                             {searchQuery && (
-                              <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-white/30 hover:text-white hover:bg-white/10 transition-all">
+                              <button onClick={() => { setSearchQuery(''); impactLight(); }} className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
                                 <CloseIcon size={12} />
                               </button>
                             )}
                             <button 
                               onClick={toggleRecording} 
-                              className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-white/30 hover:text-white hover:bg-white/10")}
+                              className={cn("p-1.5 rounded transition-all relative", isRecording ? "text-emerald-400 bg-emerald-500/20" : "text-muted-foreground hover:text-foreground hover:bg-muted")}
                               title="Spracheingabe"
                             >
                               <Mic size={12} className={cn(isRecording && "animate-pulse")} />
@@ -986,7 +1018,7 @@ const AufmassPage = () => {
                       </SheetHeader>
                       {debouncedSearchQuery.trim() ? (
                         <div className="flex-1 overflow-y-auto py-2 px-4 space-y-1">
-                          <p className="text-[10px] text-white/30 px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
+                          <p className="text-[10px] text-muted-foreground px-2 mb-1 uppercase tracking-wider">Suchergebnisse</p>
                           {searchResults.slice(0, 10).map(article => {
                             const qty = getQuantityInSection(article.id);
                             const item = getItemInSection(article.id);
@@ -1013,21 +1045,21 @@ const AufmassPage = () => {
                                   setSearchQuery('');
                                   setIsCategorySheetOpen(false);
                                 }}
-                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.06] transition-all text-left"
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-card transition-all text-left"
                               >
-                                <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                                <div className="w-8 h-8 rounded-lg bg-card border border-border flex items-center justify-center overflow-hidden shrink-0">
                                   {article.imageUrl || cat?.imageUrl
                                     ? <img src={article.imageUrl || cat?.imageUrl} alt="" className="w-full h-full object-contain p-1" />
-                                    : <Package size={12} className="text-white/15" />}
+                                    : <Package size={12} className="text-muted-foreground" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-[12px] text-white/85 font-medium leading-tight truncate">{article.name}</p>
+                                    <p className="text-[12px] text-accent-foreground font-medium leading-tight truncate">{article.name}</p>
                                     {isFromAngebot && (
                                       <span className="shrink-0 text-[8px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-white/30 font-mono truncate">{article.articleNumber}</p>
+                                  <p className="text-[10px] text-muted-foreground font-mono truncate">{article.articleNumber}</p>
                                 </div>
                                 {qty > 0 && (
                                   <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">{qty}×</span>
@@ -1036,10 +1068,10 @@ const AufmassPage = () => {
                             );
                           })}
                           {searchResults.length === 0 && (
-                            <p className="text-xs text-white/20 text-center py-6">Keine Treffer</p>
+                            <p className="text-xs text-muted-foreground text-center py-6">Keine Treffer</p>
                           )}
                           {searchResults.length > 10 && (
-                            <p className="text-[10px] text-white/25 text-center py-1">+{searchResults.length - 10} weitere</p>
+                            <p className="text-[10px] text-muted-foreground text-center py-1">+{searchResults.length - 10} weitere</p>
                           )}
                         </div>
                       ) : (
@@ -1056,7 +1088,7 @@ const AufmassPage = () => {
                           </div>
                         </div>
                       )}
-                      <div className="p-4 border-t border-white/5 bg-white/[0.02] flex flex-col gap-2">
+                      <div className="p-4 border-t border-border bg-card flex flex-col gap-2">
                         <Button 
                           variant="ghost" 
                           onClick={() => { setActiveCategoryId(null); setExpandedCategories(new Set()); setSearchQuery(''); setIsCategorySheetOpen(false); }}
@@ -1069,7 +1101,7 @@ const AufmassPage = () => {
                     </>
                   ) : (
                     <>
-                      <SheetHeader className="p-5 pb-3 border-b border-white/5 shrink-0 space-y-3">
+                      <SheetHeader className="p-5 pb-3 border-b border-border shrink-0 space-y-3">
                         <SheetTitle className="text-left text-xl text-emerald-400 flex items-center gap-2">
                           <BookMarked size={20} className="text-emerald-400" /> Projekt-Struktur
                         </SheetTitle>
@@ -1092,14 +1124,14 @@ const AufmassPage = () => {
                             onClick={() => { setActiveSectionId(s.id); setIsCategorySheetOpen(false); }}
                             className={cn(
                               "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors", 
-                              activeSectionId === s.id ? "bg-white/10 text-white font-medium shadow-sm" : "text-white/70 hover:text-white hover:bg-white/5"
+                              activeSectionId === s.id ? "bg-muted text-foreground font-medium shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-card"
                             )}
                           >
                             {s.text}
                           </button>
                         ))}
                         {sections.length === 0 && (
-                          <p className="text-xs text-white/30 text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
+                          <p className="text-xs text-muted-foreground text-center mt-4 px-4 leading-relaxed">Noch kein Abschnitt vorhanden.</p>
                         )}
                       </div>
                     </>
@@ -1108,12 +1140,12 @@ const AufmassPage = () => {
               </Sheet>
               
               <div className="hidden sm:flex w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 items-center justify-center shadow-md shrink-0">
-                <BookMarked size={15} className="text-white" />
+                <BookMarked size={15} className="text-foreground" />
               </div>
               
               <div className="min-w-0 flex flex-col">
-                <div className="flex items-center gap-1.5 cursor-pointer hover:bg-white/5 p-1 -ml-1 rounded-md" onClick={handleOpenEditProject}>
-                  <h1 className="font-semibold text-white text-sm md:text-base truncate">{currentProject.name}</h1>
+                <div className="flex items-center gap-1.5 cursor-pointer hover:bg-card p-1 -ml-1 rounded-md" onClick={handleOpenEditProject}>
+                  <ShinyText text={currentProject.name || ''} className="font-semibold text-foreground text-sm md:text-base truncate" />
                   <Edit3 size={14} className="text-emerald-400 shrink-0" />
                   {isOffline && (
                     <span className="shrink-0 flex items-center gap-1 bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ml-1">
@@ -1121,22 +1153,24 @@ const AufmassPage = () => {
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-white/40 leading-tight">{totalArticleCount} Artikel verplant</p>
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  <MotionNumber value={totalArticleCount} /> Artikel verplant
+                </p>
               </div>
             </div>
 
             {/* Center: Mode Switch (only visible if planning, desktop) */}
             {currentProject.status === 'planning' && (
-              <div className="hidden xl:flex items-center bg-white/5 p-1 rounded-xl mx-auto absolute left-1/2 -translate-x-1/2">
+              <div className="hidden xl:flex items-center bg-card p-1 rounded-xl mx-auto absolute left-1/2 -translate-x-1/2">
                 <button 
                   onClick={() => setViewMode('angebot')}
-                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'angebot' ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white")}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'angebot' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
                   📸 Struktur & Notizen
                 </button>
                 <button 
                   onClick={() => setViewMode('aufmass')}
-                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'aufmass' ? "bg-white text-black shadow-sm" : "text-white/60 hover:text-white")}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", viewMode === 'aufmass' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
                   🛒 Material
                 </button>
@@ -1163,7 +1197,7 @@ const AufmassPage = () => {
                   onClick={() => preloadCatalog(true)}
                   className={cn(
                     "h-8 w-8 rounded-full transition-all relative",
-                    status.isVisible && !status.isInitialSync ? "text-emerald-400 bg-emerald-500/10" : "text-white/40 hover:text-emerald-400 hover:bg-white/10"
+                    status.isVisible && !status.isInitialSync ? "text-emerald-400 bg-emerald-500/10" : "text-muted-foreground hover:text-emerald-400 hover:bg-muted"
                   )}
                   title="Datenbank manuell synchronisieren"
                 >
@@ -1195,7 +1229,7 @@ const AufmassPage = () => {
                     "h-8 px-2.5 gap-1.5 transition-all border",
                     isCopyMode 
                       ? "bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30 shadow-inner" 
-                      : "text-white/50 hover:text-white hover:bg-white/10 border-transparent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"
                   )}
                   title="Kopiermodus (Tablet Split-Screen)"
                 >
@@ -1207,29 +1241,31 @@ const AufmassPage = () => {
                 onClick={() => setIsInfoHubOpen(true)}
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2.5 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
+                className="h-8 px-2.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
                 title="Info-Hub (Dokumente)"
               >
                 <FileText size={15} />
                 <span className="hidden xl:inline text-xs">Info</span>
               </Button>
-              <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
-              <Button
-                onClick={() => setIsManualDialogOpen(true)}
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2.5 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
-                title="Manuelle Position"
-              >
-                <PenLine size={15} />
-                <span className="hidden xl:inline text-xs">Manuell</span>
-              </Button>
-              <div className="w-px h-4 bg-white/10 mx-1 hidden sm:block" />
+              <div className="w-px h-4 bg-muted mx-1 hidden sm:block" />
+              <Magnetic strength={0.2}>
+                <Button
+                  onClick={() => setIsManualDialogOpen(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 gap-1.5 transition-all"
+                  title="Manuelle Position"
+                >
+                  <PenLine size={15} />
+                  <span className="hidden xl:inline text-xs">Manuell</span>
+                </Button>
+              </Magnetic>
+              <div className="w-px h-4 bg-muted mx-1 hidden sm:block" />
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="h-8 w-8 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all"
+                className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
               >
                 {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
               </Button>
@@ -1239,16 +1275,16 @@ const AufmassPage = () => {
 
         {/* Mobile: Mode Switch */}
         {currentProject.status === 'planning' && (
-          <div className="xl:hidden flex items-center bg-white/[0.02] p-1.5 border-b border-white/5 shrink-0 gap-1.5 overflow-x-auto no-scrollbar">
+          <div className="xl:hidden flex items-center bg-card p-1.5 border-b border-border shrink-0 gap-1.5 overflow-x-auto no-scrollbar">
             <button 
               onClick={() => setViewMode('angebot')}
-              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'angebot' ? "bg-white text-black shadow-sm" : "bg-white/5 text-white/60 hover:text-white")}
+              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'angebot' ? "bg-primary text-primary-foreground shadow-sm" : "bg-card text-muted-foreground hover:text-foreground")}
             >
               📸 Struktur & Notizen
             </button>
             <button 
               onClick={() => setViewMode('aufmass')}
-              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'aufmass' ? "bg-white text-black shadow-sm" : "bg-white/5 text-white/60 hover:text-white")}
+              className={cn("flex-1 px-4 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap", viewMode === 'aufmass' ? "bg-primary text-primary-foreground shadow-sm" : "bg-card text-muted-foreground hover:text-foreground")}
             >
               🛒 Material
             </button>
@@ -1269,27 +1305,33 @@ const AufmassPage = () => {
           <>
         {/* Category label */}
         {activeCategory && !searchQuery && (
-          <div className="px-4 py-2 border-b border-white/5 shrink-0">
-            <p className="text-xs text-white/40 uppercase tracking-wider">{activeCategory.name}</p>
+          <div className="px-4 py-2 border-b border-border shrink-0">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">{activeCategory.name}</p>
           </div>
         )}
 
         {/* Article List */}
-        <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
-          <div className="flex flex-col gap-3 max-w-none">
+        <main className="flex-1 overflow-y-auto p-4 pb-24 lg:pb-4 relative">
+          <AnimatedBackground />
+          <motion.div 
+            variants={listContainerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col gap-3 max-w-none relative z-10"
+          >
             {isFetchingWholesale ? (
-              <div className="col-span-full text-center py-20 ios-card">
+              <motion.div variants={listItemVariants} className="col-span-full text-center py-20 bg-card/50 backdrop-blur-sm text-card-foreground border border-border shadow-sm rounded-xl">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse mx-auto mb-4">
                    <Package size={24} className="text-emerald-400" />
                 </div>
-                <p className="text-white/40 font-medium">Artikel werden geladen...</p>
-              </div>
+                <p className="text-muted-foreground font-medium">Artikel werden geladen...</p>
+              </motion.div>
             ) : viewArticles.length === 0 ? (
-              <div className="col-span-full text-center py-20 ios-card">
+              <motion.div variants={listItemVariants} className="col-span-full text-center py-20 bg-card/50 backdrop-blur-sm text-card-foreground border border-border shadow-sm rounded-xl">
                 {searchQuery
-                  ? <Search size={36} className="text-white/20 mx-auto mb-4" />
-                  : <Package size={36} className="text-white/20 mx-auto mb-4" />}
-                <p className="text-white/40 font-medium">
+                  ? <Search size={36} className="text-muted-foreground mx-auto mb-4" />
+                  : <Package size={36} className="text-muted-foreground mx-auto mb-4" />}
+                <p className="text-muted-foreground font-medium">
                   {searchQuery ? 'Kein Material gefunden' : 'Kein Material in dieser Kategorie'}
                 </p>
                 {!searchQuery && (
@@ -1297,7 +1339,7 @@ const AufmassPage = () => {
                     Katalog öffnen
                   </Button>
                 )}
-              </div>
+              </motion.div>
             ) : (
               viewArticles.map(article => {
                 const qty = getQuantityInSection(article.id);
@@ -1305,21 +1347,22 @@ const AufmassPage = () => {
                 const isFromAngebot = item?.is_from_angebot || false;
                 const cat = activeCategories.find(c => c.id === article.categoryId);
                 return (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    quantity={qty}
-                    onIncrement={() => handleIncrement(article)}
-                    onDecrement={() => handleDecrement(article)}
-                    onReset={() => handleResetArticle(article)}
-                    categoryImageUrl={cat?.imageUrl}
-                    isFromAngebot={isFromAngebot}
-                    copyMode={isCopyMode}
-                  />
+                  <motion.div key={article.id} variants={listItemVariants}>
+                    <ArticleCard
+                      article={article}
+                      quantity={qty}
+                      onIncrement={() => handleIncrement(article)}
+                      onDecrement={() => handleDecrement(article)}
+                      onReset={() => handleResetArticle(article)}
+                      categoryImageUrl={cat?.imageUrl}
+                      isFromAngebot={isFromAngebot}
+                      copyMode={isCopyMode}
+                    />
+                  </motion.div>
                 );
               })
             )}
-          </div>
+          </motion.div>
         </main>
       </>
         ) : (
@@ -1336,7 +1379,7 @@ const AufmassPage = () => {
       {viewMode === 'aufmass' && (
         <>
           {/* Desktop/Tablet permanent panel */}
-      <aside className="hidden xl:flex flex-col shrink-0 border-l border-white/10 bg-background/60 backdrop-blur-xl z-10 relative"
+      <aside className="hidden xl:flex flex-col shrink-0 border-l border-border bg-background/60 backdrop-blur-xl z-10 relative"
         style={{ width: summaryWidth }}
       >
         {/* Drag handle for summary panel */}
@@ -1363,9 +1406,9 @@ const AufmassPage = () => {
             document.addEventListener('mouseup', onUp);
           }}
         />
-        <div className="p-4 border-b border-white/5 shrink-0">
-          <h2 className="text-sm font-bold text-white/60 uppercase tracking-wider">Aufmaß</h2>
-          <p className="text-2xl font-bold text-emerald-400 mt-1">{totalArticleCount} <span className="text-sm font-normal text-white/40">Artikel</span></p>
+        <div className="p-4 border-b border-border shrink-0">
+          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Aufmaß</h2>
+          <p className="text-2xl font-bold text-emerald-400 mt-1">{totalArticleCount} <span className="text-sm font-normal text-muted-foreground">Artikel</span></p>
         </div>
         <SummaryList
                 projectId={currentProject.id}
@@ -1376,12 +1419,14 @@ const AufmassPage = () => {
                 onDeleteItem={handleDeleteItem}
                 onUpdateQuantity={handleUpdateQuantity}
               />
-        <div className="p-4 border-t border-white/5 bg-white/[0.02] space-y-2 shrink-0">
+        <div className="p-4 border-t border-border bg-card space-y-2 shrink-0">
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] border-0 h-10 rounded-xl transition-all">
-              <FileDown size={16} className="mr-2 opacity-70" /> PDF
-            </Button>
-            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 h-10 rounded-xl transition-colors">
+            <Magnetic strength={0.1}>
+              <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full bg-emerald-500 hover:bg-emerald-400 text-primary-foreground font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] border-0 h-10 rounded-xl transition-all">
+                <FileDown size={16} className="mr-2 opacity-70" /> PDF
+              </Button>
+            </Magnetic>
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full bg-card hover:bg-accent text-accent-foreground border border-border h-10 rounded-xl transition-colors">
               <FileSpreadsheet size={16} className="mr-2 opacity-50" /> CSV
             </Button>
           </div>
@@ -1390,8 +1435,8 @@ const AufmassPage = () => {
 
       {/* Mobile Bottom Summary Sheet content is triggered from header now */}
       <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-white/10 bg-background/95 backdrop-blur-xl flex flex-col p-0">
-          <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-border bg-background/95 backdrop-blur-xl flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b border-border shrink-0">
             <SheetTitle className="text-left text-xl text-gradient-emerald">Aktuelles Aufmaß</SheetTitle>
           </SheetHeader>
           <SummaryList
@@ -1403,11 +1448,13 @@ const AufmassPage = () => {
                 onDeleteItem={handleDeleteItem}
                 onUpdateQuantity={handleUpdateQuantity}
               />
-          <div className="p-6 border-t border-white/5 shrink-0 bg-white/[0.02] grid grid-cols-2 gap-3">
-            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="h-14 text-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold shadow-[0_0_30px_rgba(16,185,129,0.3)] border-0 rounded-2xl transition-all">
-              <FileDown size={20} className="mr-2 opacity-70" /> PDF
-            </Button>
-            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 rounded-2xl transition-colors">
+          <div className="p-6 border-t border-border shrink-0 bg-card grid grid-cols-2 gap-3">
+            <Magnetic strength={0.1}>
+              <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full h-14 text-lg bg-emerald-500 hover:bg-emerald-400 text-primary-foreground font-bold shadow-[0_0_30px_rgba(16,185,129,0.3)] border-0 rounded-2xl transition-all">
+                <FileDown size={20} className="mr-2 opacity-70" /> PDF
+              </Button>
+            </Magnetic>
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="h-14 text-lg bg-card hover:bg-accent text-accent-foreground border border-border rounded-2xl transition-colors">
               <FileSpreadsheet size={20} className="mr-2 opacity-50" /> CSV
             </Button>
           </div>
@@ -1418,12 +1465,12 @@ const AufmassPage = () => {
 
       {/* Info Hub Sheet */}
       <Sheet open={isInfoHubOpen} onOpenChange={setIsInfoHubOpen}>
-        <SheetContent side="right" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[500px] border-l border-white/10 bg-black/20 backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
-          <SheetHeader className="p-6 pb-4 border-b border-white/5 shrink-0">
+        <SheetContent side="right" onOpenAutoFocus={(e) => e.preventDefault()} className="w-[85vw] sm:w-[500px] border-l border-border bg-background backdrop-blur-[60px] flex flex-col p-0 shadow-[inset_1px_0_0_rgba(255,255,255,0.05)]">
+          <SheetHeader className="p-6 pb-4 border-b border-border shrink-0">
             <SheetTitle className="text-left text-xl text-gradient-emerald flex items-center gap-2">
               <FileText size={20} className="text-emerald-400" /> Info-Hub
             </SheetTitle>
-            <p className="text-sm text-white/50 text-left">
+            <p className="text-sm text-muted-foreground text-left">
               Technische Dokumente und Baustellenskizzen
             </p>
           </SheetHeader>
@@ -1439,10 +1486,10 @@ const AufmassPage = () => {
               if (!hasContent) {
                 return (
                   <div className="flex-1 flex flex-col items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-white/5 border-2 border-dashed border-white/10 flex items-center justify-center mb-4">
-                      <FileText size={24} className="text-white/20" />
+                    <div className="w-16 h-16 rounded-full bg-card border-2 border-dashed border-border flex items-center justify-center mb-4">
+                      <FileText size={24} className="text-muted-foreground" />
                     </div>
-                    <p className="text-center text-white/40 text-sm max-w-[250px]">
+                    <p className="text-center text-muted-foreground text-sm max-w-[250px]">
                       Noch keine Dokumente (PDFs, Datenblätter) oder Skizzen für dieses Projekt hinterlegt.
                     </p>
                     {/* File upload would normally be handled here, simplified for now */}
@@ -1454,13 +1501,13 @@ const AufmassPage = () => {
                 <>
                   {docs.length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider">Dokumente</h3>
+                      <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dokumente</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {docs.map((docUrl, idx) => (
-                          <a key={idx} href={docUrl} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-white/5 hover:border-emerald-500/50 transition-colors flex items-center justify-center">
-                            <FileText size={32} className="text-white/20 group-hover:text-emerald-400 transition-colors" />
-                            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-md">
-                              <p className="text-xs text-white truncate">Dokument {idx + 1}</p>
+                          <a key={idx} href={docUrl} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-border bg-card hover:border-emerald-500/50 transition-colors flex items-center justify-center">
+                            <FileText size={32} className="text-muted-foreground group-hover:text-emerald-400 transition-colors" />
+                            <div className="absolute inset-x-0 bottom-0 p-2 bg-background backdrop-blur-md">
+                              <p className="text-xs text-foreground truncate">Dokument {idx + 1}</p>
                             </div>
                           </a>
                         ))}
@@ -1470,14 +1517,14 @@ const AufmassPage = () => {
 
                   {sketches.length > 0 && (
                     <div className="space-y-3">
-                      <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider">Skizzen & Fotos</h3>
+                      <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Skizzen & Fotos</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {sketches.map((sketch, idx) => (
-                          <a key={idx} href={sketch.url} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-white/10 bg-white/5 hover:border-emerald-500/50 transition-colors flex items-center justify-center">
+                          <a key={idx} href={sketch.url} target="_blank" rel="noopener noreferrer" className="group relative aspect-video rounded-xl overflow-hidden border border-border bg-card hover:border-emerald-500/50 transition-colors flex items-center justify-center">
                             <img src={sketch.url} alt={sketch.name} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
-                              <p className="text-xs text-white truncate">{sketch.name}</p>
+                            <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="absolute inset-x-0 bottom-0 p-2 bg-background backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity">
+                              <p className="text-xs text-foreground truncate">{sketch.name}</p>
                             </div>
                           </a>
                         ))}
@@ -1493,35 +1540,35 @@ const AufmassPage = () => {
 
       {/* Manual Position Dialog */}
       <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
-        <DialogContent className="ios-card border border-white/10 bg-background sm:max-w-md">
+        <DialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white text-xl font-bold flex items-center gap-2">
+            <DialogTitle className="text-foreground text-xl font-bold flex items-center gap-2">
               <PenLine size={18} className="text-emerald-400" /> Manuelle Position
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Bezeichnung *</label>
-              <Input value={manualName} onChange={e => setManualName(e.target.value)} className="glass-input" placeholder="z.B. Sonderteil Bogen 90°" />
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Bezeichnung *</label>
+              <Input value={manualName} onChange={e => setManualName(e.target.value)} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md" placeholder="z.B. Sonderteil Bogen 90°" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Menge *</label>
-                <Input value={manualQty} onChange={e => setManualQty(e.target.value)} type="number" min="1" className="glass-input" inputMode="numeric" />
+                <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Menge *</label>
+                <Input value={manualQty} onChange={e => setManualQty(e.target.value)} type="number" min="1" className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md" inputMode="numeric" />
               </div>
               <div>
-                <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Einheit</label>
-                <Input value={manualUnit} onChange={e => setManualUnit(e.target.value)} className="glass-input" placeholder="Stk, m, kg..." />
+                <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Einheit</label>
+                <Input value={manualUnit} onChange={e => setManualUnit(e.target.value)} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md" placeholder="Stk, m, kg..." />
               </div>
             </div>
             <div>
-              <label className="text-xs text-white/50 uppercase tracking-wider mb-1.5 block">Artikelnummer (optional)</label>
-              <Input value={manualArticleNumber} onChange={e => setManualArticleNumber(e.target.value)} className="glass-input" placeholder="z.B. ART-001" />
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Artikelnummer (optional)</label>
+              <Input value={manualArticleNumber} onChange={e => setManualArticleNumber(e.target.value)} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md" placeholder="z.B. ART-001" />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button onClick={() => setIsManualDialogOpen(false)} variant="ghost" className="text-white/50">Abbrechen</Button>
-            <Button onClick={handleAddManualPosition} disabled={!manualName.trim()} className="glass-button">Hinzufügen</Button>
+            <Button onClick={() => setIsManualDialogOpen(false)} variant="ghost" className="text-muted-foreground">Abbrechen</Button>
+            <Button onClick={handleAddManualPosition} disabled={!manualName.trim()} className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md">Hinzufügen</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1544,27 +1591,27 @@ const AufmassPage = () => {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 mb-4">
                 Grunddaten
               </p>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-name" className="text-white/70">Projektname / Bauvorhaben <span className="text-red-400">*</span></Label>
+                  <Label htmlFor="edit-name" className="text-muted-foreground">Projektname / Bauvorhaben <span className="text-red-400">*</span></Label>
                   <Input
                     id="edit-name"
                     value={editProjectData.name}
                     onChange={(e) => setEditProjectData({ ...editProjectData, name: e.target.value })}
-                    className="glass-input h-11"
+                    className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-11"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-client" className="text-white/70">Auftraggeber (Optional)</Label>
+                    <Label htmlFor="edit-client" className="text-muted-foreground">Auftraggeber (Optional)</Label>
                     <Input
                       id="edit-client"
                       value={editProjectData.client_name}
                       onChange={(e) => setEditProjectData({ ...editProjectData, client_name: e.target.value })}
-                      className="glass-input h-11"
+                      className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-11"
                     />
                   </div>
                 </div>
@@ -1572,38 +1619,38 @@ const AufmassPage = () => {
             </div>
 
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4 mt-8">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 mb-4 mt-8">
                 Zeitraum & Standort
               </p>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-address" className="text-white/70">Adresse / Ort (Optional)</Label>
+                  <Label htmlFor="edit-address" className="text-muted-foreground">Adresse / Ort (Optional)</Label>
                   <Input
                     id="edit-address"
                     value={editProjectData.address}
                     onChange={(e) => setEditProjectData({ ...editProjectData, address: e.target.value })}
-                    className="glass-input h-11"
+                    className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-11"
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-start" className="text-white/70">Startdatum</Label>
+                    <Label htmlFor="edit-start" className="text-muted-foreground">Startdatum</Label>
                     <Input
                       id="edit-start"
                       type="date"
                       value={editProjectData.start_date || ''}
                       onChange={(e) => setEditProjectData({ ...editProjectData, start_date: e.target.value })}
-                      className="glass-input h-11 [color-scheme:dark]"
+                      className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-11 [color-scheme:dark]"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-end" className="text-white/70">Enddatum</Label>
+                    <Label htmlFor="edit-end" className="text-muted-foreground">Enddatum</Label>
                     <Input
                       id="edit-end"
                       type="date"
                       value={editProjectData.end_date || ''}
                       onChange={(e) => setEditProjectData({ ...editProjectData, end_date: e.target.value })}
-                      className="glass-input h-11 [color-scheme:dark]"
+                      className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-11 [color-scheme:dark]"
                     />
                   </div>
                 </div>
@@ -1611,27 +1658,27 @@ const AufmassPage = () => {
             </div>
 
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/30 flex items-center gap-2 mb-4 mt-8">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-2 mb-4 mt-8">
                 Extras
               </p>
               <div className="space-y-2">
-                <Label htmlFor="edit-notes" className="text-white/70">Interne Bemerkung (Optional)</Label>
+                <Label htmlFor="edit-notes" className="text-muted-foreground">Interne Bemerkung (Optional)</Label>
                 <Textarea
                   id="edit-notes"
                   value={editProjectData.notes}
                   onChange={(e) => setEditProjectData({ ...editProjectData, notes: e.target.value })}
-                  className="glass-input min-h-[100px] resize-y"
+                  className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md min-h-[100px] resize-y"
                 />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="shrink-0 p-4 border-t border-white/5 bg-background/50 backdrop-blur-md flex justify-between gap-3">
-          <Button variant="ghost" onClick={() => setIsEditProjectOpen(false)} className="text-white/60 flex-1 sm:flex-none">
+        <div className="shrink-0 p-4 border-t border-border bg-background/50 backdrop-blur-md flex justify-between gap-3">
+          <Button variant="ghost" onClick={() => setIsEditProjectOpen(false)} className="text-muted-foreground flex-1 sm:flex-none">
             Abbrechen
           </Button>
-          <Button onClick={handleSaveProject} disabled={!editProjectData.name.trim()} className="bg-emerald-500 hover:bg-emerald-600 text-white flex-1 sm:flex-none shadow-lg shadow-emerald-900/20">
+          <Button onClick={handleSaveProject} disabled={!editProjectData.name.trim()} className="bg-emerald-500 hover:bg-emerald-600 text-foreground flex-1 sm:flex-none shadow-lg shadow-emerald-900/20">
             Speichern
           </Button>
         </div>

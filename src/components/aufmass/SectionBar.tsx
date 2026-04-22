@@ -66,14 +66,14 @@ export function SectionBar({
   };
 
   return (
-    <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto border-b border-white/5 shrink-0 no-scrollbar">
+    <div className="flex items-center gap-2 px-4 py-3 overflow-x-auto border-b border-border shrink-0 no-scrollbar">
       <button
         onClick={() => onSelectSection(null)}
         className={cn(
           'shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
           activeSectionId === null
-            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-            : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+            ? 'bg-emerald-500 text-primary-foreground shadow-lg shadow-emerald-500/20'
+            : 'bg-muted text-muted-foreground hover:text-accent-foreground hover:bg-muted'
         )}
       >
         Allgemein
@@ -85,21 +85,21 @@ export function SectionBar({
 
         if (isEditing) {
           return (
-            <div key={sec.id} className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-1 shrink-0">
+            <div key={sec.id} className="flex items-center gap-1 bg-muted rounded-full px-2 py-1 shrink-0">
               <Input
                 value={editingName}
                 onChange={e => setEditingName(e.target.value)}
-                className="h-7 w-32 bg-transparent border-none text-sm text-white focus-visible:ring-0 p-0 px-2"
+                className="h-7 w-32 bg-transparent border-none text-sm text-foreground focus-visible:ring-0 p-0 px-2"
                 autoFocus
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleSaveEdit();
                   if (e.key === 'Escape') setEditingSectionId(null);
                 }}
               />
-              <button onClick={handleSaveEdit} className="p-1 text-emerald-400 hover:bg-white/10 rounded-full">
+              <button onClick={handleSaveEdit} className="p-1 text-emerald-400 hover:bg-muted rounded-full">
                 <Check size={14} />
               </button>
-              <button onClick={() => setEditingSectionId(null)} className="p-1 text-white/40 hover:bg-white/10 rounded-full">
+              <button onClick={() => setEditingSectionId(null)} className="p-1 text-muted-foreground hover:bg-muted rounded-full">
                 <X size={14} />
               </button>
             </div>
@@ -113,16 +113,16 @@ export function SectionBar({
               className={cn(
                 'flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap',
                 isActive
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                  : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                  ? 'bg-emerald-500 text-primary-foreground shadow-lg shadow-emerald-500/20'
+                  : 'bg-muted text-muted-foreground hover:text-accent-foreground hover:bg-muted'
               )}
             >
               {sec.text}
               {isActive && (
-                <div className="flex items-center gap-1 ml-1 pl-1 border-l border-white/20">
+                <div className="flex items-center gap-1 ml-1 pl-1 border-l border-input">
                   <span 
                     onClick={(e) => handleStartEdit(e, sec)}
-                    className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                    className="p-1 hover:bg-accent rounded-full transition-colors"
                   >
                     <Pencil size={12} />
                   </span>
@@ -145,39 +145,39 @@ export function SectionBar({
             value={newSectionName}
             onChange={e => setNewSectionName(e.target.value)}
             placeholder="Name..."
-            className="h-8 w-32 glass-input text-sm"
+            className="h-8 w-32 bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md text-sm"
             autoFocus
             onKeyDown={e => { if (e.key === 'Enter') handleAddSection(); if (e.key === 'Escape') setIsAddingSectionOpen(false); }}
           />
-          <Button onClick={handleAddSection} size="sm" className="h-8 glass-button px-3">OK</Button>
-          <Button onClick={() => setIsAddingSectionOpen(false)} size="sm" variant="ghost" className="h-8 px-2 text-white/50">✕</Button>
+          <Button onClick={handleAddSection} size="sm" className="h-8 bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md px-3">OK</Button>
+          <Button onClick={() => setIsAddingSectionOpen(false)} size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground">✕</Button>
         </div>
       ) : (
         <button
           onClick={() => setIsAddingSectionOpen(true)}
-          className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium bg-white/5 text-emerald-400 hover:bg-emerald-500/10 transition-all whitespace-nowrap border border-emerald-500/20"
+          className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium bg-muted text-emerald-400 hover:bg-emerald-500/10 transition-all whitespace-nowrap border border-emerald-500/20"
         >
           <Plus size={14} />
         </button>
       )}
 
       <AlertDialog open={!!sectionToDelete} onOpenChange={() => setSectionToDelete(null)}>
-        <AlertDialogContent className="glass-card bg-gray-900/90 border-white/10 text-white">
+        <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl bg-background border-border text-foreground">
           <AlertDialogHeader>
             <AlertDialogTitle>Abschnitt löschen?</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/60">
+            <AlertDialogDescription className="text-muted-foreground">
               Möchten Sie den Abschnitt "{sectionToDelete?.text}" wirklich löschen? 
               Alle enthaltenen Artikel werden in "Allgemein" verschoben.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-white/5 border-white/10 text-white hover:bg-white/10">Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel className="bg-muted border-border text-foreground hover:bg-muted">Abbrechen</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => {
                 if (sectionToDelete) onDeleteSection(sectionToDelete.id);
                 setSectionToDelete(null);
               }}
-              className="bg-red-500 hover:bg-red-600 text-white"
+              className="bg-red-500 hover:bg-red-600 text-destructive-foreground"
             >
               Löschen
             </AlertDialogAction>

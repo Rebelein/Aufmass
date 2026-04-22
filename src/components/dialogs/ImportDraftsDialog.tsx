@@ -86,8 +86,8 @@ const ImportDraftsDialog: React.FC<ImportDraftsDialogProps> = ({ isOpen, onClose
             <Sparkles size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">KI-Import Entwürfe</h2>
-            <p className="text-white/40 text-xs">{drafts.length} Entwürfe</p>
+            <h2 className="text-lg font-bold text-foreground">KI-Import Entwürfe</h2>
+            <p className="text-muted-foreground text-xs">{drafts.length} Entwürfe</p>
           </div>
         </div>
       }
@@ -98,7 +98,7 @@ const ImportDraftsDialog: React.FC<ImportDraftsDialogProps> = ({ isOpen, onClose
             <Loader2 className="animate-spin text-emerald-400 w-8 h-8" />
           </div>
         ) : drafts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-white/50 space-y-4">
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground space-y-4">
             <FileText size={48} className="opacity-20" />
             <p>Keine offenen Import-Entwürfe gefunden.</p>
           </div>
@@ -107,18 +107,18 @@ const ImportDraftsDialog: React.FC<ImportDraftsDialogProps> = ({ isOpen, onClose
             {drafts.map(draft => (
               <div 
                 key={draft.id} 
-                className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer group"
+                className="flex items-center justify-between p-4 rounded-xl bg-muted border border-border hover:bg-muted transition-colors cursor-pointer group"
                 onClick={() => draft.status === 'ready_for_review' && onOpenDraft(draft)}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     {getStatusIcon(draft.status)}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="font-bold text-white/90 text-sm truncate">{draft.file_name || 'Unbekannte Datei'}</h4>
-                    <div className="flex items-center gap-2 text-[11px] text-white/50 mt-0.5">
+                    <h4 className="font-bold text-foreground text-sm truncate">{draft.file_name || 'Unbekannte Datei'}</h4>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
                       <span>{format(new Date(draft.created_at), 'dd.MM.yyyy HH:mm', { locale: de })}</span>
-                      <span className="w-1 h-1 rounded-full bg-white/20" />
+                      <span className="w-1 h-1 rounded-full bg-muted/50" />
                       <span className={
                         draft.status === 'processing' ? 'text-amber-400' :
                         draft.status === 'ready_for_review' ? 'text-emerald-400' :

@@ -26,8 +26,8 @@ const ArticleList: React.FC<ArticleListProps> = ({
 
   if (articles.length === 0) {
     return (
-        <div className="glass-card p-12 text-center border-dashed border-white/5 bg-white/[0.02]">
-            <p className="text-white/50 font-medium">Keine Artikel in dieser Kategorie.</p>
+        <div className="bg-card text-card-foreground border-border shadow-sm rounded-xl p-12 text-center border-dashed border-border bg-muted">
+            <p className="text-muted-foreground font-medium">Keine Artikel in dieser Kategorie.</p>
         </div>
     );
   }
@@ -54,8 +54,8 @@ const ArticleList: React.FC<ArticleListProps> = ({
           <div 
             key={article.id} 
             className={cn(
-              "glass-card p-4 flex gap-4 transition-all duration-500 group relative",
-              isStaged ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]" : "border-white/5",
+              "bg-card text-card-foreground border-border shadow-sm rounded-xl p-4 flex gap-4 transition-all duration-500 group relative",
+              isStaged ? "border-emerald-500/40 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]" : "border-border",
               isInProject && !isStaged && "border-teal-500/20 bg-teal-500/5"
             )}
           >
@@ -68,11 +68,11 @@ const ArticleList: React.FC<ArticleListProps> = ({
                 </div>
             )}
 
-            <div className="flex-shrink-0 w-20 h-20 relative rounded-xl overflow-hidden border border-white/10 bg-white/5">
+            <div className="flex-shrink-0 w-20 h-20 relative rounded-xl overflow-hidden border border-border bg-muted">
               {article.imageUrl ? (
                   <img src={article.imageUrl} alt="" fill className="object-contain p-1 transition-transform group-hover:scale-110" />
               ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                       <imgIcon size={32} />
                   </div>
               )}
@@ -80,25 +80,25 @@ const ArticleList: React.FC<ArticleListProps> = ({
 
             <div className="flex-grow flex flex-col justify-between min-w-0">
               <div className="space-y-1">
-                  <h3 className="font-bold text-white leading-snug group-hover:text-emerald-300 transition-colors" title={article.name}>
+                  <h3 className="font-bold text-foreground leading-snug group-hover:text-emerald-300 transition-colors" title={article.name}>
                     {article.name}
                   </h3>
                   <div className="flex items-center gap-2">
                       <button 
                         onClick={() => handleCopyToClipboard(article.articleNumber)}
-                        className="text-[10px] font-mono text-white/40 hover:text-emerald-400 transition-colors flex items-center gap-1 bg-white/5 px-1.5 py-0.5 rounded border border-white/5"
+                        className="text-[10px] font-mono text-muted-foreground hover:text-emerald-400 transition-colors flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded border border-border"
                       >
                         {article.articleNumber}
                       </button>
-                      <span className="text-[10px] font-bold text-white/50 uppercase tracking-tighter">{article.unit}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">{article.unit}</span>
                   </div>
               </div>
 
               <div className="flex items-center gap-3 mt-3">
-                <div className="flex items-center bg-white/5 rounded-xl border border-white/10 p-1">
+                <div className="flex items-center bg-muted rounded-xl border border-border p-1">
                     <button 
                         onClick={() => onStagedQuantityChange(article.id, Math.max(0, inputQuantity - 1))}
-                        className="h-8 w-8 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                        className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-accent-foreground hover:bg-muted rounded-lg transition-all"
                     >
                         <Minus size={14} />
                     </button>

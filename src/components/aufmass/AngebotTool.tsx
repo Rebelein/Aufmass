@@ -78,9 +78,9 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
   if (!activeSection) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-white/30 p-8 space-y-4 bg-background/50">
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 space-y-4 bg-background/50">
         <BookMarked className="w-16 h-16 opacity-30" />
-        <h2 className="text-xl font-medium text-white/50">Kein Bauabschnitt ausgewählt</h2>
+        <h2 className="text-xl font-medium text-muted-foreground">Kein Bauabschnitt ausgewählt</h2>
         <p className="text-center text-sm max-w-sm">Wähle links in der Seitenleiste einen Projekt-Abschnitt aus oder erstelle einen neuen, um hier Fotos und Notizen für das Angebot zu erfassen.</p>
       </div>
     );
@@ -94,7 +94,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
           <input
              id={`section-title-${activeSection.id}`}
              key={`input-${activeSection.id}`} /* Force re-render on active section change */
-             className="w-full bg-transparent text-2xl md:text-3xl lg:text-4xl font-black text-white border-b border-transparent focus:border-white/20 focus:outline-none transition-colors pb-2"
+             className="w-full bg-transparent text-2xl md:text-3xl lg:text-4xl font-black text-foreground border-b border-transparent focus:border-input focus:outline-none transition-colors pb-2"
              defaultValue={activeSection.text}
              onBlur={(e) => handleTitleChange(activeSection, e.target.value)}
              onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
@@ -112,20 +112,20 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
                  <Trash2 className="w-5 h-5" />
                </Button>
              </AlertDialogTrigger>
-             <AlertDialogContent className="ios-card border border-white/10 bg-background">
+             <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border border-border bg-background">
                <AlertDialogHeader>
-                 <AlertDialogTitle className="text-xl font-bold text-white">Bauabschnitt löschen?</AlertDialogTitle>
-                 <AlertDialogDescription className="text-white/60">
+                 <AlertDialogTitle className="text-xl font-bold text-foreground">Bauabschnitt löschen?</AlertDialogTitle>
+                 <AlertDialogDescription className="text-muted-foreground">
                    Möchten Sie diesen kompletten Abschnitt inkl. aller Notizen und Fotos wirklich unwiderruflich löschen?
                  </AlertDialogDescription>
                </AlertDialogHeader>
                <AlertDialogFooter className="gap-2">
-                 <AlertDialogCancel className="ios-button-secondary border-none">Abbrechen</AlertDialogCancel>
-                 <AlertDialogAction onClick={handleDeleteSection} className="bg-red-500/90 hover:bg-red-500 text-white rounded-xl">Löschen</AlertDialogAction>
+                 <AlertDialogCancel className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md-secondary border-none">Abbrechen</AlertDialogCancel>
+                 <AlertDialogAction onClick={handleDeleteSection} className="bg-red-500/90 hover:bg-red-500 text-destructive-foreground rounded-xl">Löschen</AlertDialogAction>
                </AlertDialogFooter>
              </AlertDialogContent>
            </AlertDialog>
-           <Button onClick={() => setIsNoteEditorOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
+           <Button onClick={() => setIsNoteEditorOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-primary-foreground rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
              <ImagePlus className="w-5 h-5 mr-2" /> Foto / Skizze
            </Button>
         </div>
@@ -133,11 +133,11 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
       {/* NOTIZEN */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={`desc-${activeSection.id}`} className="space-y-3">
-        <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+        <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider flex items-center gap-2">
           <PenLine className="w-3.5 h-3.5" /> Notizen & Details
         </h3>
         <Textarea 
-          className="glass-input resize-y min-h-[160px] text-base p-5 leading-relaxed bg-white/5 border-white/5 focus:bg-white/10 focus:border-emerald-500/50 rounded-2xl"
+          className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md resize-y min-h-[160px] text-base p-5 leading-relaxed bg-muted border-border focus:bg-muted focus:border-emerald-500/50 rounded-2xl"
           placeholder="Dokumentiere hier alle wichtigen Details, Kundenwünsche oder Besonderheiten für das Angebot..."
           defaultValue={activeSection.description || ''}
           onBlur={(e) => handleDescriptionChange(activeSection, e.target.value)}
@@ -146,7 +146,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
       {/* GALERIE */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={`gal-${activeSection.id}`} className="space-y-3 pb-8">
-        <h3 className="text-white/40 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+        <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-wider flex items-center gap-2">
           <ImageIcon className="w-3.5 h-3.5" /> Galerie & Skizzen
         </h3>
         
@@ -161,10 +161,10 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
 
           if (allImages.length === 0) {
             return (
-              <div className="flex flex-col items-center justify-center p-16 text-white/30 border-2 border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+              <div className="flex flex-col items-center justify-center p-16 text-muted-foreground border-2 border-dashed border-border rounded-3xl bg-background">
                 <ImageIcon className="w-12 h-12 mb-4 opacity-30" />
                 <p className="text-sm font-medium">Noch keine Fotos oder Skizzen hinterlegt.</p>
-                <p className="text-xs text-white/40 mt-1">Erstelle eine Skizze oder nimm ein Foto auf.</p>
+                <p className="text-xs text-muted-foreground mt-1">Erstelle eine Skizze oder nimm ein Foto auf.</p>
               </div>
             );
           }
@@ -172,11 +172,11 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
           return (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {allImages.map((imgObj, idx) => (
-                <div key={`${activeSection.id}-img-${idx}`} className="relative group aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-black/40">
+                <div key={`${activeSection.id}-img-${idx}`} className="relative group aspect-[4/3] rounded-2xl overflow-hidden border border-border shadow-lg bg-muted">
                   <img src={imgObj.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Capture" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-black/40 backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-[10px] text-white font-medium">{(imgObj as any).name || 'Foto'}</p>
+                  <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-muted backdrop-blur-md border border-border opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-[10px] text-foreground font-medium">{(imgObj as any).name || 'Foto'}</p>
                   </div>
                   <button 
                     onClick={() => {
@@ -187,7 +187,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
                         deleteProjectItem(imgObj.id!);
                       }
                     }}
-                    className="absolute bottom-3 right-3 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-2.5 opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 shadow-xl"
+                    className="absolute bottom-3 right-3 bg-red-500/90 hover:bg-red-500 text-destructive-foreground rounded-full p-2.5 opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 shadow-xl"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -26,7 +26,7 @@ export const SwipeableItem: React.FC<SwipeableItemProps> = ({ children, onDelete
   };
 
   return (
-    <div className="relative overflow-hidden rounded-xl mb-2 bg-white/5 border border-white/5">
+    <div className="relative overflow-hidden rounded-xl mb-2 bg-muted border border-border">
       {/* Background/Delete Indicator */}
       <motion.div 
         style={{ backgroundColor, opacity }}
