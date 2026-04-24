@@ -13,6 +13,7 @@ Wir nutzen Radix UI Primitives, die mittels Tailwind CSS gestylt sind. Diese bil
 **Verwendung:** Diese Komponenten sollten für alle Standard-UI-Elemente genutzt werden, anstatt native HTML-Tags (`<button>`, `<input>`) zu verwenden, um Barrierefreiheit und Theme-Konsistenz zu wahren.
 
 ## 2. "Wow-Komponenten" (mvpblocks / Aceternity inspiriert)
+*Primäre Quelle: [mvpblocks Dokumentation](https://blocks.mvp-subha.me/docs/) | [GitHub](https://github.com/subhadeeproy3902/mvpblocks)*
 *Ablageort: `src/components/ui/` (PascalCase)*
 
 Diese Komponenten wurden eingeführt, um der App Leben einzuhauchen.

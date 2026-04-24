@@ -17,7 +17,8 @@ Die Kern-Technologien dieses Design-Systems sind:
 3.  **Framer Motion**: Die primäre Animations-Bibliothek für Page-Transitions, Staggered-Lists und Mikro-Interaktionen.
 4.  **Radix UI (via shadcn/ui)**: Barrierefreie, ungestylte Basis-Komponenten (Dialoge, Selects, Dropdowns), die mit Tailwind unseren semantischen Look erhalten.
 5.  **Lucide React**: Die Standard-Icon-Bibliothek für einen konsistenten, sauberen Strichstärke-Stil.
-6.  **mvpblocks / Magic UI / Aceternity UI**: Quellen für komplexe, interaktive "Wow-Komponenten" (wie Spotlight-Karten oder animierte Hintergründe).
+6.  **mvpblocks**: Hauptquelle für die komplexen, interaktiven "Wow-Komponenten" (wie Spotlight-Karten oder animierte Hintergründe). [Dokumentation](https://blocks.mvp-subha.me/docs/) | [GitHub Repository](https://github.com/subhadeeproy3902/mvpblocks)
+7.  **Magic UI / Aceternity UI**: Weitere Inspirationsquellen für Micro-Interactions.
 
 ## Struktur der Dokumentation
 
