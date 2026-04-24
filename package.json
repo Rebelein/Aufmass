@@ -1,7 +1,7 @@
 {
   "name": "rebelein-aufmass",
   "private": true,
-  "version": "1.4.3",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -47,6 +47,7 @@
     "jspdf-autotable": "^5.0.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
+    "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -55,6 +56,7 @@
     "react-router-dom": "^6.28.0",
     "recharts": "^2.15.1",
     "tailwind-merge": "^3.0.1",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

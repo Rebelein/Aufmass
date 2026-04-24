@@ -1,22 +1,50 @@
-# **App Name**: Katalog PDF Maker
+# Projekt Blueprint: Rebelein Aufmaß-App
 
-## Core Features:
+## 1. Projekt-Status (Stand: April 2026)
+Die Anwendung ist eine spezialisierte **Aufmaß- und Dokumentations-Lösung** für Handwerksbetriebe. Sie ermöglicht die Erfassung von Materialien auf Baustellen, den Abgleich mit Großhändler-Daten (Datanorm) und den Export als PDF oder CSV.
 
-- Artikelkatalog-Anzeige: Anzeige eines Artikelkatalogs mit Bildern, Beschreibungen und Preisen.
-- Artikelauswahl: Ermöglicht es Benutzern, Artikel aus dem Katalog auszuwählen und ihrer Bestellung hinzuzufügen.
-- Auswahlzusammenfassung: Anzeige der ausgewählten Artikel in einer übersichtlichen, zusammengefassten Ansicht.
-- PDF-Generierung: Generative KI tool erstellt ein gut formatiertes PDF-Dokument aus den ausgewählten Artikeln, um Lesbarkeit und professionelle Präsentation zu gewährleisten.
-- PDF-Download: Ermöglicht es Benutzern, das generierte PDF herunterzuladen.
-- Katalogverwaltung: Verwaltungsoberfläche zum Erstellen und Verwalten von Kategorien und Unterkategorien für den Artikelkatalog.
-- Datenbank: Datenbank zur Speicherung von Artikeln, Kategorien und Unterkategorien.
-- Bulkimport: Artikel sollen der Kategorie eine Bulkimport Funktion bieten
+### Kern-Features:
+*   **Projekt-Management:** Erstellung und Verwaltung von Baustellen/Projekten.
+*   **Intelligentes Aufmaß:** Schnelle Erfassung von Artikeln in verschiedenen Bauabschnitten.
+*   **PDF/CSV-Import (OCR):** Lokaler Import von LVs oder Listen via Texterkennung (Tesseract.js) mit automatischem Datanorm-Abgleich.
+*   **Datanorm-Suche:** Globaler Zugriff auf Millionen von Großhändler-Artikeln via Suchmaske.
+*   **Offline-First:** Lokale Zwischenspeicherung der Daten mit Hintergrund-Synchronisation zu Supabase.
+*   **Self-Hosted:** Vollständige Kontrolle durch Betrieb auf eigenem vServer.
 
-## Style Guidelines:
+---
 
-- Primärfarbe: Sanftes Blau (#64B5F6), um Vertrauen und Ruhe auszustrahlen.
-- Hintergrundfarbe: Sehr helles Blau (#F0F8FF), fast weiß, um den Fokus auf die Artikel zu lenken.
-- Akzentfarbe: Blaugrün (#4DB6AC), um die Aufmerksamkeit auf interaktive Elemente wie Schaltflächen zu lenken.
-- Körper- und Überschriftenschrift: 'PT Sans', eine humanistische serifenlose Schrift, bietet ein ausgewogenes Verhältnis von moderner und ansprechender Ästhetik, geeignet für Überschriften und Textkörper.
-- Einfache, klare Symbole zur Darstellung von Artikelkategorien und Aktionen.
-- Sauberes, übersichtliches Layout mit viel Freiraum für einfaches Durchsuchen und Lesen.
-- Subtile Animationen zur Rückmeldung auf Benutzerinteraktionen.
+## 2. Wichtige Verzeichnisse & Ressourcen
+
+### 🗄️ Datenbank (Supabase / Postgres)
+Alle Informationen zur Datenbankstruktur befinden sich hier:
+*   **`supabase/schema_current.sql`**: Das tagesaktuelle, vollständige Datenbankschema (Referenz).
+*   **`supabase/migrations/`**: Enthält die initiale Baseline-Migration für neue Setups.
+*   **`src/lib/supabase.ts`**: Konfiguration der Datenbank-Verbindung.
+
+### 🎨 Design & UI
+Richtlinien für das visuelle Erscheinungsbild:
+*   **`docs/design-system/`**: Enthält alle aktuellen Design-Vorgaben, Farbpaletten und UI-Komponenten-Regeln.
+*   **`src/components/ui/`**: Die Basis-Bausteine der Oberfläche (Buttons, Dialoge, Inputs).
+*   **`tailwind.config.ts`**: Konfiguration des CSS-Frameworks.
+
+### 🚀 Logik & Features
+Wo passiert was?
+*   **`src/lib/catalog-storage.ts`**: Logik für Katalog-Artikel und Datanorm-Suche.
+*   **`src/lib/project-storage.ts`**: Verwaltung von Projekten und Aufmaß-Positionen.
+*   **`src/components/dialogs/ProjectImportDialog.tsx`**: Das Herzstück des OCR- und PDF-Imports.
+*   **`docs/superpowers/`**: Detaillierte Konzepte zu speziellen Funktionen wie KI-Management.
+
+---
+
+## 3. Tech-Stack
+*   **Frontend:** React 18, TypeScript, Vite
+*   **Styling:** Tailwind CSS (Modernes Dark/Light-Design)
+*   **Datenbank:** PostgreSQL (Self-hosted via Supabase/Coolify)
+*   **OCR:** Tesseract.js (Lokale Texterkennung im Browser)
+*   **Hosting:** Linux vServer via Coolify
+
+---
+
+## 4. API & Integrationen
+*   **Datanorm-Import:** Erfolgt über ein optimiertes Massen-Upload-Tool im Admin-Bereich direkt in die `articles`-Tabelle (Source: 'wholesale').
+*   **Gemini AI:** Integriert für zukünftige intelligente Assistenzfunktionen (API-Key in `.env`).

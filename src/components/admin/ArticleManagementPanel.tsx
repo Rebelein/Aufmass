@@ -21,7 +21,7 @@ import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp,
 import { Badge } from '@/components/ui/badge';
 import { cn, generateUUID } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { batchAddCatalog, updateCategoryImage, batchUpdateArticles } from '@/lib/catalog-storage';
+import { batchAddCatalog, updateCategoryImage, batchUpdateArticles, findWholesaleArticleByNumber } from '@/lib/catalog-storage';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import {
   AlertDialog,
@@ -515,6 +515,25 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     setIsArticleFormDialogOpen(false);
   };
 
+  const handleArticleNumberBlur = async () => {
+    if (!articleFormData.articleNumber || editingArticle) return;
+    
+    const wholesaleArticle = await findWholesaleArticleByNumber(articleFormData.articleNumber);
+    if (wholesaleArticle) {
+      setArticleFormData(prev => ({
+        ...prev,
+        name: prev.name || wholesaleArticle.name,
+        unit: prev.unit || wholesaleArticle.unit,
+        supplierId: prev.supplierId || wholesaleArticle.supplierId || prev.supplierId
+      }));
+      toast({ 
+        title: "Artikel in Datanorm gefunden", 
+        description: "Daten wurden automatisch ergänzt." 
+      });
+      impactLight();
+    }
+  };
+
   return (
     <div className="h-full flex flex-col items-stretch space-y-0">
       <div className="bg-card text-card-foreground border-border shadow-sm rounded-xl p-0 overflow-hidden flex flex-col h-full rounded-2xl shadow-none border-0 sm:border">
@@ -792,7 +811,17 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
           <form onSubmit={handleArticleFormSubmit} className="space-y-4 py-4">
             <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Bezeichnung</Label><Input name="name" value={articleFormData.name} onChange={(e) => setArticleFormData({...articleFormData, name: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
             <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Art-Nr.</Label><Input name="articleNumber" value={articleFormData.articleNumber} onChange={(e) => setArticleFormData({...articleFormData, articleNumber: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Art-Nr.</Label>
+                  <Input 
+                    name="articleNumber" 
+                    value={articleFormData.articleNumber} 
+                    onChange={(e) => setArticleFormData({...articleFormData, articleNumber: e.target.value})} 
+                    onBlur={handleArticleNumberBlur}
+                    className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" 
+                    required 
+                  />
+                </div>
                 <div className="space-y-2"><Label className="text-muted-foreground text-xs uppercase font-bold tracking-widest ml-1">Einheit</Label><Input name="unit" value={articleFormData.unit} onChange={(e) => setArticleFormData({...articleFormData, unit: e.target.value})} className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-12" required /></div>
             </div>
             <div className="space-y-2">

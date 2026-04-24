@@ -86,11 +86,10 @@ const SortableCategoryItem = ({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    transform: CSS.Translate.toString(transform),
     transition,
     zIndex: isDragging ? 50 : 'auto',
-    opacity: isDragging ? 0.5 : 1,
-    position: isDragging ? 'relative' : 'static' as any,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   const isSelected = activeCategoryId === category.id;
@@ -102,14 +101,14 @@ const SortableCategoryItem = ({
   const isDeleting = deletingCategoryId === category.id;
 
   return (
-    <li ref={setNodeRef} style={style} className="group/item relative list-none">
+    <li ref={setNodeRef} style={style} className="group/item relative list-none mb-1">
       {isDeleting ? (
         /* Inline Delete Confirmation */
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.15 }}
-          className="flex items-center gap-2 p-2 rounded-xl border border-red-500/30 bg-red-950/40 backdrop-blur-sm"
+          className="flex items-center gap-2 p-2 rounded-xl border border-red-500/30 bg-red-950/40 backdrop-blur-sm ml-0"
           onClick={e => e.stopPropagation()}
         >
           <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-red-500/20 text-red-400">
@@ -141,7 +140,7 @@ const SortableCategoryItem = ({
         <div 
           className={cn(
             "flex justify-between items-center p-2.5 min-h-[44px] rounded-xl cursor-pointer transition-all duration-200 border",
-            onReorderCategory ? "pl-9" : "",
+            onReorderCategory ? "pl-1" : "",
             isDeepestExpanded && "sticky top-0 z-10 bg-background backdrop-blur-md border-border text-foreground shadow-lg",
             isSelected && !hasChildren
               ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
@@ -157,18 +156,18 @@ const SortableCategoryItem = ({
             }
           }}
         >
-          {onReorderCategory && (
-            <div 
-              className="absolute left-1.5 top-0 bottom-0 w-7 flex items-center justify-center cursor-grab active:cursor-grabbing z-20" 
-              {...attributes} 
-              {...listeners}
-              onClick={e => e.stopPropagation()}
-            >
-              <GripVertical size={14} className="text-muted-foreground group-hover/item:text-emerald-400/70 transition-colors" />
-            </div>
-          )}
+          <div className="flex items-center flex-grow gap-2 min-w-0 pr-2">
+            {onReorderCategory && (
+              <div 
+                className="w-7 h-7 flex items-center justify-center cursor-grab active:cursor-grabbing text-muted-foreground hover:text-emerald-400/70 transition-colors shrink-0 mr-1" 
+                {...attributes} 
+                {...listeners}
+                onClick={e => e.stopPropagation()}
+              >
+                <GripVertical size={14} />
+              </div>
+            )}
 
-          <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
             <div className={cn(
                 "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
                 isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover/item:bg-muted group-hover/item:text-muted-foreground"

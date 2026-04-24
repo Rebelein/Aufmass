@@ -20,7 +20,7 @@ interface ImportReviewDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveDraft: (id: string, data: any, supplierId: string | null) => Promise<void>;
-  onConfirmImport: (id: string, data: any, targetCategoryId: string | null, supplierId: string | null, importMode?: ImportMode) => Promise<void>;
+  onConfirmImport: (id: string, data: any, targetCategoryId: string | null, supplierId: string | null, importMode?: ImportMode, catalogSource?: 'own' | 'wholesale') => Promise<void>;
   articles: Article[];
   categories: Category[];
   suppliers: Supplier[];
@@ -41,6 +41,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   const [localData, setLocalData] = useState<any[]>([]);
   const [isSyncEditing, setIsSyncEditing] = useState(true);
   const [targetCategoryId, setTargetCategoryId] = useState<string>(defaultTargetCategoryId || 'root');
+  const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
   const [supplierId, setSupplierId] = useState<string>('none');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
   const [cursorInfo, setCursorInfo] = useState<{ catIdx: number, artIdx: number, pos: number, field: string } | null>(null);
@@ -168,7 +169,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     setIsImporting(true);
     const finalTargetId = targetCategoryId === 'root' ? null : targetCategoryId;
     const finalSupplierId = supplierId === 'none' ? null : supplierId;
-    await onConfirmImport(draft?.id || '', localData, finalTargetId, finalSupplierId, mode);
+    await onConfirmImport(draft?.id || '', localData, finalTargetId, finalSupplierId, mode, catalogSource);
     setIsImporting(false);
     onClose();
   };
@@ -228,7 +229,19 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     >
       <div className="p-4 space-y-4">
         {/* Settings Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-muted/50 p-3 rounded-xl border border-border">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-muted/50 p-3 rounded-xl border border-border">
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase text-muted-foreground font-bold ml-1">Katalog-Typ</Label>
+            <Select value={catalogSource} onValueChange={(val: any) => setCatalogSource(val)}>
+              <SelectTrigger className="bg-background border border-input text-foreground focus-visible:ring-1 focus-visible:ring-ring shadow-sm rounded-md h-9 text-xs">
+                <SelectValue placeholder="Wählen..." />
+              </SelectTrigger>
+              <SelectContent className="bg-background border-border text-foreground z-[100]">
+                <SelectItem value="own">Eigener Katalog</SelectItem>
+                <SelectItem value="wholesale">Großhändler</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1">
             <Label className="text-[10px] uppercase text-muted-foreground font-bold ml-1">Ziel-Kategorie</Label>
             <Select value={targetCategoryId} onValueChange={setTargetCategoryId}>
@@ -237,14 +250,16 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
               </SelectTrigger>
               <SelectContent className="bg-background border-border text-foreground max-h-[300px] z-[100]">
                 <SelectItem value="root">Hauptverzeichnis (Root)</SelectItem>
-                {categoryTree.map(({ cat, level }) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    <div className="flex items-center gap-2">
-                      {level > 0 && <span className="text-muted-foreground" style={{ paddingLeft: `${level * 12}px` }}>└</span>}
-                      <span>{cat.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {categoryTree
+                  .filter(({ cat }) => cat.source === catalogSource || (!cat.source && catalogSource === 'own'))
+                  .map(({ cat, level }) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <div className="flex items-center gap-2">
+                        {level > 0 && <span className="text-muted-foreground" style={{ paddingLeft: `${level * 12}px` }}>└</span>}
+                        <span>{cat.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

@@ -346,6 +346,23 @@ export async function searchWholesaleArticles(query: string): Promise<Article[]>
   return mapArticleData(data);
 }
 
+export async function findWholesaleArticleByNumber(articleNumber: string): Promise<Article | null> {
+  if (!articleNumber) return null;
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*, categories(name), suppliers(name)')
+    .eq('source', 'wholesale')
+    .eq('article_number', articleNumber)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error finding wholesale article by number:", error);
+    return null;
+  }
+  if (!data) return null;
+  return mapArticleData([data])[0];
+}
+
 export function subscribeToArticles(callback: (articles: Article[]) => void, source?: 'own' | 'wholesale') {
   // 1. Instant load from cache
   const cached = loadFromCache<Article[]>(CACHE_KEYS.ARTICLES(source));
@@ -498,14 +515,15 @@ export async function batchAddCatalog(
   catalogData: ProposedCategory[],
   existingCategories: Category[],
   rootParentId: string | null = null,
-  defaultSupplierId: string | null = null
+  defaultSupplierId: string | null = null,
+  source: 'own' | 'wholesale' = 'own'
 ): Promise<boolean> {
     
     const processCategory = async (category: ProposedCategory, parentId: string | null, order: number) => {
       // 1. Create Category
       const { data: newCat, error: catError } = await supabase
         .from('categories')
-        .insert([{ name: category.categoryName, parent_id: parentId, order: order }])
+        .insert([{ name: category.categoryName, parent_id: parentId, order: order, source: source }])
         .select()
         .single();
 
@@ -518,7 +536,8 @@ export async function batchAddCatalog(
         unit: art.unit,
         category_id: newCat.id,
         supplier_id: art.supplierId || defaultSupplierId,
-        order: idx
+        order: idx,
+        source: source
       }));
 
       if (articlesToInsert.length > 0) {
