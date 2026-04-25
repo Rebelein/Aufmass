@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Article, Category, Supplier } from '@/lib/data';
 import type { ProposedCategory, NewArticleFormData } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ interface ArticleManagementPanelProps {
   allCategories: Category[]; 
   onAssignImage: (articleIds: string[], imageUrl: string | null) => void;
   onNavigateCategory: (direction: 'prev' | 'next') => void;
+  onDataChanged?: () => void;
 }
 
 const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
@@ -71,6 +73,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   onUpdateExistingArticle,
   onDeleteArticles,
   allCategories,
+  onDataChanged,
 }) => {
   const [isArticleFormDialogOpen, setIsArticleFormDialogOpen] = useState(false);
   const [articleFormData, setArticleFormData] = useState<NewArticleFormData>({
@@ -98,6 +101,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [isSyncEditing, setIsSyncEditing] = useState(true);
+  const [activeRowId, setActiveRowId] = useState<string | null>(null);
   const [cursorInfo, setCursorInfo] = useState<{ id: string, field: string, pos: number } | null>(null);
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement>>({});
 
@@ -289,6 +293,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       setHasUnsavedChanges(false);
       impactMedium();
       toast({ title: "Änderungen gespeichert" });
+      onDataChanged?.();
     } catch (error) {
       toast({ title: "Fehler beim Speichern", variant: "destructive" });
     } finally {
@@ -328,6 +333,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         setCategoryImage(base64);
         impactMedium();
         toast({ title: "Bild aktualisiert" });
+        onDataChanged?.();
       }
     } catch (err) {
       toast({ title: "Fehler beim Upload", variant: "destructive" });
@@ -378,6 +384,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         setCategoryImage(base64);
         impactMedium();
         toast({ title: "Bild aus Zwischenablage eingefügt" });
+        onDataChanged?.();
       }
     } catch (err) {
       console.error(err);
@@ -667,9 +674,17 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
+                      <AnimatePresence initial={false}>
                         {localArticles.map(article => (
                           deletingArticleId === article.id ? (
-                            <TableRow key={article.id} className="border-destructive/30 bg-destructive/10">
+                            <motion.tr 
+                              key={`del-${article.id}`} 
+                              layout 
+                              initial={{ opacity: 0, height: 0 }} 
+                              animate={{ opacity: 1, height: 'auto' }} 
+                              exit={{ opacity: 0, scale: 0.95 }} 
+                              className="border-b transition-colors border-destructive/30 bg-destructive/10"
+                            >
                               <TableCell colSpan={6} className="p-2">
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-2">
                                   <div className="flex items-center gap-2 min-w-0">
@@ -696,9 +711,29 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                   </div>
                                 </div>
                               </TableCell>
-                            </TableRow>
+                            </motion.tr>
                           ) : (
-                            <TableRow key={article.id} className="border-border hover:bg-muted/30 group transition-colors">
+                            <motion.tr 
+                              key={article.id} 
+                              layout 
+                              initial={{ opacity: 0, y: -10 }} 
+                              animate={{ 
+                                opacity: 1, 
+                                y: 0,
+                                scale: activeRowId === article.id ? 1.005 : 1,
+                                zIndex: activeRowId === article.id ? 20 : 0
+                              }} 
+                              exit={{ opacity: 0, scale: 0.95, backgroundColor: "rgba(239, 68, 68, 0.1)" }} 
+                              transition={{ duration: 0.2 }}
+                              onFocusCapture={() => setActiveRowId(article.id)}
+                              onClick={() => setActiveRowId(article.id)}
+                              className={cn(
+                                "border-b transition-colors data-[state=selected]:bg-muted group relative",
+                                activeRowId === article.id 
+                                  ? "bg-card shadow-[0_8px_30px_rgba(245,158,11,0.12)] outline outline-2 outline-amber-500/40 border-transparent rounded-xl" 
+                                  : "border-border hover:bg-muted/30"
+                              )}
+                            >
                                 <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
                                 <TableCell className="font-bold text-foreground p-2">
                                   <div className="flex flex-col gap-1.5">
@@ -794,9 +829,10 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                         <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive"><Trash2 size={14}/></Button>
                                     </div>
                                 </TableCell>
-                            </TableRow>
+                            </motion.tr>
                           )
                         ))}
+                      </AnimatePresence>
                     </TableBody>
                 </Table>
                 {initialArticles.length === 0 && <div className="py-20 text-center text-muted-foreground font-medium">Keine Artikel vorhanden.</div>}

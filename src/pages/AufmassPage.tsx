@@ -4,14 +4,14 @@ import type { Article, Category } from '@/lib/data';
 import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers, fetchWholesaleArticlesByCategory, searchWholesaleArticles } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentProjectId, getProjectById, upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection, updateProject } from '@/lib/project-storage';
-import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
+import { getCurrentProjectId, getProjectById, upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection, updateProject, createProjectList, deleteProjectList } from '@/lib/project-storage';
+import type { Project, ProjectSelectedItem, ProjectList } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
-import { ChevronLeft, FileDown, Menu, Package, Sparkles, FileSpreadsheet, BookMarked, Search, X as CloseIcon, PenLine, Edit3, Sun, Moon, Mic, Copy, FileText, Database, FileUp, CloudOff } from 'lucide-react';
+import { ChevronLeft, FileDown, Menu, Package, Sparkles, FileSpreadsheet, BookMarked, Search, X as CloseIcon, PenLine, Edit3, Sun, Moon, Mic, Copy, FileText, Database, FileUp, CloudOff, ListPlus, LayoutGrid, CheckCircle2, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn, generateUUID } from '@/lib/utils';
@@ -47,6 +47,7 @@ const AufmassPage = () => {
   const [catalogSource, setCatalogSource] = useState<'own' | 'wholesale'>('own');
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+  const [activeListId, setActiveListId] = useState<string | null>(() => localStorage.getItem('activeListId'));
   const [viewMode, setViewMode] = useState<'aufmass' | 'angebot'>('angebot');
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
@@ -90,7 +91,31 @@ const AufmassPage = () => {
 
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300); return () => clearTimeout(timer); }, [searchQuery]);
 
-  useEffect(() => { const root = window.document.documentElement; root.classList.remove('light', 'dark'); root.classList.add(theme); localStorage.setItem('theme', theme); }, [theme]);
+  useEffect(() => {
+    if (!currentProject || isLoadingData) return;
+    const checkAndCreateInitialList = async () => {
+      if ((!currentProject.lists || currentProject.lists.length === 0) && !isLoadingData) {
+        const defaultListName = currentProject.status === 'planning' ? 'Angebot 1' : 'Aufmaß Gesamt';
+        const defaultListType = currentProject.status === 'planning' ? 'angebot' : 'aufmass';
+        const newList = await createProjectList(currentProject.id, defaultListName, defaultListType);
+        if (newList) {
+          setCurrentProject(prev => prev ? { ...prev, lists: [newList] } : prev);
+          setActiveListId(newList.id);
+        }
+      } else if (!activeListId && currentProject.lists && currentProject.lists.length > 0) {
+        setActiveListId(currentProject.lists[0].id);
+      }
+    };
+    checkAndCreateInitialList();
+  }, [currentProject?.id, currentProject?.lists?.length, isLoadingData, activeListId]);
+
+  useEffect(() => {
+    if (activeListId) {
+      localStorage.setItem('activeListId', activeListId);
+    } else {
+      localStorage.removeItem('activeListId');
+    }
+  }, [activeListId]);
 
   const activeCategories = catalogSource === 'own' ? categories : wholesaleCategories;
 
@@ -178,25 +203,87 @@ const AufmassPage = () => {
 
   const viewArticles = useMemo(() => { let result = []; if (catalogSource === 'wholesale') { result = dynamicWholesaleArticles; } else if (searchQuery.trim().length > 0) { result = searchResults; } else if (!activeCategoryId) { result = []; } else { const subcats = activeCategories.filter(c => c.parentId === activeCategoryId); const validIds = [activeCategoryId, ...subcats.map(c => c.id)]; result = articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)); } return [...result].sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' })); }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
 
-  const sections = useMemo(() => (currentProject?.selectedItems ?? []).filter(i => i.type === 'section').sort((a,b) => (a.order ?? 0) - (b.order ?? 0)), [currentProject]);
+  const sections = useMemo(() => (currentProject?.selectedItems ?? []).filter(i => {
+    const isSection = i.type === 'section';
+    if (!isSection) return false;
+    if (!currentProject?.lists || currentProject.lists.length === 0) return true;
+    return i.list_id === activeListId;
+  }).sort((a,b) => (a.order ?? 0) - (b.order ?? 0)), [currentProject, activeListId]);
 
   const processedSummaryItems: ProcessedSummaryItem[] = useMemo(() => {
     if (!currentProject) return [];
-    const enrichedItems = currentProject.selectedItems.map(item => { if (item.type === 'article' && item.article_id) { const articleDetail = articlesData.find(a => a.id === item.article_id) ?? dynamicWholesaleArticles.find(a => a.id === item.article_id) ?? projectWholesaleArticles.find(a => a.id === item.article_id); const allCats = [...categories, ...wholesaleCategories]; const categoryImageUrl = articleDetail?.categoryId ? allCats.find(c => c.id === articleDetail.categoryId)?.imageUrl : undefined; return { ...item, article: articleDetail, categoryImageUrl }; } return item as ProcessedSummaryItem; });
+    
+    // Filter items by active list if lists exist
+    const filteredByList = currentProject.selectedItems.filter(item => {
+      if (!currentProject.lists || currentProject.lists.length === 0) return true;
+      return item.list_id === activeListId;
+    });
+
+    const enrichedItems = filteredByList.map(item => { if (item.type === 'article' && item.article_id) { const articleDetail = articlesData.find(a => a.id === item.article_id) ?? dynamicWholesaleArticles.find(a => a.id === item.article_id) ?? projectWholesaleArticles.find(a => a.id === item.article_id); const allCats = [...categories, ...wholesaleCategories]; const categoryImageUrl = articleDetail?.categoryId ? allCats.find(c => c.id === articleDetail.categoryId)?.imageUrl : undefined; return { ...item, article: articleDetail, categoryImageUrl }; } return item as ProcessedSummaryItem; });
     return enrichedItems.sort((a, b) => { if (a.type === 'section' || b.type === 'section') return (a.order ?? 0) - (b.order ?? 0); const getCategoryPathOrder = (categoryId?: string): string => { if (!categoryId) return '999999'; const path: number[] = []; let currId: string | undefined | null = categoryId; const allCats = [...categories, ...wholesaleCategories]; while (currId) { const cat = allCats.find(c => c.id === currId); if (!cat) break; path.unshift(cat.order ?? 0); currId = cat.parentId; } return path.map(n => n.toString().padStart(5, '0')).join('-'); }; const pathA = getCategoryPathOrder(a.article?.categoryId); const pathB = getCategoryPathOrder(b.article?.categoryId); if (pathA !== pathB) return pathA.localeCompare(pathB); const nameA = (a.article?.name ?? a.name ?? '').replace(/\s+/g, ' ').trim(); const nameB = (b.article?.name ?? b.name ?? '').replace(/\s+/g, ' ').trim(); return nameA.compare(nameB, undefined, { numeric: true, sensitivity: 'base' }); });
-  }, [currentProject, articlesData, dynamicWholesaleArticles, projectWholesaleArticles, categories, wholesaleCategories]);
+  }, [currentProject, articlesData, dynamicWholesaleArticles, projectWholesaleArticles, categories, wholesaleCategories, activeListId]);
 
   const totalArticleCount = useMemo(() => processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0), [processedSummaryItems]);
 
-  const getQuantityInSection = useCallback((articleId: string): number => { if (!currentProject) return 0; return currentProject.selectedItems.filter(i => i.type === 'article' && i.article_id === articleId && i.section_id === activeSectionId).reduce((s, i) => s + (i.quantity ?? 0), 0); }, [currentProject, activeSectionId]);
+  const getQuantityInSection = useCallback((articleId: string): number => {
+    if (!currentProject) return 0;
+    return currentProject.selectedItems.filter(i => 
+      i.type === 'article' && 
+      i.article_id === articleId && 
+      i.section_id === activeSectionId &&
+      (!currentProject.lists || currentProject.lists.length === 0 || i.list_id === activeListId)
+    ).reduce((s, i) => s + (i.quantity ?? 0), 0);
+  }, [currentProject, activeSectionId, activeListId]);
 
-  const getItemInSection = useCallback((articleId: string): ProjectSelectedItem | undefined => { if (!currentProject) return undefined; return currentProject.selectedItems.find(i => i.type === 'article' && i.article_id === articleId && i.section_id === activeSectionId); }, [currentProject, activeSectionId]);
+  const getItemInSection = useCallback((articleId: string): ProjectSelectedItem | undefined => {
+    if (!currentProject) return undefined;
+    return currentProject.selectedItems.find(i => 
+      i.type === 'article' && 
+      i.article_id === articleId && 
+      i.section_id === activeSectionId &&
+      (!currentProject.lists || currentProject.lists.length === 0 || i.list_id === activeListId)
+    );
+  }, [currentProject, activeSectionId, activeListId]);
 
   const updateLocalItem = useCallback((updatedItem: ProjectSelectedItem) => { setCurrentProject(prev => { if (!prev) return prev; const exists = prev.selectedItems.find(i => i.id === updatedItem.id); if (exists) return { ...prev, selectedItems: prev.selectedItems.map(i => i.id === updatedItem.id ? updatedItem : i) }; return { ...prev, selectedItems: [...prev.selectedItems, updatedItem] }; }); }, []);
 
   const removeLocalItem = useCallback((itemId: string) => { setCurrentProject(prev => { if (!prev) return prev; return { ...prev, selectedItems: prev.selectedItems.filter(i => i.id !== itemId) }; }); }, []);
 
-  const handleIncrement = useCallback(async (article: Article) => { if (!currentProject) return; impactMedium(); const existing = getItemInSection(article.id); if (existing) { const newQty = (existing.quantity ?? 0) + 1; updateLocalItem({ ...existing, quantity: newQty }); const ok = await updateProjectItemQuantity(existing.id, newQty); if (!ok) { updateLocalItem(existing); toast({ title: 'Fehler', description: 'Menge konnte nicht gespeichert werden.', variant: 'destructive' }); } } else { const newItem: ProjectSelectedItem = { id: generateUUID(), project_id: currentProject.id, type: 'article', order: currentProject.selectedItems.length, article_id: article.id, quantity: 1, section_id: activeSectionId ?? null, }; updateLocalItem(newItem); const saved = await upsertProjectItem(newItem); if (!saved) { removeLocalItem(newItem.id); toast({ title: 'Fehler', description: 'Artikel konnte nicht hinzugefügt werden.', variant: 'destructive' }); } } }, [currentProject, activeSectionId, getItemInSection, updateLocalItem, removeLocalItem, impactMedium, toast]);
+  const handleIncrement = useCallback(async (article: Article) => {
+    if (!currentProject) return;
+    if (currentProject.lists && currentProject.lists.length > 0 && !activeListId) {
+      toast({ title: 'Hinweis', description: 'Bitte wählen Sie zuerst eine Liste aus.' });
+      return;
+    }
+    impactMedium();
+    const existing = getItemInSection(article.id);
+    if (existing) {
+      const newQty = (existing.quantity ?? 0) + 1;
+      updateLocalItem({ ...existing, quantity: newQty });
+      const ok = await updateProjectItemQuantity(existing.id, newQty);
+      if (!ok) {
+        updateLocalItem(existing);
+        toast({ title: 'Fehler', description: 'Menge konnte nicht gespeichert werden.', variant: 'destructive' });
+      }
+    } else {
+      const newItem: ProjectSelectedItem = {
+        id: generateUUID(),
+        project_id: currentProject.id,
+        list_id: activeListId,
+        type: 'article',
+        order: currentProject.selectedItems.length,
+        article_id: article.id,
+        quantity: 1,
+        section_id: activeSectionId ?? null,
+      };
+      updateLocalItem(newItem);
+      const saved = await upsertProjectItem(newItem);
+      if (!saved) {
+        removeLocalItem(newItem.id);
+        toast({ title: 'Fehler', description: 'Artikel konnte nicht hinzugefügt werden.', variant: 'destructive' });
+      }
+    }
+  }, [currentProject, activeSectionId, activeListId, getItemInSection, updateLocalItem, removeLocalItem, impactMedium, toast]);
 
   const handleDecrement = useCallback(async (article: Article) => { if (!currentProject) return; impactMedium(); const existing = getItemInSection(article.id); if (!existing) return; if ((existing.quantity ?? 0) <= 1) { removeLocalItem(existing.id); const ok = await deleteProjectItem(existing.id); if (!ok) { updateLocalItem(existing); toast({ title: 'Fehler', description: 'Artikel konnte nicht entfernt werden.', variant: 'destructive' }); } } else { const newQty = (existing.quantity ?? 0) - 1; updateLocalItem({ ...existing, quantity: newQty }); const ok = await updateProjectItemQuantity(existing.id, newQty); if (!ok) { updateLocalItem(existing); toast({ title: 'Fehler', description: 'Menge konnte nicht gespeichert werden.', variant: 'destructive' }); } } }, [currentProject, activeSectionId, getItemInSection, updateLocalItem, removeLocalItem, impactMedium, toast]);
 
@@ -206,19 +293,66 @@ const AufmassPage = () => {
 
   const handleUpdateQuantity = useCallback(async (itemId: string, newQuantity: number) => { if (newQuantity < 1) return; impactLight(); setCurrentProject(prev => { if (!prev) return prev; return { ...prev, selectedItems: prev.selectedItems.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i) }; }); const ok = await updateProjectItemQuantity(itemId, newQuantity); if (!ok) toast({ title: 'Fehler', description: 'Menge konnte nicht aktualisiert werden.', variant: 'destructive' }); }, [toast, impactLight]);
 
-  const handleAddSection = async (sectionName: string) => { if (!currentProject || !sectionName.trim()) return; const order = currentProject.selectedItems.length; const newSec = await addSection(currentProject.id, sectionName, order); if (newSec) { updateLocalItem(newSec); setActiveSectionId(newSec.id); toast({ title: 'Abschnitt erstellt', description: sectionName }); } };
+  const handleAddSection = async (sectionName: string) => {
+    if (!currentProject || !sectionName.trim()) return;
+    const order = currentProject.selectedItems.length;
+    const newSec = await addSection(currentProject.id, sectionName, order, activeListId);
+    if (newSec) {
+      updateLocalItem(newSec);
+      setActiveSectionId(newSec.id);
+      toast({ title: 'Abschnitt erstellt', description: sectionName });
+    }
+  };
 
   const handleUpdateSection = async (sectionId: string, newName: string) => { if (!currentProject) return; const section = currentProject.selectedItems.find(i => i.id === sectionId); if (!section) return; const updatedSection = { ...section, text: newName }; const result = await upsertProjectItem(updatedSection); if (result) { updateLocalItem(result); impactMedium(); } };
 
   const handleDeleteSection = async (sectionId: string) => { if (!currentProject) return; try { const { error } = await supabase.from('project_items').update({ section_id: null }).eq('section_id', sectionId); if (error) throw error; const success = await deleteProjectItem(sectionId); if (success) { setCurrentProject(prev => { if (!prev) return null; return { ...prev, selectedItems: prev.selectedItems.filter(i => i.id !== sectionId).map(i => i.section_id === sectionId ? { ...i, section_id: null } : i) }; }); if (activeSectionId === sectionId) setActiveSectionId(null); impactMedium(); toast({ title: 'Abschnitt gelöscht' }); } } catch (err) { toast({ title: 'Fehler beim Löschen', variant: 'destructive' }); } };
 
-  const handleAddManualPosition = async () => { if (!currentProject || !manualName.trim()) return; const newItem: ProjectSelectedItem = { id: generateUUID(), project_id: currentProject.id, type: 'article', order: currentProject.selectedItems.length, article_id: null, quantity: parseFloat(manualQty) || 1, name: manualName.trim(), unit: manualUnit.trim() || undefined, article_number: manualArticleNumber.trim() || undefined, section_id: activeSectionId ?? null, }; updateLocalItem(newItem); const saved = await upsertProjectItem(newItem); if (!saved) { removeLocalItem(newItem.id); toast({ title: 'Fehler', variant: 'destructive' }); return; } toast({ title: 'Hinzugefügt' }); setManualName(''); setManualQty('1'); setManualUnit(''); setManualArticleNumber(''); setIsManualDialogOpen(false); };
+  const handleAddManualPosition = async () => {
+    if (!currentProject || !manualName.trim()) return;
+    const newItem: ProjectSelectedItem = {
+      id: generateUUID(),
+      project_id: currentProject.id,
+      list_id: activeListId,
+      type: 'article',
+      order: currentProject.selectedItems.length,
+      article_id: null,
+      quantity: parseFloat(manualQty) || 1,
+      name: manualName.trim(),
+      unit: manualUnit.trim() || undefined,
+      article_number: manualArticleNumber.trim() || undefined,
+      section_id: activeSectionId ?? null,
+    };
+    updateLocalItem(newItem);
+    const saved = await upsertProjectItem(newItem);
+    if (!saved) {
+      removeLocalItem(newItem.id);
+      toast({ title: 'Fehler', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Hinzugefügt' });
+    setManualName('');
+    setManualQty('1');
+    setManualUnit('');
+    setManualArticleNumber('');
+    setIsManualDialogOpen(false);
+  };
 
   const handleImportItems = async (items: { article: Article, quantity: number }[]) => {
     if (!currentProject) return;
     for (const item of items) {
-      const newItem: ProjectSelectedItem = { id: generateUUID(), project_id: currentProject.id, type: 'article', order: currentProject.selectedItems.length, article_id: item.article.id, quantity: item.quantity, section_id: activeSectionId ?? null };
-      updateLocalItem(newItem); await upsertProjectItem(newItem);
+      const newItem: ProjectSelectedItem = {
+        id: generateUUID(),
+        project_id: currentProject.id,
+        list_id: activeListId,
+        type: 'article',
+        order: currentProject.selectedItems.length,
+        article_id: item.article.id,
+        quantity: item.quantity,
+        section_id: activeSectionId ?? null
+      };
+      updateLocalItem(newItem);
+      await upsertProjectItem(newItem);
     }
     impactMedium();
   };
@@ -254,11 +388,27 @@ const AufmassPage = () => {
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="shrink-0 border-b bg-background/80 backdrop-blur-md flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}><ChevronLeft /></Button>
-            <div className="min-w-0" onClick={handleOpenEditProject}><ShinyText text={currentProject.name || ''} className="font-bold truncate" /><p className="text-[10px] text-muted-foreground">{totalArticleCount} Positionen</p></div>
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Button variant="ghost" size="icon" className="lg:hidden text-primary shrink-0" onClick={() => setIsCategorySheetOpen(true)}>
+              <Menu size={20} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="shrink-0"><ChevronLeft /></Button>
+            <div className="min-w-0 cursor-pointer group flex flex-col" onClick={handleOpenEditProject}>
+              <div className="flex items-center gap-2 overflow-hidden">
+                <ShinyText text={currentProject.name || ''} className="font-bold truncate" />
+                <span className="text-muted-foreground/50 text-sm hidden sm:inline">/</span>
+                <span className="text-sm font-semibold text-primary truncate hidden sm:inline group-hover:underline decoration-primary/50 underline-offset-4">
+                  {currentProject.lists?.find(l => l.id === activeListId)?.name || 'Lädt...'}
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                <span className="sm:hidden font-semibold text-primary truncate max-w-[120px]">{currentProject.lists?.find(l => l.id === activeListId)?.name}</span>
+                <span className="sm:hidden text-muted-foreground/50">•</span>
+                {totalArticleCount} Positionen
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button variant="ghost" size="sm" onClick={() => setIsManualDialogOpen(true)} className="text-emerald-400 gap-1.5"><PenLine size={14} /> <span className="hidden sm:inline">Manuell</span></Button>
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={14} />}</Button>
           </div>
@@ -291,6 +441,30 @@ const AufmassPage = () => {
 
       <CsvExportDialog isOpen={isCsvExportDialogOpen} onClose={() => setIsCsvExportDialogOpen(false)} projectItems={processedSummaryItems} projectName={currentProject.name} />
       <ProjectImportDialog isOpen={isImportDialogOpen} onClose={() => setIsImportDialogOpen(false)} onImportItems={handleImportItems} />
+
+      {/* Mobiler Katalog (Sheet) */}
+      <Sheet open={isCategorySheetOpen} onOpenChange={setIsCategorySheetOpen}>
+        <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 flex flex-col bg-card border-r border-border">
+          <SheetHeader className="p-4 border-b shrink-0 text-left bg-muted/30">
+            <SheetTitle className="flex items-center gap-2 text-primary font-bold">
+              <Menu size={18} /> Katalog
+            </SheetTitle>
+          </SheetHeader>
+          <div className="p-3 border-b shrink-0 space-y-3 bg-background">
+            <div className="flex bg-muted/50 border border-border rounded-xl p-1">
+              <button onClick={() => setCatalogSource('own')} className={cn("flex-1 px-2 py-1.5 text-[11px] font-bold rounded-lg transition-all", catalogSource === 'own' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>Eigener Katalog</button>
+              <button onClick={() => setCatalogSource('wholesale')} className={cn("flex-1 px-2 py-1.5 text-[11px] font-bold rounded-lg transition-all", catalogSource === 'wholesale' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}>Datanorm</button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+              <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Suchen..." className="h-10 pl-9 text-xs bg-card border-border focus:ring-primary/50" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto py-3 bg-card">
+            <CategoryTree categories={activeCategories} activeCategoryId={activeCategoryId} expandedCategories={expandedCategories} forceExpandedIds={searchExpandedIds} onSelectCategory={handleSelectCategory} onToggleExpansion={toggleCategoryExpansion} />
+          </div>
+        </SheetContent>
+      </Sheet>
     </motion.div>
   );
 };

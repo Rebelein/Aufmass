@@ -10,9 +10,18 @@ export interface ProjectSection {
   order: number;
 }
 
+export interface ProjectList {
+  id: string;
+  project_id: string;
+  name: string;
+  type: 'angebot' | 'aufmass';
+  created_at: string;
+}
+
 export interface ProjectSelectedItem {
   id: string;
   project_id: string;
+  list_id?: string | null;
   type: 'article' | 'section';
   order: number;
   section_id?: string | null;
@@ -46,6 +55,7 @@ export interface Project {
   end_date?: string | null;
   notes?: string | null;
   documents?: string[];
+  lists: ProjectList[];
   selectedItems: ProjectSelectedItem[];
   created_at: string;
   updated_at: string;
@@ -56,30 +66,37 @@ const CURRENT_PROJECT_ID_KEY = 'catalogAppCurrentProjectId';
 export async function getProjects(): Promise<Project[]> {
   const { data, error } = await supabase
     .from('projects')
-    .select('*')
+    .select('*, project_lists(*)')
     .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error fetching projects from Supabase:', error);
     return [];
   }
-  return (data as Project[]).map(p => ({ ...p, selectedItems: [] }));
+  return (data as any[]).map(p => ({ 
+    ...p, 
+    selectedItems: [], 
+    lists: p.project_lists || [] 
+  })) as Project[];
 }
 
 let lastProjectsCount = 0;
 
 export function subscribeToProjects(callback: (projects: Project[]) => void) {
+  const handleChange = async () => {
+    const projects = await getProjects();
+    const diff = projects.length - lastProjectsCount;
+    if (diff !== 0) {
+      syncEvents.emit({ type: 'complete', label: 'Baustellen aktualisiert', changes: Math.abs(diff) });
+    }
+    lastProjectsCount = projects.length;
+    callback(projects);
+  };
+
   const channel = supabase
-    .channel('public:projects')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, async () => {
-      const projects = await getProjects();
-      const diff = projects.length - lastProjectsCount;
-      if (diff !== 0) {
-        syncEvents.emit({ type: 'complete', label: 'Baustellen aktualisiert', changes: Math.abs(diff) });
-      }
-      lastProjectsCount = projects.length;
-      callback(projects);
-    })
+    .channel('public:projects_and_lists')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, handleChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'project_lists' }, handleChange)
     .subscribe();
 
   getProjects().then(projects => {
@@ -106,26 +123,44 @@ export function setCurrentProjectId(projectId: string | null): void {
 export async function getProjectById(projectId: string): Promise<Project | undefined> {
   if (!projectId) return undefined;
 
+  // We try to fetch with project_lists, but if the table doesn't exist yet, we fallback
   const { data, error } = await supabase
     .from('projects')
-    .select('*, project_items(*)')
+    .select('*, project_items(*), project_lists(*)')
     .eq('id', projectId)
     .single();
 
   if (error) {
-    console.error('Fehler beim Abrufen des Projekts:', error);
-    return undefined;
+    // Fallback if project_lists doesn't exist
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('projects')
+      .select('*, project_items(*)')
+      .eq('id', projectId)
+      .single();
+
+    if (fallbackError) {
+      console.error('Fehler beim Abrufen des Projekts:', fallbackError);
+      return undefined;
+    }
+    return {
+      ...fallbackData,
+      lists: [],
+      selectedItems: ((fallbackData.project_items as ProjectSelectedItem[]) || []).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+    } as Project;
   }
 
   return {
     ...data,
+    lists: (data.project_lists as ProjectList[]) || [],
     selectedItems: ((data.project_items as ProjectSelectedItem[]) || []).sort(
       (a, b) => (a.order ?? 0) - (b.order ?? 0)
     ),
   } as Project;
 }
 
-export async function addProjectToSupabase(projectName: string, projectData?: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at'>>): Promise<Project | null> {
+export async function addProjectToSupabase(projectName: string, projectData?: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at' | 'lists'>>): Promise<Project | null> {
   const { data, error } = await supabase
     .from('projects')
     .insert([{ 
@@ -144,10 +179,27 @@ export async function addProjectToSupabase(projectName: string, projectData?: Pa
     console.error('Projekt konnte nicht erstellt werden:', error);
     return null;
   }
-  return { ...data, selectedItems: [] } as Project;
+  
+  const createdProject = data as Project;
+  
+  // Automatisch erstes Aufmaßblatt anlegen
+  const defaultListType = createdProject.status === 'planning' ? 'angebot' : 'aufmass';
+  const defaultListName = defaultListType === 'angebot' ? 'Angebot 1' : 'Aufmaßblatt 1';
+  
+  const { data: listData } = await supabase
+    .from('project_lists')
+    .insert([{ project_id: createdProject.id, name: defaultListName, type: defaultListType }])
+    .select()
+    .single();
+    
+  return { 
+    ...createdProject, 
+    selectedItems: [], 
+    lists: listData ? [listData as ProjectList] : [] 
+  };
 }
 
-export async function updateProject(projectId: string, updates: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at'>>): Promise<boolean> {
+export async function updateProject(projectId: string, updates: Partial<Omit<Project, 'id' | 'selectedItems' | 'created_at' | 'updated_at' | 'lists'>>): Promise<boolean> {
   const payload = { ...updates };
   if (payload.name) {
     payload.name = payload.name.trim();
@@ -162,6 +214,38 @@ export async function updateProject(projectId: string, updates: Partial<Omit<Pro
 
 export async function updateProjectName(projectId: string, name: string): Promise<boolean> {
   return updateProject(projectId, { name });
+}
+
+// --- List Management ---
+
+export async function createProjectList(projectId: string, name: string, type: 'angebot' | 'aufmass'): Promise<ProjectList | null> {
+  const { data, error } = await supabase
+    .from('project_lists')
+    .insert([{ project_id: projectId, name, type }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Fehler beim Erstellen der Liste:', error);
+    return null;
+  }
+  return data as ProjectList;
+}
+
+export async function deleteProjectList(listId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_lists')
+    .delete()
+    .eq('id', listId);
+  return !error;
+}
+
+export async function updateProjectList(listId: string, updates: Partial<Pick<ProjectList, 'name' | 'type'>>): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_lists')
+    .update(updates)
+    .eq('id', listId);
+  return !error;
 }
 
 export async function markProjectItemsAsAngebot(projectId: string): Promise<boolean> {
@@ -197,6 +281,7 @@ export async function upsertProjectItem(item: ProjectSelectedItem): Promise<Proj
   const payload: Record<string, unknown> = {
     id: item.id,
     project_id: item.project_id,
+    list_id: item.list_id ?? null,
     type: item.type,
     order: item.order,
     section_id: item.section_id ?? null,
@@ -280,11 +365,13 @@ export async function updateProjectItemQuantity(itemId: string, quantity: number
 export async function addSection(
   projectId: string,
   sectionName: string,
-  order: number
+  order: number,
+  listId?: string | null
 ): Promise<ProjectSelectedItem | null> {
   const newSection: Record<string, unknown> = {
     id: generateUUID(),
     project_id: projectId,
+    list_id: listId ?? null,
     type: 'section',
     text: sectionName.trim(),
     order,

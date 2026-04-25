@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, BookMarked, Search, ChevronLeft, Sun, Moon } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, BookMarked, Search, ChevronLeft, Sun, Moon, ImagePlus, ClipboardPaste } from 'lucide-react';
 import type { Category, Article, Supplier } from '@/lib/data';
 import { addCategory, updateCategory, batchUpdateCategories, batchUpdateArticles, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
@@ -47,6 +47,8 @@ const AdminPage = () => {
   const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
   const [reviewingDraft, setReviewingDraft] = useState<ImportDraft | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const categoryImageInputRef = useRef<HTMLInputElement>(null);
+  const [activeCategoryIdForImage, setActiveCategoryIdForImage] = useState<string | null>(null);
   const { impactMedium } = useHapticFeedback();
   const [sidebarWidth, setSidebarWidth] = useState(() => { const stored = localStorage.getItem('admin-sidebar-width'); return stored ? Math.max(200, Math.min(parseInt(stored, 10), 800)) : 308; });
   const isResizing = useRef(false);
@@ -88,12 +90,137 @@ const AdminPage = () => {
   };
 
   const handleSaveEditCategory = async () => { if (!inlineEditingCategoryId || !inlineEditedCategoryName.trim()) return; const success = await updateCategory(inlineEditingCategoryId, { name: inlineEditedCategoryName.trim() }); if (success) { setInlineEditingCategoryId(null); toast({ title: 'Erfolg' }); refreshData(); } };
-  const handleConfirmDeleteCategory = (id: string) => { setItemToDelete({ id, type: 'category' }); setIsDeleteDialogOpen(true); };
-  const confirmDeleteItem = async () => { if (!itemToDelete) return; if (itemToDelete.type === 'category') { const cat = categories.find(c => c.id === itemToDelete.id); const { deleteCategoryAndReparentChildren } = await import('@/lib/catalog-storage'); const success = await deleteCategoryAndReparentChildren(itemToDelete.id, cat?.parentId); if (success) refreshData(); } setIsDeleteDialogOpen(false); setItemToDelete(null); };
+  
+  // Startet den Inline-Bestätigungsdialog für Kategorien
+  const handleInitiateDeleteCategory = (id: string) => { setDeletingCategoryId(id); };
+  
+  // Führt das tatsächliche Löschen der Kategorie (inkl. Unterkategorien und Artikeln) durch
+  const handleExecuteDeleteCategory = async (id: string) => {
+    const { deleteCategoryWithChildren } = await import('@/lib/catalog-storage');
+    const success = await deleteCategoryWithChildren(id);
+    if (success) {
+      toast({ title: 'Kategorie gelöscht' });
+      setDeletingCategoryId(null);
+      refreshData();
+    } else {
+      toast({ title: 'Fehler beim Löschen', variant: 'destructive' });
+    }
+  };
+
+  const confirmDeleteItem = async () => { 
+    if (!itemToDelete) return; 
+    // Fallback falls es doch mal über das Modal kommen sollte (wird aber jetzt inline gemacht)
+    if (itemToDelete.type === 'category') { 
+      const { deleteCategoryWithChildren } = await import('@/lib/catalog-storage'); 
+      const success = await deleteCategoryWithChildren(itemToDelete.id); 
+      if (success) refreshData(); 
+    } 
+    setIsDeleteDialogOpen(false); setItemToDelete(null); 
+  };
+  
   const handleSaveNewSubCategory = async () => { if (!inlineCreateParentId || !inlineNewSubCategoryName.trim()) return; const siblings = categories.filter(c => c.parentId === inlineCreateParentId); const nextOrder = siblings.length; const newCat = await addCategory({ name: inlineNewSubCategoryName.trim(), parentId: inlineCreateParentId, order: nextOrder, source: 'own' }); if (newCat) { setInlineCreateParentId(null); setInlineNewSubCategoryName(''); refreshData(); } };
 
+  const handleCategoryUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeCategoryIdForImage) return;
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 120;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } }
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const base64 = await base64Promise;
+      const { updateCategoryImage } = await import('@/lib/catalog-storage');
+      const success = await updateCategoryImage(activeCategoryIdForImage, base64);
+      if (success) {
+        impactMedium();
+        toast({ title: "Kategoriebild aktualisiert" });
+        refreshData();
+      }
+    } catch (err) {
+      toast({ title: "Fehler beim Upload", variant: "destructive" });
+    }
+  };
+
+  const handleCategoryPasteImage = async (categoryId: string) => {
+    try {
+      const items = await navigator.clipboard.read();
+      let blob: Blob | null = null;
+      for (const item of items) {
+        const imageType = item.types.find(type => type.startsWith('image/'));
+        if (imageType) {
+          blob = await item.getType(imageType);
+          break;
+        }
+      }
+
+      if (!blob) {
+        toast({ title: "Kein Bild in der Zwischenablage", variant: "destructive" });
+        return;
+      }
+
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_SIZE = 120;
+            let width = img.width;
+            let height = img.height;
+            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } }
+            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+          };
+          img.src = event.target?.result as string;
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      const base64 = await base64Promise;
+      const { updateCategoryImage } = await import('@/lib/catalog-storage');
+      const success = await updateCategoryImage(categoryId, base64);
+      if (success) {
+        impactMedium();
+        toast({ title: "Bild eingefügt" });
+        refreshData();
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Fehler beim Zugriff auf Zwischenablage", variant: "destructive" });
+    }
+  };
+
   const renderAdminActions = (category: Category) => (
-    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); }} className="gap-2"><PlusCircle size={14} /> Untergruppe</DropdownMenuItem><DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="gap-2"><Edit3 size={14} /> Umbenennen</DropdownMenuItem><DropdownMenuSeparator /><DropdownMenuItem onClick={() => handleConfirmDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Löschen</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+      <DropdownMenuItem onClick={() => { setActiveCategoryIdForImage(category.id); categoryImageInputRef.current?.click(); }} className="gap-2"><ImagePlus size={14} /> Bild hochladen</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleCategoryPasteImage(category.id)} className="gap-2"><ClipboardPaste size={14} /> Bild einfügen</DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); }} className="gap-2"><PlusCircle size={14} /> Untergruppe</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="gap-2"><Edit3 size={14} /> Umbenennen</DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={() => handleInitiateDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Löschen</DropdownMenuItem>
+    </DropdownMenuContent></DropdownMenu>
   );
 
   const handleCsvUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,14 +267,40 @@ const AdminPage = () => {
               {view === 'catalog' ? (
                 <>
                   <div className="p-4 border-b shrink-0"><p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 mb-2 flex items-center gap-2"><ListPlus size={14} /> Hauptgruppen</p><div className="flex gap-2"><Input value={newMainCategoryName} onChange={e => setNewMainCategoryName(e.target.value)} placeholder="Neue Gruppe..." className="h-9 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()} /><Button onClick={handleAddMainCategory} className="h-9 w-9 p-0"><PlusCircle size={16} /></Button></div></div>
-                  <div className="flex-1 overflow-y-auto py-2"><CategoryTree categories={categories} activeCategoryId={activeCategoryId} expandedCategories={expandedCategories} onSelectCategory={handleSelectCategory} onToggleExpansion={toggleCategoryExpansion} renderActions={renderAdminActions} onReorderCategory={handleReorderCategory} inlineEditingCategoryId={inlineEditingCategoryId} editedCategoryName={inlineEditedCategoryName} onEditedCategoryNameChange={setInlineEditedCategoryName} onSaveEdit={handleSaveEditCategory} deletingCategoryId={deletingCategoryId} onConfirmDeleteCategory={handleConfirmDeleteCategory} onCancelDeleteCategory={() => setDeletingCategoryId(null)} onCancelEdit={() => setInlineEditingCategoryId(null)} inlineCreateParentId={inlineCreateParentId} newSubCategoryName={inlineNewSubCategoryName} onNewSubCategoryNameChange={setInlineNewSubCategoryName} onSaveNewSubCategory={handleSaveNewSubCategory} onCancelNewSubCategory={() => setInlineCreateParentId(null)} /></div>
+                  <div className="flex-1 overflow-y-auto py-2"><CategoryTree categories={categories} activeCategoryId={activeCategoryId} expandedCategories={expandedCategories} onSelectCategory={handleSelectCategory} onToggleExpansion={toggleCategoryExpansion} renderActions={renderAdminActions} onReorderCategory={handleReorderCategory} inlineEditingCategoryId={inlineEditingCategoryId} editedCategoryName={inlineEditedCategoryName} onEditedCategoryNameChange={setInlineEditedCategoryName} onSaveEdit={handleSaveEditCategory} deletingCategoryId={deletingCategoryId} onConfirmDeleteCategory={handleExecuteDeleteCategory} onCancelDeleteCategory={() => setDeletingCategoryId(null)} onCancelEdit={() => setInlineEditingCategoryId(null)} inlineCreateParentId={inlineCreateParentId} newSubCategoryName={inlineNewSubCategoryName} onNewSubCategoryNameChange={setInlineNewSubCategoryName} onSaveNewSubCategory={handleSaveNewSubCategory} onCancelNewSubCategory={() => setInlineCreateParentId(null)} /></div>
                 </>
               ) : (
                 <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 opacity-60"><div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500"><Search size={32} /></div><p className="text-xs font-medium text-muted-foreground">Datanorm-Suche aktiv</p></div>
               )}
               <div className="p-4 border-t bg-muted/20 space-y-2 shrink-0">
                 <p className="text-[9px] font-bold uppercase text-muted-foreground flex items-center gap-1.5"><Sparkles size={10} className="text-emerald-400" /> KI-Management</p>
-                <div onClick={() => setIsDraftsDialogOpen(true)} className="p-2 border rounded-lg bg-background cursor-pointer hover:bg-muted text-xs font-semibold flex justify-between items-center">KI-Scans prüfen <Badge variant="outline" className="text-[10px]">{importDrafts.filter(d => d.status === 'ready_for_review').length}</Badge></div>
+                <div onClick={() => setIsDraftsDialogOpen(true)} className="p-2 border rounded-lg bg-background cursor-pointer hover:bg-muted text-xs font-semibold flex justify-between items-center relative overflow-hidden group">
+                  <span className="flex items-center gap-2">KI-Scans prüfen</span>
+                  
+                  <div className="flex gap-1.5">
+                    {/* Zeige laufende Scans an (blinkend) */}
+                    {importDrafts.filter(d => d.status === 'processing').length > 0 && (
+                      <Badge variant="secondary" className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse flex items-center gap-1">
+                        <Loader2 size={10} className="animate-spin" /> 
+                        {importDrafts.filter(d => d.status === 'processing').length} aktiv
+                      </Badge>
+                    )}
+                    
+                    {/* Zeige fertige Scans an, die zur Überprüfung bereitstehen */}
+                    {importDrafts.filter(d => d.status === 'ready_for_review').length > 0 && (
+                      <Badge variant="default" className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white">
+                        {importDrafts.filter(d => d.status === 'ready_for_review').length} bereit
+                      </Badge>
+                    )}
+                    
+                    {/* Fallback: Keine Scans */}
+                    {importDrafts.filter(d => d.status === 'processing' || d.status === 'ready_for_review').length === 0 && (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">
+                        0
+                      </Badge>
+                    )}
+                  </div>
+                </div>
                 <div onClick={() => fileInputRef.current?.click()} className="p-3 border rounded-lg bg-background cursor-pointer hover:bg-muted flex items-center gap-2 text-[10px] font-bold w-full"><FileUp size={14} className="text-emerald-400" /> CSV Katalog-Import</div>
                 <Button onClick={() => setIsSupplierManagementDialogOpen(true)} variant="ghost" className="w-full justify-start h-8 text-[10px] font-bold uppercase"><FolderPlus size={12} className="mr-2 text-teal-400" /> Stammdaten</Button>
               </div>
@@ -157,7 +310,7 @@ const AdminPage = () => {
             {view === 'wholesale' ? (
               <WholesaleCatalogPanel ownCategories={categories} onArticlesCopied={refreshData} />
             ) : activeCategoryId ? (
-              <ArticleManagementPanel categoryName={categories.find(c => c.id === activeCategoryId)?.name || ''} categoryId={activeCategoryId} articles={articlesAdmin.filter(a => a.categoryId === activeCategoryId)} allArticles={articlesAdmin} onAddNewArticle={data => handleAddNewArticleToCategory(activeCategoryId, data)} onUpdateExistingArticle={handleUpdateExistingArticle} onReorderArticles={handleReorderArticlesInCategory} onDeleteArticles={handleDeleteArticles} onAssignSupplier={handleAssignSupplierToArticles} allCategories={categories} suppliers={suppliers} onAssignImage={handleAssignImageToArticles} onNavigateCategory={() => {}} />
+              <ArticleManagementPanel categoryName={categories.find(c => c.id === activeCategoryId)?.name || ''} categoryId={activeCategoryId} articles={articlesAdmin.filter(a => a.categoryId === activeCategoryId)} allArticles={articlesAdmin} onAddNewArticle={data => handleAddNewArticleToCategory(activeCategoryId, data)} onUpdateExistingArticle={handleUpdateExistingArticle} onReorderArticles={handleReorderArticlesInCategory} onDeleteArticles={handleDeleteArticles} onAssignSupplier={handleAssignSupplierToArticles} allCategories={categories} suppliers={suppliers} onAssignImage={handleAssignImageToArticles} onNavigateCategory={() => {}} onDataChanged={refreshData} />
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50"><Package size={48} className="mb-4" /><p>Wähle eine Gruppe aus</p></div>
             )}
@@ -169,6 +322,7 @@ const AdminPage = () => {
       <ImportDraftsDialog isOpen={isDraftsDialogOpen} onClose={() => setIsDraftsDialogOpen(false)} onOpenDraft={d => { setIsDraftsDialogOpen(false); setReviewingDraft(d); }} />
       <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)} onSaveDraft={(id, data, sid) => updateImportDraftData(id, data, sid)} onConfirmImport={handleConfirmReviewImport} categories={categories} suppliers={suppliers} articles={articlesAdmin} defaultTargetCategoryId={activeCategoryId || ''} />
       <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+      <input type="file" ref={categoryImageInputRef} onChange={handleCategoryUploadImage} accept="image/*" className="hidden" />
     </motion.div>
   );
 };

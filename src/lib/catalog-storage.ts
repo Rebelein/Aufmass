@@ -245,6 +245,33 @@ export async function deleteCategoryAndReparentChildren(categoryId: string, pare
     return !deleteError;
 }
 
+export async function deleteCategoryWithChildren(categoryId: string): Promise<boolean> {
+  // 1. Alle Unterkategorien rekursiv ermitteln
+  const { data: allCats } = await supabase.from('categories').select('id, parent_id');
+  const catsToDelete = new Set<string>([categoryId]);
+  
+  let added = true;
+  while (added) {
+    added = false;
+    allCats?.forEach(c => {
+      if (c.parent_id && catsToDelete.has(c.parent_id) && !catsToDelete.has(c.id)) {
+        catsToDelete.add(c.id);
+        added = true;
+      }
+    });
+  }
+  
+  const idsToDelete = Array.from(catsToDelete);
+
+  // 2. Alle Artikel in diesen Kategorien löschen
+  await supabase.from('articles').delete().in('category_id', idsToDelete);
+
+  // 3. Alle ermittelten Kategorien löschen
+  const { error } = await supabase.from('categories').delete().in('id', idsToDelete);
+
+  return !error;
+}
+
 export async function batchUpdateCategories(categoriesToUpdate: Partial<Category>[]): Promise<boolean> {
   // Supabase doesn't have a direct batch update by ID for different values in one call easily like Firestore
   // We'll do it sequentially or with a custom RPC if needed. For now, sequential is fine for small numbers.
