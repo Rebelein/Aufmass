@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sparkles, ChevronDown, Loader2, Save, Check, Trash2, FolderPlus, ListPlus } from 'lucide-react';
+import { Sparkles, ChevronDown, Loader2, Save, Check, Trash2, FolderPlus, ListPlus, X } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import type { Category, Supplier, Article } from '@/lib/data';
 import type { ImportDraft } from '@/lib/import-storage';
@@ -48,6 +50,10 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [showImportModeDialog, setShowImportModeDialog] = useState(false);
+
+  const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
+  const [targetMoveIdx, setTargetMoveIdx] = useState<string>('');
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const inputRefs = useRef<Record<string, HTMLInputElement>>({});
 
@@ -146,6 +152,54 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     e.stopPropagation();
     const nextData = localData.filter((_, i) => i !== catIdx);
     setLocalData(nextData);
+  };
+
+  const toggleArticleSelection = (catIdx: number, artIdx: number) => {
+    const key = `${catIdx}-${artIdx}`;
+    const next = new Set(selectedArticles);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setSelectedArticles(next);
+  };
+
+  const handleMoveSelection = () => {
+    if (selectedArticles.size === 0) return;
+    if (targetMoveIdx === 'new' && !newCategoryName.trim()) return;
+    if (targetMoveIdx === '') return;
+
+    const nextData = JSON.parse(JSON.stringify(localData));
+    const movedArticles: any[] = [];
+    
+    const sortedKeys = Array.from(selectedArticles).map(k => {
+      const [c, a] = k.split('-');
+      return { catIdx: parseInt(c, 10), artIdx: parseInt(a, 10) };
+    }).sort((a, b) => {
+      if (a.catIdx === b.catIdx) return b.artIdx - a.artIdx;
+      return b.catIdx - a.catIdx;
+    });
+
+    for (const { catIdx, artIdx } of sortedKeys) {
+      const art = nextData[catIdx].articles[artIdx];
+      movedArticles.push(art);
+      nextData[catIdx].articles.splice(artIdx, 1);
+    }
+    
+    movedArticles.reverse();
+
+    if (targetMoveIdx === 'new') {
+      nextData.push({
+        categoryName: newCategoryName.trim(),
+        articles: movedArticles
+      });
+    } else {
+      const targetIdx = parseInt(targetMoveIdx, 10);
+      nextData[targetIdx].articles.push(...movedArticles);
+    }
+    
+    setLocalData(nextData.filter((c: any) => c.articles.length > 0 || c.categoryName));
+    setSelectedArticles(new Set());
+    setTargetMoveIdx('');
+    setNewCategoryName('');
   };
 
   const handleSave = async () => {
@@ -289,6 +343,52 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
         </div>
 
         {/* Content Area */}
+        {selectedArticles.size > 0 && (
+          <div className="bg-primary/10 border border-primary/30 p-3 rounded-xl flex flex-col sm:flex-row items-center gap-3 animate-in fade-in sticky top-0 z-50 shadow-md backdrop-blur-md">
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge className="bg-primary text-primary-foreground">{selectedArticles.size}</Badge>
+              <span className="text-sm font-bold text-primary">Artikel ausgewählt</span>
+            </div>
+            
+            <div className="flex flex-1 items-center gap-2 w-full">
+              <Select value={targetMoveIdx} onValueChange={setTargetMoveIdx}>
+                <SelectTrigger className="h-9 bg-background border-primary/20 text-xs">
+                  <SelectValue placeholder="Ziel wählen..." />
+                </SelectTrigger>
+                <SelectContent className="bg-background border-border z-[150]">
+                  <SelectItem value="new" className="font-bold text-primary">+ Neue Kategorie...</SelectItem>
+                  <SelectSeparator />
+                  {localData.map((c, idx) => (
+                    <SelectItem key={idx} value={String(idx)}>{c.categoryName || `Gruppe ${idx + 1}`}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {targetMoveIdx === 'new' && (
+                <Input 
+                  placeholder="Name..." 
+                  className="h-9 text-xs bg-background border-primary/30"
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  autoFocus
+                />
+              )}
+              
+              <Button 
+                size="sm" 
+                onClick={handleMoveSelection} 
+                disabled={!targetMoveIdx || (targetMoveIdx === 'new' && !newCategoryName.trim())} 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md shrink-0 h-9 px-4"
+              >
+                 Ausführen
+              </Button>
+              
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedArticles(new Set()); setTargetMoveIdx(''); }} className="h-9 w-9 p-0 rounded-full hover:bg-destructive/10 hover:text-destructive shrink-0">
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="space-y-4">
           {localData.map((category: any, catIdx: number) => (
             <div key={catIdx} className="bg-muted/30 rounded-xl border border-border overflow-hidden">
@@ -327,7 +427,8 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                    <Table>
                      <TableHeader className="bg-muted/20">
                        <TableRow className="border-border">
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-3">Bezeichnung</TableHead>
+                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-3 w-8"></TableHead>
+                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-1">Bezeichnung</TableHead>
                          <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-32 p-2">Art-Nr.</TableHead>
                          <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-24 p-2">Einheit</TableHead>
                          <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-10 p-2"></TableHead>
@@ -336,7 +437,14 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                      <TableBody>
                        {category.articles.map((article: any, artIdx: number) => (
                          <TableRow key={article.id || artIdx} className="border-border hover:bg-muted/50 transition-colors group">
-                           <TableCell className="p-1.5 pl-2">
+                           <TableCell className="p-1.5 pl-3 w-8 text-center align-middle">
+                             <Checkbox 
+                               checked={selectedArticles.has(`${catIdx}-${artIdx}`)} 
+                               onCheckedChange={() => toggleArticleSelection(catIdx, artIdx)}
+                               className="border-primary/50 data-[state=checked]:bg-primary"
+                             />
+                           </TableCell>
+                           <TableCell className="p-1.5 pl-1">
                              <input 
                                ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
                                value={article.name}

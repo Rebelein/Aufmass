@@ -131,24 +131,43 @@ export async function getCategoriesList(source?: 'own' | 'wholesale'): Promise<C
     syncEvents.emit({ type: 'startInitial', label: 'Lade Kategorien...' });
   }
 
-  let query = supabase
-    .from('categories')
-    .select('*')
-    .order('order');
+  let allData: any[] = [];
+  let from = 0;
+  const limit = 1000;
+  let hasMore = true;
 
-  if (source) {
-    query = query.eq('source', source);
-  }
+  while (hasMore) {
+    let query = supabase
+      .from('categories')
+      .select('*')
+      .order('order')
+      .range(from, from + limit - 1);
 
-  const { data, error } = await query;
+    if (source) {
+      query = query.eq('source', source);
+    }
 
-  if (error) {
-    console.error("Error fetching categories:", error);
-    return cachedData || [];
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error fetching categories:", error);
+      return cachedData || [];
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < limit) {
+        hasMore = false;
+      } else {
+        from += limit;
+      }
+    } else {
+      hasMore = false;
+    }
   }
   
   // Map database snake_case to UI camelCase for compatibility
-  const mapped = (data as any[]).map(cat => ({
+  const mapped = allData.map(cat => ({
     ...cat,
     parentId: cat.parent_id,
     imageUrl: cat.image_url,
@@ -308,23 +327,42 @@ export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Art
     syncEvents.emit({ type: 'startInitial', label: 'Lade Artikel-Datenbank...' });
   }
 
-  let query = supabase
-    .from('articles')
-    .select('*, categories(name), suppliers(name)')
-    .order('order');
+  let allData: any[] = [];
+  let from = 0;
+  const limit = 1000;
+  let hasMore = true;
 
-  if (source) {
-    query = query.eq('source', source);
+  while (hasMore) {
+    let query = supabase
+      .from('articles')
+      .select('*, categories(name), suppliers(name)')
+      .order('order')
+      .range(from, from + limit - 1);
+
+    if (source) {
+      query = query.eq('source', source);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error fetching articles:", error);
+      return cachedData || [];
+    }
+
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      if (data.length < limit) {
+        hasMore = false;
+      } else {
+        from += limit;
+      }
+    } else {
+      hasMore = false;
+    }
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error fetching articles:", error);
-    return cachedData || [];
-  }
-
-  const mapped = mapArticleData(data);
+  const mapped = mapArticleData(allData);
   
   if (isFirstRun) {
     syncEvents.emit({ type: 'complete', label: 'Artikel initialisiert', changes: mapped.length });

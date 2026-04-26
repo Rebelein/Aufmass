@@ -60,6 +60,7 @@ const SortableCategoryItem = ({
   deletingCategoryId,
   onConfirmDeleteCategory,
   onCancelDeleteCategory,
+  depth,
   children
 }: { 
   id: string, 
@@ -81,6 +82,7 @@ const SortableCategoryItem = ({
   deletingCategoryId: string | null | undefined,
   onConfirmDeleteCategory: ((categoryId: string) => void) | undefined,
   onCancelDeleteCategory: (() => void) | undefined,
+  depth: number,
   children: React.ReactNode 
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -102,6 +104,9 @@ const SortableCategoryItem = ({
 
   return (
     <li ref={setNodeRef} style={style} className="group/item relative list-none mb-1">
+      {depth > 0 && (
+        <div className="absolute -left-[14px] top-[22px] w-[14px] h-[2px] bg-border/40 pointer-events-none rounded-r-full" />
+      )}
       {isDeleting ? (
         /* Inline Delete Confirmation */
         <motion.div
@@ -284,7 +289,7 @@ const SortableSiblingGroup = ({
   }
 
   const content = (
-    <ul className={cn("space-y-1", depth === 0 ? "px-2" : "pl-4 pr-0 mt-1")}>
+    <ul className={cn("space-y-1 relative", depth === 0 ? "px-2" : "ml-[22px] pl-3 border-l-2 border-border/30 mt-1")}>
       {columnCategories.map((category, index) => {
         const isAddingChildToThis = inlineCreateParentId === category.id;
         const hasChildren = categories.some(subCat => subCat.parentId === category.id) || isAddingChildToThis;
@@ -323,6 +328,7 @@ const SortableSiblingGroup = ({
             deletingCategoryId={deletingCategoryId}
             onConfirmDeleteCategory={onConfirmDeleteCategory}
             onCancelDeleteCategory={onCancelDeleteCategory}
+            depth={depth}
           >
             <AnimatePresence initial={false}>
               {hasChildren && isExpanded && (
@@ -369,7 +375,10 @@ const SortableSiblingGroup = ({
         );
       })}
       {isAddingHere && (
-        <li className="group/item mt-1 list-none">
+        <li className="group/item mt-1 list-none relative">
+          {depth > 0 && (
+            <div className="absolute -left-[14px] top-[22px] w-[14px] h-[2px] bg-border/40 pointer-events-none rounded-r-full" />
+          )}
           <div className="flex justify-between items-center p-2.5 rounded-xl border border-input bg-muted ml-0">
              <div className="flex items-center flex-grow gap-2.5 min-w-0 pr-2">
                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-muted text-muted-foreground">

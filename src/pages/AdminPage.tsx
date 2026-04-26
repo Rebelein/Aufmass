@@ -211,15 +211,33 @@ const AdminPage = () => {
     }
   };
 
+  const handleCategoryRemoveImage = async (categoryId: string) => {
+    try {
+      const { updateCategoryImage } = await import('@/lib/catalog-storage');
+      const success = await updateCategoryImage(categoryId, null);
+      if (success) {
+        impactMedium();
+        toast({ title: "Bild entfernt" });
+        refreshData();
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Fehler beim Entfernen des Bildes", variant: "destructive" });
+    }
+  };
+
   const renderAdminActions = (category: Category) => (
     <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
       <DropdownMenuItem onClick={() => { setActiveCategoryIdForImage(category.id); categoryImageInputRef.current?.click(); }} className="gap-2"><ImagePlus size={14} /> Bild hochladen</DropdownMenuItem>
       <DropdownMenuItem onClick={() => handleCategoryPasteImage(category.id)} className="gap-2"><ClipboardPaste size={14} /> Bild einfügen</DropdownMenuItem>
+      {category.imageUrl && (
+        <DropdownMenuItem onClick={() => handleCategoryRemoveImage(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Bild entfernen</DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); }} className="gap-2"><PlusCircle size={14} /> Untergruppe</DropdownMenuItem>
       <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="gap-2"><Edit3 size={14} /> Umbenennen</DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem onClick={() => handleInitiateDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Löschen</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => handleInitiateDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Kategorie Löschen</DropdownMenuItem>
     </DropdownMenuContent></DropdownMenu>
   );
 
@@ -310,7 +328,29 @@ const AdminPage = () => {
             {view === 'wholesale' ? (
               <WholesaleCatalogPanel ownCategories={categories} onArticlesCopied={refreshData} />
             ) : activeCategoryId ? (
-              <ArticleManagementPanel categoryName={categories.find(c => c.id === activeCategoryId)?.name || ''} categoryId={activeCategoryId} articles={articlesAdmin.filter(a => a.categoryId === activeCategoryId)} allArticles={articlesAdmin} onAddNewArticle={data => handleAddNewArticleToCategory(activeCategoryId, data)} onUpdateExistingArticle={handleUpdateExistingArticle} onReorderArticles={handleReorderArticlesInCategory} onDeleteArticles={handleDeleteArticles} onAssignSupplier={handleAssignSupplierToArticles} allCategories={categories} suppliers={suppliers} onAssignImage={handleAssignImageToArticles} onNavigateCategory={() => {}} onDataChanged={refreshData} />
+              <ArticleManagementPanel 
+                categoryName={categories.find(c => c.id === activeCategoryId)?.name || ''} 
+                categoryId={activeCategoryId} 
+                articles={(() => {
+                  const getRecursiveIds = (parentId: string): string[] => {
+                    const children = categories.filter(c => c.parentId === parentId);
+                    return [parentId, ...children.flatMap(c => getRecursiveIds(c.id))];
+                  };
+                  const allIds = getRecursiveIds(activeCategoryId);
+                  return articlesAdmin.filter(a => a.categoryId && allIds.includes(a.categoryId));
+                })()} 
+                allArticles={articlesAdmin} 
+                onAddNewArticle={data => handleAddNewArticleToCategory(activeCategoryId, data)} 
+                onUpdateExistingArticle={handleUpdateExistingArticle} 
+                onReorderArticles={handleReorderArticlesInCategory} 
+                onDeleteArticles={handleDeleteArticles} 
+                onAssignSupplier={handleAssignSupplierToArticles} 
+                allCategories={categories} 
+                suppliers={suppliers} 
+                onAssignImage={handleAssignImageToArticles} 
+                onNavigateCategory={() => {}} 
+                onDataChanged={refreshData} 
+              />
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50"><Package size={48} className="mb-4" /><p>Wähle eine Gruppe aus</p></div>
             )}

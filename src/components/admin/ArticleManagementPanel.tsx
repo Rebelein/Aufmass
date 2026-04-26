@@ -508,6 +508,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     setReviewingDraft(null);
     impactMedium();
     toast({ title: "Import erfolgreich" });
+    onDataChanged?.();
   };
 
   const handleOpenDraft = (draft: ImportDraft) => {
