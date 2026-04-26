@@ -27,42 +27,54 @@ export const generateGCCsv = (items: ProcessedSummaryItem[]): string => {
   return header + rows;
 };
 
-export const generateHeinzeCsv = (items: ProcessedSummaryItem[]): string => {
+export const generateHeinzeUgs = (items: ProcessedSummaryItem[]): string => {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const header = `V ${yy}${mm}${dd}\n`;
+
+  let index = 1;
   const rows = items
     .filter((item) => item.type === 'article')
     .map((item) => {
       const articleNumber = item.article?.articleNumber || (item as any).article_number || '';
       const quantity = item.quantity || 0;
-      const name = item.article?.name || item.text || (item as any).name || '';
-      const unit = item.article?.unit || (item as any).unit || 'ST';
-      const priceVal = (item.article as any)?.price;
       
-      const qtyStr = formatGermanNumber(quantity, 3);
-      const priceStr = priceVal ? formatGermanNumber(priceVal, 2) : '';
+      const posStr = String(index++).padEnd(4, ' ');
+      const artStr = String(articleNumber).padEnd(17, ' ');
+      const qtyStr = String(Math.round(quantity * 1000)).padStart(8, '0');
       
-      // Structure: [Nummer];[Menge];[Einheit];[Beschreibung];[Preis];
-      return `${articleNumber};${qtyStr};${unit};${name};${priceStr};`;
+      return `A ${posStr}${artStr}${qtyStr}`;
     })
     .join('\n');
   
-  return rows;
+  return header + rows;
 };
 
-export const generateCsvForSupplier = (supplier: string, items: ProcessedSummaryItem[]): string => {
+// Keeps compatibility but might be deprecated
+export const generateHeinzeCsv = (items: ProcessedSummaryItem[]): string => {
+  return generateHeinzeUgs(items);
+};
+
+export const generateExportForSupplier = (supplier: string, items: ProcessedSummaryItem[]): { content: string, extension: string, useBom: boolean } => {
   const normalizedSupplier = supplier.toUpperCase();
-  if (normalizedSupplier.includes('GC')) {
-    return generateGCCsv(items);
-  } else if (normalizedSupplier.includes('HEINZE')) {
-    return generateHeinzeCsv(items);
+  if (normalizedSupplier.includes('HEINZE')) {
+    return { content: generateHeinzeUgs(items), extension: 'ugs', useBom: false };
   } else {
     // Default to GC format as requested
-    return generateGCCsv(items);
+    return { content: generateGCCsv(items), extension: 'csv', useBom: true };
   }
 };
 
-export const downloadCsv = (content: string, filename: string) => {
-  // UTF-8 BOM is essential for Excel to recognize characters correctly
-  const blob = new Blob(["\ufeff" + content], { type: 'text/csv;charset=utf-8;' });
+export const generateCsvForSupplier = (supplier: string, items: ProcessedSummaryItem[]): string => {
+  return generateExportForSupplier(supplier, items).content;
+};
+
+export const downloadFile = (content: string, filename: string, useBom: boolean = true) => {
+  const finalContent = useBom ? "\ufeff" + content : content;
+  const mimeType = filename.endsWith('.ugs') ? 'text/plain;charset=utf-8;' : 'text/csv;charset=utf-8;';
+  const blob = new Blob([finalContent], { type: mimeType });
   const url = URL.createObjectURL(blob);
   
   const link = document.createElement('a');
@@ -72,4 +84,8 @@ export const downloadCsv = (content: string, filename: string) => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+};
+
+export const downloadCsv = (content: string, filename: string) => {
+  downloadFile(content, filename, true);
 };

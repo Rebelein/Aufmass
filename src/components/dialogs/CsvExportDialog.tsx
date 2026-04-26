@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Download, Archive, FileText } from 'lucide-react';
 import type { ProcessedSummaryItem } from '@/lib/types';
-import { generateCsvForSupplier, downloadCsv, getSupplierName } from '@/lib/csv-export';
+import { generateExportForSupplier, downloadFile, getSupplierName } from '@/lib/csv-export';
 import JSZip from 'jszip';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,10 +47,10 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
     const items = projectItems.filter(
       (item) => item.type === 'article' && getSupplierName(item) === supplier
     );
-    const csvContent = generateCsvForSupplier(supplier, items);
-    const filename = `${projectName}_${supplier}_${getDateString()}.csv`;
-    downloadCsv(csvContent, filename);
-    toast({ title: 'CSV heruntergeladen', description: filename });
+    const { content, extension, useBom } = generateExportForSupplier(supplier, items);
+    const filename = `${projectName}_${supplier}_${getDateString()}.${extension}`;
+    downloadFile(content, filename, useBom);
+    toast({ title: `${extension.toUpperCase()} heruntergeladen`, description: filename });
   };
 
   const handleDownloadAllSeparately = () => {
@@ -67,14 +67,14 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
       const items = projectItems.filter(
         (item) => item.type === 'article' && getSupplierName(item) === supplier
       );
-      const csvContent = generateCsvForSupplier(supplier, items);
-      const filename = `${projectName}_${supplier}_${dateStr}.csv`;
-      // UTF-8 BOM for Excel
-      zip.file(filename, "\ufeff" + csvContent);
+      const { content, extension, useBom } = generateExportForSupplier(supplier, items);
+      const filename = `${projectName}_${supplier}_${dateStr}.${extension}`;
+      // UTF-8 BOM for Excel if needed
+      zip.file(filename, (useBom ? "\ufeff" : "") + content);
     });
 
     const content = await zip.generateAsync({ type: 'blob' });
-    const zipFilename = `${projectName}_CSV_Export_${dateStr}.zip`;
+    const zipFilename = `${projectName}_Export_${dateStr}.zip`;
     
     const url = URL.createObjectURL(content);
     const link = document.createElement('a');
@@ -91,7 +91,7 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
       <DialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border border-border bg-background sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-foreground text-xl font-bold flex items-center gap-2">
-            <FileSpreadsheet size={22} className="text-emerald-400" /> CSV Export
+            <FileSpreadsheet size={22} className="text-emerald-400" /> Export
           </DialogTitle>
         </DialogHeader>
         
@@ -139,7 +139,7 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
                 className="w-full justify-start gap-3 text-muted-foreground hover:text-accent-foreground hover:bg-emerald-500/10 h-11 px-3 border border-transparent hover:border-emerald-500/20"
               >
                 <FileText size={16} className="text-emerald-400/70" />
-                <span className="truncate">Download {supplier} CSV</span>
+                <span className="truncate">Download {supplier} Datei</span>
               </Button>
             ))}
             {suppliers.length === 0 && (

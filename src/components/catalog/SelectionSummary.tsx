@@ -234,7 +234,7 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                   <DropdownMenuItem onClick={() => handleExport('heinze')} className="hover:bg-muted cursor-pointer gap-3 py-3">
                       <FileSpreadsheet size={18} className="text-primary" />
                       <div className="flex flex-col">
-                        <span className="font-medium">CSV (Sanitär Heinze)</span>
+                        <span className="font-medium">UGS (Sanitär Heinze)</span>
                         <span className="text-[10px] text-muted-foreground">Format für den Import</span>
                       </div>
                   </DropdownMenuItem>
@@ -247,4 +247,4 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
   );
 };
 
-export default SelectionSummary;
+export default SelectionSummary;lectionSummary;
