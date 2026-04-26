@@ -20,7 +20,7 @@ import ImportDraftsDialog from '../dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '../dialogs/ImportReviewDialog';
 import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp, Loader2, Trash2, Edit3, Package, BookMarked, Camera, ImagePlus, FileText, ClipboardPaste, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { cn, generateUUID } from '@/lib/utils';
+import { cn, generateUUID, getInheritedCategoryImageUrl } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { batchAddCatalog, updateCategoryImage, batchUpdateArticles, findWholesaleArticleByNumber } from '@/lib/catalog-storage';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -738,9 +738,9 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                 <TableCell className="font-bold text-foreground p-2">
                                   <div className="flex flex-col gap-1.5">
                                     <div className="flex items-center gap-2">
-                                     {article.imageUrl && (
+                                     {(article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)) && (
                                        <div className="w-8 h-8 rounded-md border border-border shrink-0 bg-background overflow-hidden flex items-center justify-center">
-                                         <img src={article.imageUrl} alt="" className="w-full h-full object-contain" />
+                                         <img src={article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)} alt="" className="w-full h-full object-contain" />
                                        </div>
                                      )}
                                      <textarea 

@@ -22,10 +22,22 @@ export default function Header() {
   );
 
   useEffect(() => {
+    const handleThemeChange = () => {
+      const storedTheme = localStorage.getItem('theme') as 'dark' | 'light';
+      if (storedTheme && storedTheme !== theme) {
+        setTheme(storedTheme);
+      }
+    };
+    window.addEventListener('theme-change', handleThemeChange);
+    return () => window.removeEventListener('theme-change', handleThemeChange);
+  }, [theme]);
+
+  useEffect(() => {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(theme);
     localStorage.setItem('theme', theme);
+    window.dispatchEvent(new Event('theme-change'));
   }, [theme]);
 
   const isActive = (path: string) => location.pathname === path;

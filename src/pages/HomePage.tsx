@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Label } from '@/components/ui/label';
-import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, ListPlus, X as CloseIcon } from 'lucide-react';
+import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, ListPlus, X as CloseIcon, Layers } from 'lucide-react';
 import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId, markProjectItemsAsAngebot, createProjectList } from '@/lib/project-storage';
 import { preloadCatalog } from '@/lib/catalog-storage';
 import type { Project, ProjectList } from '@/lib/project-storage';
@@ -73,6 +73,9 @@ export default function HomePage() {
   // Listen-Management States (Inline)
   const [creatingListForProject, setCreatingListForProject] = useState<string | null>(null);
   const [inlineListName, setInlineListName] = useState('');
+  
+  // Neu: State für das hervorgehobene Projekt (Info-Screen)
+  const [expandedProject, setExpandedProject] = useState<Project | null>(null);
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -151,15 +154,25 @@ export default function HomePage() {
 
   const handleUpdateStatus = async (project: Project, newStatus: 'planning' | 'active' | 'completed') => {
     try {
+      // Optimistic UI Update: Sofort in der Ansicht verschieben
+      setProjects(prevProjects => prevProjects.map(p => p.id === project.id ? { ...p, status: newStatus } : p));
+      
       const success = await updateProject(project.id, { status: newStatus });
       if (success) {
         if (project.status === 'planning' && newStatus === 'active') {
           await markProjectItemsAsAngebot(project.id);
         }
         toast({ title: "Status aktualisiert", description: `${project.name} verschoben.` });
+      } else {
+        // Rollback bei Fehler
+        setProjects(prevProjects => prevProjects.map(p => p.id === project.id ? { ...p, status: project.status } : p));
+        toast({ title: "Fehler", description: "Status konnte nicht aktualisiert werden.", variant: "destructive" });
       }
     } catch (error) {
       console.error("Error updating project status:", error);
+      // Rollback bei Exception
+      setProjects(prevProjects => prevProjects.map(p => p.id === project.id ? { ...p, status: project.status } : p));
+      toast({ title: "Fehler", description: "Status konnte nicht aktualisiert werden.", variant: "destructive" });
     }
   };
 
@@ -200,6 +213,7 @@ export default function HomePage() {
   const renderProjectCard = (project: Project, index: number) => {
     const articleCount = (project.selectedItems || []).filter(item => item.type === 'article').length;
     const sectionCount = (project.selectedItems || []).filter(item => item.type === 'section').length;
+    const isExpanded = expandedProject?.id === project.id;
 
     return (
       <motion.div 
@@ -214,10 +228,14 @@ export default function HomePage() {
           delay: index * 0.05 
         }}
         key={project.id} 
-        className="w-full"
+        className="w-full cursor-pointer"
+        onClick={() => setExpandedProject(isExpanded ? null : project)}
       >
-        <SpotlightCard className="bg-card border border-border rounded-xl shadow-sm overflow-hidden group flex flex-col hover:shadow-md hover:border-primary/30 transition-all duration-300">
-          <div className="p-4 space-y-3 flex-1">
+        <SpotlightCard className={cn(
+          "bg-card border rounded-xl shadow-sm overflow-hidden group flex flex-col transition-all duration-300",
+          isExpanded ? "border-primary shadow-md ring-2 ring-primary/20" : "border-border hover:shadow-md hover:border-primary/30"
+        )}>
+          <div className="p-4 space-y-3 flex-1 relative z-10">
             <div className="flex justify-between items-start gap-4">
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-foreground leading-tight break-words flex items-center gap-2 group-hover:text-primary transition-colors">
@@ -230,7 +248,7 @@ export default function HomePage() {
                 )}
               </div>
               
-              <div className="shrink-0 flex items-center relative z-20">
+              <div className="shrink-0 flex items-center relative z-20" onClick={(e) => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10">
@@ -264,14 +282,59 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* Inline Expanded Info */}
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-4 space-y-4 border-t border-border/50 mt-4 cursor-default" onClick={e => e.stopPropagation()}>
+                    {/* Basis-Infos */}
+                    <div className="grid grid-cols-1 gap-3">
+                      {(project.client_name || project.address) && (
+                        <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/50">
+                          <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><User size={12}/> Kunde & Ort</h3>
+                          {project.client_name && <p className="text-xs font-semibold text-foreground flex items-center gap-1.5"><User size={14} className="text-primary"/> {project.client_name}</p>}
+                          {project.address && <p className="text-xs text-muted-foreground flex items-start gap-1.5"><MapPin size={14} className="text-primary shrink-0 mt-0.5"/> {project.address}</p>}
+                        </div>
+                      )}
+                      {(project.start_date || project.end_date) && (
+                        <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/50">
+                          <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Calendar size={12}/> Zeitraum</h3>
+                          <div className="flex items-center gap-4">
+                            {project.start_date && <div><span className="text-[9px] text-muted-foreground uppercase block mb-0.5">Start</span><span className="text-xs font-semibold">{formatDate(project.start_date)}</span></div>}
+                            {project.end_date && <div><span className="text-[9px] text-muted-foreground uppercase block mb-0.5">Ende</span><span className="text-xs font-semibold">{formatDate(project.end_date)}</span></div>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Notizen */}
+                    {project.notes && (
+                      <div className="space-y-2">
+                        <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Briefcase size={12}/> Interne Notizen</h3>
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-600/90 whitespace-pre-wrap leading-relaxed max-h-[150px] overflow-y-auto">
+                          {project.notes}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Listen-Bereich in der Karte */}
-            <div className="mt-4 pt-3 border-t border-border/50">
+            <div className="mt-4 pt-3 border-t border-border/50 relative z-20" onClick={e => e.stopPropagation()}>
                <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/70">Blätter / Aufmaße</span>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       if (creatingListForProject === project.id) {
                         setCreatingListForProject(null);
                         setInlineListName('');
@@ -309,7 +372,7 @@ export default function HomePage() {
                         <Button 
                           size="sm" 
                           className="h-7 w-7 p-0 shrink-0 bg-primary text-primary-foreground"
-                          onClick={() => handleAddInlineList(project.id, project.status)}
+                          onClick={(e) => { e.stopPropagation(); handleAddInlineList(project.id, project.status); }}
                           disabled={!inlineListName.trim()}
                         >
                           <CheckCircle2 size={14} />
@@ -319,61 +382,77 @@ export default function HomePage() {
                  )}
                </AnimatePresence>
 
-               <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto no-scrollbar">
+               <div className={cn("flex flex-col gap-1.5 overflow-y-auto no-scrollbar", isExpanded ? "max-h-[300px]" : "max-h-[120px]")}>
                   {(project.lists || []).length === 0 ? (
                     <button 
-                      onClick={() => handleSelectProject(project.id)}
+                      onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id); }}
                       className="text-[11px] text-muted-foreground italic text-left hover:text-primary transition-colors"
                     >
                       Klicke auf das +, um ein neues Blatt zu erstellen.
                     </button>
                   ) : (
-                    project.lists.map(list => (
-                      <button
-                        key={list.id}
-                        onClick={() => handleSelectProject(project.id, list.id)}
-                        className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-primary/10 hover:text-primary transition-all text-left text-xs font-bold group/list"
-                      >
-                        {list.type === 'angebot' ? <FileText size={12} className="opacity-50" /> : <Database size={12} className="opacity-50" />}
-                        <span className="flex-1 truncate">{list.name}</span>
-                        <ChevronRight size={12} className="opacity-0 group-hover/list:opacity-100 transition-opacity" />
-                      </button>
-                    ))
+                    project.lists.map(list => {
+                      const itemCount = (project.selectedItems || []).filter(item => item.list_id === list.id && item.type === 'article').length;
+                      const hasItems = itemCount > 0;
+                      
+                      return (
+                        <button
+                          key={list.id}
+                          onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id, list.id); }}
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-lg transition-all text-left text-xs font-bold group/list",
+                            isExpanded ? "bg-muted/30 border border-border hover:border-primary/50 hover:bg-primary/5 py-3" : "bg-muted/50 hover:bg-primary/10 hover:text-primary"
+                          )}
+                        >
+                          {list.type === 'angebot' ? <FileText size={isExpanded ? 16 : 12} className="opacity-50" /> : <Database size={isExpanded ? 16 : 12} className="opacity-50" />}
+                          <span className="flex-1 truncate">{list.name}</span>
+                          
+                          <div className={cn(
+                            "px-1.5 py-0.5 rounded-md text-[9px] font-black transition-colors shrink-0",
+                            hasItems ? "bg-primary/20 text-primary border border-primary/30" : "bg-muted text-muted-foreground/50 border border-border"
+                          )}>
+                            {itemCount}
+                          </div>
+                          
+                          <ChevronRight size={12} className="opacity-0 group-hover/list:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                      );
+                    })
                   )}
                </div>
             </div>
             
-            <div className="text-[10px] text-muted-foreground/70 pt-2 flex items-center justify-between">
+            <div className="text-[10px] text-muted-foreground/70 pt-2 flex items-center justify-between relative z-20" onClick={e => e.stopPropagation()}>
               <span>Geändert: {formatDate(project.updated_at)}</span>
               {project.address && <span className="truncate max-w-[150px]"><MapPin size={10} className="inline mr-1" />{project.address}</span>}
             </div>
           </div>
 
-          <div className="border-t border-border p-2 bg-muted/30 flex items-center justify-between gap-2 relative z-20">
+          <div className="border-t border-border p-2 bg-muted/30 flex items-center justify-between gap-2 relative z-20" onClick={e => e.stopPropagation()}>
             <div className="flex bg-background border border-border rounded-lg p-0.5 shrink-0 shadow-sm">
               {project.status === 'completed' && (
-                <Button size="icon" variant="ghost" onClick={() => handleUpdateStatus(project, 'active')} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Ausführung">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Ausführung">
                   <ChevronLeft size={16} />
                 </Button>
               )}
               {project.status === 'active' && (
-                 <Button size="icon" variant="ghost" onClick={() => handleUpdateStatus(project, 'planning')} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Planung">
+                 <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'planning'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Planung">
                    <ChevronLeft size={16} />
                  </Button>
               )}
               {project.status === 'planning' && (
-                <Button size="icon" variant="ghost" onClick={() => handleUpdateStatus(project, 'active')} className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" title="In Ausführung geben">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" title="In Ausführung geben">
                   <ChevronRight size={16} />
                 </Button>
               )}
               {project.status === 'active' && (
-                <Button size="icon" variant="ghost" onClick={() => handleUpdateStatus(project, 'completed')} className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" title="Projektabschluss">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'completed'); }} className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" title="Projektabschluss">
                   <ChevronRight size={16} />
                 </Button>
               )}
             </div>
 
-            <Button onClick={() => handleSelectProject(project.id)} variant="ghost" className="h-8 flex-1 text-xs text-foreground font-semibold hover:bg-primary/10 hover:text-primary transition-all">
+            <Button onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id); }} variant="ghost" className="h-8 flex-1 text-xs text-foreground font-semibold hover:bg-primary/10 hover:text-primary transition-all">
               <span>Alles öffnen</span>
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>

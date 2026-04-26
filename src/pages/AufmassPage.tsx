@@ -14,7 +14,7 @@ import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { ChevronLeft, FileDown, Menu, Package, Sparkles, FileSpreadsheet, BookMarked, Search, X as CloseIcon, PenLine, Edit3, Sun, Moon, Mic, Copy, FileText, Database, FileUp, CloudOff, ListPlus, LayoutGrid, CheckCircle2, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { cn, generateUUID } from '@/lib/utils';
+import { cn, generateUUID, getInheritedCategoryImageUrl } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CsvExportDialog } from '@/components/dialogs/CsvExportDialog';
@@ -69,6 +69,25 @@ const AufmassPage = () => {
   const [theme, setTheme] = useState<'dark' | 'light'>((localStorage.getItem('theme') as 'dark' | 'light') || 'dark');
   const [manualName, setManualName] = useState('');
   const [manualQty, setManualQty] = useState('1');
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      const storedTheme = localStorage.getItem('theme') as 'dark' | 'light';
+      if (storedTheme && storedTheme !== theme) {
+        setTheme(storedTheme);
+      }
+    };
+    window.addEventListener('theme-change', handleThemeChange);
+    return () => window.removeEventListener('theme-change', handleThemeChange);
+  }, [theme]);
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+    localStorage.setItem('theme', theme);
+    window.dispatchEvent(new Event('theme-change'));
+  }, [theme]);
   const [manualUnit, setManualUnit] = useState('');
   const [manualArticleNumber, setManualArticleNumber] = useState('');
 
@@ -219,8 +238,8 @@ const AufmassPage = () => {
       return item.list_id === activeListId;
     });
 
-    const enrichedItems = filteredByList.map(item => { if (item.type === 'article' && item.article_id) { const articleDetail = articlesData.find(a => a.id === item.article_id) ?? dynamicWholesaleArticles.find(a => a.id === item.article_id) ?? projectWholesaleArticles.find(a => a.id === item.article_id); const allCats = [...categories, ...wholesaleCategories]; const categoryImageUrl = articleDetail?.categoryId ? allCats.find(c => c.id === articleDetail.categoryId)?.imageUrl : undefined; return { ...item, article: articleDetail, categoryImageUrl }; } return item as ProcessedSummaryItem; });
-    return enrichedItems.sort((a, b) => { if (a.type === 'section' || b.type === 'section') return (a.order ?? 0) - (b.order ?? 0); const getCategoryPathOrder = (categoryId?: string): string => { if (!categoryId) return '999999'; const path: number[] = []; let currId: string | undefined | null = categoryId; const allCats = [...categories, ...wholesaleCategories]; while (currId) { const cat = allCats.find(c => c.id === currId); if (!cat) break; path.unshift(cat.order ?? 0); currId = cat.parentId; } return path.map(n => n.toString().padStart(5, '0')).join('-'); }; const pathA = getCategoryPathOrder(a.article?.categoryId); const pathB = getCategoryPathOrder(b.article?.categoryId); if (pathA !== pathB) return pathA.localeCompare(pathB); const nameA = (a.article?.name ?? a.name ?? '').replace(/\s+/g, ' ').trim(); const nameB = (b.article?.name ?? b.name ?? '').replace(/\s+/g, ' ').trim(); return nameA.compare(nameB, undefined, { numeric: true, sensitivity: 'base' }); });
+    const enrichedItems = filteredByList.map(item => { if (item.type === 'article' && item.article_id) { const articleDetail = articlesData.find(a => a.id === item.article_id) ?? dynamicWholesaleArticles.find(a => a.id === item.article_id) ?? projectWholesaleArticles.find(a => a.id === item.article_id); const allCats = [...categories, ...wholesaleCategories]; const categoryImageUrl = getInheritedCategoryImageUrl(articleDetail?.categoryId, allCats); return { ...item, article: articleDetail, categoryImageUrl }; } return item as ProcessedSummaryItem; });
+    return enrichedItems.sort((a, b) => { if (a.type === 'section' || b.type === 'section') return (a.order ?? 0) - (b.order ?? 0); const getCategoryPathOrder = (categoryId?: string): string => { if (!categoryId) return '999999'; const path: number[] = []; let currId: string | undefined | null = categoryId; const allCats = [...categories, ...wholesaleCategories]; while (currId) { const cat = allCats.find(c => c.id === currId); if (!cat) break; path.unshift(cat.order ?? 0); currId = cat.parentId; } return path.map(n => n.toString().padStart(5, '0')).join('-'); }; const pathA = getCategoryPathOrder(a.article?.categoryId); const pathB = getCategoryPathOrder(b.article?.categoryId); if (pathA !== pathB) return pathA.localeCompare(pathB); const nameA = (a.article?.name ?? a.name ?? '').replace(/\s+/g, ' ').trim(); const nameB = (b.article?.name ?? b.name ?? '').replace(/\s+/g, ' ').trim(); return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' }); });
   }, [currentProject, articlesData, dynamicWholesaleArticles, projectWholesaleArticles, categories, wholesaleCategories, activeListId]);
 
   const totalArticleCount = useMemo(() => processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0), [processedSummaryItems]);
@@ -409,6 +428,10 @@ const AufmassPage = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => setIsSummaryOpen(true)} className="xl:hidden h-8 px-2 gap-1.5 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 mr-1 relative">
+              <Package size={15} />
+              <span className="font-bold text-xs">{totalArticleCount}</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setIsManualDialogOpen(true)} className="text-emerald-400 gap-1.5"><PenLine size={14} /> <span className="hidden sm:inline">Manuell</span></Button>
             <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={18} /> : <Moon size={14} />}</Button>
           </div>
@@ -419,7 +442,7 @@ const AufmassPage = () => {
         <main className="flex-1 overflow-y-auto p-4">
           <div className="flex flex-col gap-3">
             {viewArticles.map(article => (
-              <ArticleCard key={article.id} article={article} quantity={getQuantityInSection(article.id)} onIncrement={() => handleIncrement(article)} onDecrement={() => handleDecrement(article)} onReset={() => handleResetArticle(article)} />
+              <ArticleCard key={article.id} article={article} categoryImageUrl={getInheritedCategoryImageUrl(article.categoryId, activeCategories)} quantity={getQuantityInSection(article.id)} onIncrement={() => handleIncrement(article)} onDecrement={() => handleDecrement(article)} onReset={() => handleResetArticle(article)} />
             ))}
           </div>
         </main>
@@ -462,6 +485,32 @@ const AufmassPage = () => {
           </div>
           <div className="flex-1 overflow-y-auto py-3 bg-card">
             <CategoryTree categories={activeCategories} activeCategoryId={activeCategoryId} expandedCategories={expandedCategories} forceExpandedIds={searchExpandedIds} onSelectCategory={handleSelectCategory} onToggleExpansion={toggleCategoryExpansion} />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Mobile Bottom Summary Sheet */}
+      <Sheet open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-[2.5rem] border-t border-border bg-background/95 backdrop-blur-xl flex flex-col p-0">
+          <SheetHeader className="p-6 pb-4 border-b border-border shrink-0">
+            <SheetTitle className="text-left text-xl text-primary font-bold">Aktuelles Aufmaß</SheetTitle>
+          </SheetHeader>
+          <SummaryList
+            projectId={currentProject.id}
+            sectionItems={sections}
+            articleItems={processedSummaryItems.filter(i => i.type === 'article')}
+            activeSectionId={activeSectionId}
+            onSelectSection={setActiveSectionId}
+            onDeleteItem={handleDeleteItem}
+            onUpdateQuantity={handleUpdateQuantity}
+          />
+          <div className="p-6 border-t border-border shrink-0 bg-card grid grid-cols-2 gap-3">
+            <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full h-14 text-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">
+              <FileDown size={20} className="mr-2 opacity-70" /> PDF
+            </Button>
+            <Button onClick={handleExportCsv} disabled={totalArticleCount === 0} className="w-full h-14 bg-card hover:bg-accent text-accent-foreground border border-border rounded-xl transition-colors">
+              <FileSpreadsheet size={16} className="mr-2 opacity-50" /> CSV
+            </Button>
           </div>
         </SheetContent>
       </Sheet>

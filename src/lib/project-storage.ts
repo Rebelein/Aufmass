@@ -66,7 +66,11 @@ const CURRENT_PROJECT_ID_KEY = 'catalogAppCurrentProjectId';
 export async function getProjects(): Promise<Project[]> {
   const { data, error } = await supabase
     .from('projects')
-    .select('*, project_lists(*)')
+    .select(`
+      *,
+      project_lists(*),
+      project_items(id, list_id, type)
+    `)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -75,7 +79,7 @@ export async function getProjects(): Promise<Project[]> {
   }
   return (data as any[]).map(p => ({ 
     ...p, 
-    selectedItems: [], 
+    selectedItems: p.project_items || [], 
     lists: p.project_lists || [] 
   })) as Project[];
 }

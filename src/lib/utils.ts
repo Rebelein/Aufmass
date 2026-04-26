@@ -14,3 +14,20 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+export function getInheritedCategoryImageUrl(categoryId: string | null | undefined, categories: any[]): string | undefined {
+  if (!categoryId || !categories || categories.length === 0) return undefined;
+  
+  let currentId: string | null | undefined = categoryId;
+  const visited = new Set<string>(); // Prevent infinite loops
+  
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const cat = categories.find(c => c.id === currentId);
+    if (!cat) break;
+    if (cat.imageUrl) return cat.imageUrl;
+    currentId = cat.parentId;
+  }
+  
+  return undefined;
+}
