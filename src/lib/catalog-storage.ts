@@ -306,16 +306,27 @@ export async function batchUpdateCategories(categoriesToUpdate: Partial<Category
 // --- Article Functions ---
 
 function mapArticleData(data: any[]): Article[] {
-  return data.map(art => ({
-    ...art,
-    articleNumber: art.article_number,
-    categoryId: art.category_id,
-    supplierId: art.supplier_id,
-    imageUrl: art.image_url ?? undefined,
-    source: art.source ?? 'own',
-    categoryName: art.categories?.name || '',
-    supplierName: art.suppliers?.name || ''
-  })) as Article[];
+  return data.map(art => {
+    const supplierArticleNumbers = art.supplier_article_numbers ?? {};
+    
+    // Migration/Fallback: If article has a supplier_id and article_number, 
+    // but the supplier_article_numbers map doesn't contain it, pre-fill it for the frontend.
+    if (art.supplier_id && art.article_number && !supplierArticleNumbers[art.supplier_id]) {
+      supplierArticleNumbers[art.supplier_id] = art.article_number;
+    }
+
+    return {
+      ...art,
+      articleNumber: art.article_number,
+      categoryId: art.category_id,
+      supplierId: art.supplier_id,
+      supplierArticleNumbers,
+      imageUrl: art.image_url ?? undefined,
+      source: art.source ?? 'own',
+      categoryName: art.categories?.name || '',
+      supplierName: art.suppliers?.name || ''
+    };
+  }) as Article[];
 }
 
 export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Article[]> {
@@ -500,6 +511,7 @@ export async function addArticle(articleData: Omit<Article, 'id'>): Promise<Arti
       unit: articleData.unit,
       category_id: articleData.categoryId,
       supplier_id: articleData.supplierId,
+      supplier_article_numbers: articleData.supplierArticleNumbers || {},
       order: articleData.order,
       aliases: articleData.aliases || []
     }])
@@ -514,7 +526,8 @@ export async function addArticle(articleData: Omit<Article, 'id'>): Promise<Arti
     ...data, 
     articleNumber: data.article_number,
     categoryId: data.category_id,
-    supplierId: data.supplier_id
+    supplierId: data.supplier_id,
+    supplierArticleNumbers: data.supplier_article_numbers || {}
   } as Article;
 }
 
@@ -528,6 +541,7 @@ export async function updateArticle(id: string, data: Partial<Omit<Article, 'id'
   if ('imageUrl' in data) updateData.image_url = data.imageUrl || null;
   if (data.order !== undefined) updateData.order = data.order;
   if (data.aliases) updateData.aliases = data.aliases;
+  if (data.supplierArticleNumbers) updateData.supplier_article_numbers = data.supplierArticleNumbers;
 
   const { error } = await supabase
     .from('articles')

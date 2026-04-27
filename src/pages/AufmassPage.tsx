@@ -4,7 +4,7 @@ import type { Article, Category } from '@/lib/data';
 import { subscribeToCategories, subscribeToArticles, subscribeToSuppliers, fetchWholesaleArticlesByCategory, searchWholesaleArticles } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { getCurrentProjectId, getProjectById, upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, addSection, updateProject, createProjectList, deleteProjectList } from '@/lib/project-storage';
+import { getCurrentProjectId, getProjectById, upsertProjectItem, deleteProjectItem, updateProjectItemQuantity, updateProjectItemSupplier, addSection, updateProject, createProjectList, deleteProjectList } from '@/lib/project-storage';
 import type { Project, ProjectSelectedItem, ProjectList } from '@/lib/project-storage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -194,6 +194,8 @@ const AufmassPage = () => {
     return () => { isMounted = false; };
   }, [currentProject?.selectedItems, articlesData, isLoadingData, projectWholesaleArticles]);
 
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+
   useEffect(() => {
     const projectId = getCurrentProjectId();
     if (!projectId) { navigate('/'); return; }
@@ -202,7 +204,7 @@ const AufmassPage = () => {
     const unsubWCats = subscribeToCategories(cats => { if (isMounted) setWholesaleCategories(cats); }, 'wholesale');
     const unsubArts = subscribeToArticles(arts => { if (isMounted) setArticlesData(arts); }, 'own');
     const unsubWArts = subscribeToArticles(() => {}, 'wholesale');
-    const unsubSupps = subscribeToSuppliers(() => {});
+    const unsubSupps = subscribeToSuppliers(supps => { if (isMounted) setSuppliers(supps); });
     const load = async () => { const project = await getProjectById(projectId); if (!project) { navigate('/'); return; } if (isMounted) { setCurrentProject(project); setIsLoadingData(false); } };
     load();
     return () => { isMounted = false; unsubCats(); unsubWCats(); unsubArts(); unsubWArts(); unsubSupps(); };
@@ -311,6 +313,18 @@ const AufmassPage = () => {
   const handleDeleteItem = useCallback(async (itemId: string) => { removeLocalItem(itemId); await deleteProjectItem(itemId); }, [removeLocalItem]);
 
   const handleUpdateQuantity = useCallback(async (itemId: string, newQuantity: number) => { if (newQuantity < 1) return; impactLight(); setCurrentProject(prev => { if (!prev) return prev; return { ...prev, selectedItems: prev.selectedItems.map(i => i.id === itemId ? { ...i, quantity: newQuantity } : i) }; }); const ok = await updateProjectItemQuantity(itemId, newQuantity); if (!ok) toast({ title: 'Fehler', description: 'Menge konnte nicht aktualisiert werden.', variant: 'destructive' }); }, [toast, impactLight]);
+
+  const handleUpdateSupplier = useCallback(async (itemId: string, supplierName: string | null, articleNumber: string | null) => {
+    setCurrentProject(prev => {
+      if (!prev) return prev;
+      return { 
+        ...prev, 
+        selectedItems: prev.selectedItems.map(i => i.id === itemId ? { ...i, supplier_name: supplierName, article_number: articleNumber } : i) 
+      };
+    });
+    const ok = await updateProjectItemSupplier(itemId, supplierName, articleNumber);
+    if (!ok) toast({ title: 'Fehler', description: 'Händler konnte nicht aktualisiert werden.', variant: 'destructive' });
+  }, [toast]);
 
   const handleAddSection = async (sectionName: string) => {
     if (!currentProject || !sectionName.trim()) return;
@@ -503,6 +517,8 @@ const AufmassPage = () => {
             onSelectSection={setActiveSectionId}
             onDeleteItem={handleDeleteItem}
             onUpdateQuantity={handleUpdateQuantity}
+            onUpdateSupplier={handleUpdateSupplier}
+            suppliers={suppliers}
           />
           <div className="p-6 border-t border-border shrink-0 bg-card grid grid-cols-2 gap-3">
             <Button onClick={handleGeneratePdf} disabled={totalArticleCount === 0} className="w-full h-14 text-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl transition-all">

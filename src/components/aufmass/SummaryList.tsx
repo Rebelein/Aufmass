@@ -6,6 +6,7 @@ import { SwipeableItem } from '@/components/catalog/SwipeableItem';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProcessedSummaryItem } from '@/lib/types';
 import type { ProjectSelectedItem } from '@/lib/project-storage';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 
 interface SummaryListProps {
@@ -16,6 +17,8 @@ interface SummaryListProps {
   onSelectSection: (sectionId: string | null) => void;
   onDeleteItem: (itemId: string) => void;
   onUpdateQuantity: (itemId: string, newQuantity: number) => void;
+  onUpdateSupplier?: (itemId: string, supplierName: string | null, articleNumber: string | null) => void;
+  suppliers?: any[];
 }
 
 const STORAGE_KEY_PREFIX = 'aufmass_copied_';
@@ -28,6 +31,8 @@ export function SummaryList({
   onSelectSection,
   onDeleteItem,
   onUpdateQuantity,
+  onUpdateSupplier,
+  suppliers = []
 }: SummaryListProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [copiedItems, setCopiedItems] = useState<Set<string>>(() => {
@@ -280,22 +285,58 @@ export function SummaryList({
                                   <button
                                     onClick={() => handleCopyArticleNumber(item.id, articleNumber)}
                                     className={cn(
-                                      'flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded transition-all active:scale-95',
+                                      'flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md transition-all active:scale-95 border cursor-pointer hover:shadow-sm w-fit',
                                       isCopied
-                                        ? 'bg-emerald-500/15 text-emerald-400'
-                                        : 'bg-muted hover:bg-muted text-muted-foreground hover:text-muted-foreground'
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border'
                                     )}
+                                    title="Artikelnummer kopieren"
                                   >
-                                    <span className="text-[10px] font-mono font-medium">{articleNumber}</span>
+                                    <span className="text-[11px] font-mono font-medium">{articleNumber}</span>
                                     {isCopied
-                                      ? <Check size={9} className="text-emerald-400" strokeWidth={3} />
-                                      : <Copy size={9} className="opacity-40" />}
+                                      ? <Check size={11} className="text-emerald-400" strokeWidth={3} />
+                                      : <Copy size={11} className="opacity-50" />}
                                   </button>
                                 )}
-                                {supplierName && (
-                                  <span className="text-[9px] text-cyan-400/50 font-medium truncate block" title={supplierName}>
-                                    {supplierName}
-                                  </span>
+                                
+                                {suppliers && suppliers.length > 0 ? (
+                                  <div className="mt-1 w-fit">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="flex items-center gap-1 text-[10px] text-cyan-500 hover:text-cyan-400 font-bold bg-cyan-500/10 hover:bg-cyan-500/20 px-1.5 py-0.5 rounded transition-colors cursor-pointer border border-cyan-500/20">
+                                          <span className="truncate max-w-[120px]">{supplierName || 'Kein Händler'}</span>
+                                          <ChevronDown size={10} className="opacity-70" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="bg-card border-border text-foreground shadow-xl z-50">
+                                        <DropdownMenuItem
+                                          className="text-xs cursor-pointer hover:bg-muted"
+                                          onClick={() => onUpdateSupplier?.(item.id, null, item.article?.articleNumber || null)}
+                                        >
+                                          Kein Händler (Standard)
+                                        </DropdownMenuItem>
+                                        {suppliers.map(s => {
+                                          const hasSpecificNumber = item.article?.supplierArticleNumbers?.[s.id];
+                                          return (
+                                            <DropdownMenuItem
+                                              key={s.id}
+                                              className="text-xs cursor-pointer hover:bg-muted flex justify-between gap-4"
+                                              onClick={() => onUpdateSupplier?.(item.id, s.name, hasSpecificNumber || item.article?.articleNumber || null)}
+                                            >
+                                              <span>{s.name}</span>
+                                              {hasSpecificNumber && <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1 rounded">{hasSpecificNumber}</span>}
+                                            </DropdownMenuItem>
+                                          );
+                                        })}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                ) : (
+                                  supplierName && (
+                                    <span className="text-[10px] text-cyan-500 font-bold bg-cyan-500/10 px-1.5 py-0.5 rounded mt-1 inline-block border border-cyan-500/20">
+                                      {supplierName}
+                                    </span>
+                                  )
                                 )}
                               </div>
 

@@ -20,7 +20,8 @@ export interface Article {
   categoryId: string;
   categoryName?: string; // Optional: denormalized for convenience
   unit: string; // Einheit z.B. Stück, Meter, kg
-  articleNumber: string; // Artikelnummer
+  articleNumber: string; // Artikelnummer (fallback or primary)
+  supplierArticleNumbers?: Record<string, string>; // Maps supplierId to articleNumber
   order?: number; // Order within the category
   imageUrl?: string;
   supplierName?: string;

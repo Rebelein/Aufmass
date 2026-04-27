@@ -73,7 +73,7 @@ const AdminPage = () => {
   const handleSelectCategory = (id: string) => { setActiveCategoryId(id); setIsCategorySheetOpen(false); };
   const toggleCategoryExpansion = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const next = new Set(expandedCategories); if (next.has(id)) next.delete(id); else next.add(id); setExpandedCategories(next); };
 
-  const handleAddNewArticleToCategory = async (catId: string, data: any) => { const newArt = await addArticle({ ...data, categoryId: catId, order: 0, source: 'own' }); if (newArt) { toast({ title: 'Artikel hinzugefügt' }); refreshData(); } };
+  const handleAddNewArticleToCategory = async (catId: string, data: any) => { const newArt = await addArticle({ ...data, categoryId: catId, order: 0, source: 'own', supplierArticleNumbers: data.supplierId ? { [data.supplierId]: data.articleNumber } : {} }); if (newArt) { toast({ title: 'Artikel hinzugefügt' }); refreshData(); } };
   const handleUpdateExistingArticle = async (id: string, data: any) => { const success = await updateArticle(id, data); if (success) { toast({ title: 'Artikel aktualisiert' }); refreshData(); } };
   const handleReorderArticlesInCategory = async (catId: string, reordered: Article[]) => { const updates = reordered.map((a, i) => ({ id: a.id, order: i })); await batchUpdateArticles(updates); refreshData(); };
   const handleDeleteArticles = async (ids: string[]) => { const success = await deleteArticles(ids); if (success) { toast({ title: 'Artikel gelöscht' }); refreshData(); } };
@@ -252,7 +252,24 @@ const AdminPage = () => {
   };
 
   const handleConfirmReviewImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
-    if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
+    const draft = importDrafts.find(d => d.id === id);
+    if (draft?.import_options?.mode === 'extend') {
+      const allArts = data.flatMap((c: any) => c.articles || []);
+      for (const art of allArts) {
+        if (art.matchedArticleId && art.articleNumber) {
+          const existingArt = articlesAdmin.find(a => a.id === art.matchedArticleId);
+          if (existingArt) {
+            const nextMap = { ...(existingArt.supplierArticleNumbers || {}) };
+            if (supplierId && supplierId !== 'none') {
+              nextMap[supplierId] = art.articleNumber;
+            }
+            await supabase.from('articles').update({ 
+              supplier_article_numbers: nextMap 
+            }).eq('id', art.matchedArticleId);
+          }
+        }
+      }
+    } else if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
       if (importMode === 'replace_all') await supabase.from('articles').delete().eq('category_id', targetId);
       const allArts = data.flatMap((c: any) => c.articles || []);
       const inserts = allArts.map((art: any, idx: number) => ({ name: art.name, article_number: art.articleNumber, unit: art.unit, category_id: targetId, supplier_id: art.supplierId || (supplierId === 'none' ? null : supplierId), order: idx, source: 'own' }));
@@ -332,6 +349,9 @@ const AdminPage = () => {
                 categoryName={categories.find(c => c.id === activeCategoryId)?.name || ''} 
                 categoryId={activeCategoryId} 
                 articles={(() => {
+                  const isParent = categories.some(c => c.parentId === activeCategoryId);
+                  if (isParent) return articlesAdmin.filter(a => a.categoryId === activeCategoryId); // Only return direct children, no recursive children to improve performance
+
                   const getRecursiveIds = (parentId: string): string[] => {
                     const children = categories.filter(c => c.parentId === parentId);
                     return [parentId, ...children.flatMap(c => getRecursiveIds(c.id))];

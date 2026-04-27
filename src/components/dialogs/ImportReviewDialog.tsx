@@ -72,6 +72,23 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     return buildTree(categories);
   }, [categories]);
 
+  const availableArticles = React.useMemo(() => {
+    const getRecursiveIds = (parentId: string): string[] => {
+      const children = categories.filter(c => c.parentId === parentId);
+      return [parentId, ...children.flatMap(c => getRecursiveIds(c.id))];
+    };
+    const validIds = getRecursiveIds(targetCategoryId || defaultTargetCategoryId || 'root');
+    const filtered = articles.filter(a => a.categoryId && validIds.includes(a.categoryId));
+    
+    // Duplikate nach ID entfernen, um React-Key-Warnungen im Select zu vermeiden
+    const seen = new Set();
+    return filtered.filter(a => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  }, [articles, categories, targetCategoryId, defaultTargetCategoryId]);
+
   useEffect(() => {
     if (draft && isOpen) {
       setLocalData(JSON.parse(JSON.stringify(draft.extracted_data)));
@@ -210,6 +227,10 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   };
 
   const handleConfirmClick = () => {
+    if (draft.import_options?.mode === 'extend') {
+      executeImport('add_to_existing');
+      return;
+    }
     const finalTargetId = targetCategoryId === 'root' ? null : targetCategoryId;
     if (finalTargetId) {
       setShowImportModeDialog(true);
@@ -359,7 +380,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                   <SelectItem value="new" className="font-bold text-primary">+ Neue Kategorie...</SelectItem>
                   <SelectSeparator />
                   {localData.map((c, idx) => (
-                    <SelectItem key={idx} value={String(idx)}>{c.categoryName || `Gruppe ${idx + 1}`}</SelectItem>
+                    <SelectItem key={c.id || idx} value={String(idx)}>{c.categoryName || `Gruppe ${idx + 1}`}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -391,7 +412,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
         )}
         <div className="space-y-4">
           {localData.map((category: any, catIdx: number) => (
-            <div key={catIdx} className="bg-muted/30 rounded-xl border border-border overflow-hidden">
+            <div key={category.id || catIdx} className="bg-muted/30 rounded-xl border border-border overflow-hidden">
               <div 
                 className="p-3 bg-muted/50 flex items-center justify-between cursor-pointer hover:bg-muted/80 transition-colors"
                 onClick={() => toggleCategory(catIdx)}
@@ -424,67 +445,146 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
               
               {!collapsedCategories.has(catIdx) && (
                 <div className="overflow-x-auto">
-                   <Table>
-                     <TableHeader className="bg-muted/20">
-                       <TableRow className="border-border">
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-3 w-8"></TableHead>
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-1">Bezeichnung</TableHead>
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-32 p-2">Art-Nr.</TableHead>
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-24 p-2">Einheit</TableHead>
-                         <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-10 p-2"></TableHead>
-                       </TableRow>
-                     </TableHeader>
-                     <TableBody>
-                       {category.articles.map((article: any, artIdx: number) => (
-                         <TableRow key={article.id || artIdx} className="border-border hover:bg-muted/50 transition-colors group">
-                           <TableCell className="p-1.5 pl-3 w-8 text-center align-middle">
-                             <Checkbox 
-                               checked={selectedArticles.has(`${catIdx}-${artIdx}`)} 
-                               onCheckedChange={() => toggleArticleSelection(catIdx, artIdx)}
-                               className="border-primary/50 data-[state=checked]:bg-primary"
-                             />
-                           </TableCell>
-                           <TableCell className="p-1.5 pl-1">
-                             <input 
-                               ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
-                               value={article.name}
-                               onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
-                               className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all"
-                             />
-                           </TableCell>
-                           <TableCell className="p-1.5">
-                             <input 
-                               ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
-                               value={article.articleNumber}
-                               onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                               className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-all"
-                             />
-                           </TableCell>
-                           <TableCell className="p-1.5">
-                             <input 
-                               ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
-                               value={article.unit}
-                               onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
-                               className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-all"
-                             />
-                           </TableCell>
-                           <TableCell className="p-1 text-center">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => handleDeleteArticle(catIdx, artIdx)}
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all rounded-lg"
-                              >
-                                <Trash2 size={12} />
-                              </Button>
-                           </TableCell>
+                   {draft.import_options?.mode === 'extend' ? (
+                     <Table>
+                       <TableHeader className="bg-muted/20">
+                         <TableRow className="border-border">
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-3 w-8"></TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2">Original Artikel</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-1">Gefundene Bezeichnung</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-32 p-2">Neue Art.-Nr.</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-24 p-2">Einheit</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-10 p-2"></TableHead>
                          </TableRow>
-                       ))}
-                     </TableBody>
-                   </Table>
+                       </TableHeader>
+                       <TableBody>
+                         {category.articles.map((article: any, artIdx: number) => {
+                           const originalArticle = articles.find(a => a.id === article.matchedArticleId);
+                           return (
+                             <TableRow key={`${article.id}-${catIdx}-${artIdx}`} className="border-border hover:bg-muted/50 transition-colors group">
+                               <TableCell className="p-1.5 pl-3 w-8 text-center align-middle">
+                                 <Checkbox 
+                                   checked={selectedArticles.has(`${catIdx}-${artIdx}`)} 
+                                   onCheckedChange={() => toggleArticleSelection(catIdx, artIdx)}
+                                   className="border-primary/50 data-[state=checked]:bg-primary"
+                                 />
+                               </TableCell>
+                               <TableCell className="p-1.5">
+                                 <Select value={article.matchedArticleId || 'none'} onValueChange={(val) => handleUpdateItem(catIdx, artIdx, 'matchedArticleId', val === 'none' ? '' : val)}>
+                                   <SelectTrigger className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all">
+                                     <SelectValue placeholder="Nicht zugeordnet">
+                                       {originalArticle ? <span className="font-semibold text-emerald-500">{originalArticle.name}</span> : <span className="text-red-400">Keine Zuordnung</span>}
+                                     </SelectValue>
+                                   </SelectTrigger>
+                                   <SelectContent className="bg-card border-border text-foreground max-w-sm max-h-60">
+                                     <SelectItem value="none" className="text-muted-foreground">Ignorieren</SelectItem>
+                                     {availableArticles.map((a, idx) => (
+                                       <SelectItem key={`${a.id}-${idx}`} value={a.id}>{a.name} <span className="text-muted-foreground ml-2">{a.articleNumber}</span></SelectItem>
+                                     ))}
+                                   </SelectContent>
+                                 </Select>
+                               </TableCell>
+                               <TableCell className="p-1.5 pl-1">
+                                 <input 
+                                   ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
+                                   value={article.name || ''}
+                                   onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all"
+                                 />
+                               </TableCell>
+                               <TableCell className="p-1.5">
+                                 <input 
+                                   ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
+                                   value={article.articleNumber || ''}
+                                   onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-all"
+                                 />
+                               </TableCell>
+                               <TableCell className="p-1.5">
+                                 <input 
+                                   ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
+                                   value={article.unit || ''}
+                                   onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-all"
+                                 />
+                               </TableCell>
+                               <TableCell className="p-1 text-center">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleDeleteArticle(catIdx, artIdx)}
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all rounded-lg"
+                                  >
+                                    <Trash2 size={12} />
+                                  </Button>
+                               </TableCell>
+                             </TableRow>
+                           );
+                         })}
+                       </TableBody>
+                     </Table>
+                   ) : (
+                     <Table>
+                       <TableHeader className="bg-muted/20">
+                         <TableRow className="border-border">
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-3 w-8"></TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground p-2 pl-1">Bezeichnung</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-32 p-2">Art-Nr.</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-24 p-2">Einheit</TableHead>
+                           <TableHead className="text-[9px] uppercase font-bold text-muted-foreground w-10 p-2"></TableHead>
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                         {category.articles.map((article: any, artIdx: number) => (
+                           <TableRow key={`${article.id}-${catIdx}-${artIdx}`} className="border-border hover:bg-muted/50 transition-colors group">
+                             <TableCell className="p-1.5 pl-3 w-8 text-center align-middle">
+                               <Checkbox 
+                                 checked={selectedArticles.has(`${catIdx}-${artIdx}`)} 
+                                 onCheckedChange={() => toggleArticleSelection(catIdx, artIdx)}
+                                 className="border-primary/50 data-[state=checked]:bg-primary"
+                               />
+                             </TableCell>
+                             <TableCell className="p-1.5 pl-1">
+                               <input 
+                                 ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
+                                 value={article.name || ''}
+                                 onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all"
+                               />
+                             </TableCell>
+                             <TableCell className="p-1.5">
+                               <input 
+                                 ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
+                                 value={article.articleNumber || ''}
+                                 onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-all"
+                               />
+                             </TableCell>
+                             <TableCell className="p-1.5">
+                               <input 
+                                 ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
+                                 value={article.unit || ''}
+                                 onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-all"
+                               />
+                             </TableCell>
+                             <TableCell className="p-1 text-center">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleDeleteArticle(catIdx, artIdx)}
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all rounded-lg"
+                                >
+                                  <Trash2 size={12} />
+                                </Button>
+                             </TableCell>
+                           </TableRow>
+                         ))}
+                       </TableBody>
+                     </Table>
+                   )}
                 </div>
-              )}
-            </div>
+              )}            </div>
           ))}
         </div>
       </div>

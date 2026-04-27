@@ -92,12 +92,25 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
   const [isImportingPdf, setIsImportingPdf] = useState(false);
   const [isImportingClipboard, setIsImportingClipboard] = useState(false);
+  const [importMode, setImportMode] = useState<'import' | 'extend'>('import');
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const articleImageInputRef = useRef<HTMLInputElement>(null);
   const [activeArticleIdForImage, setActiveArticleIdForImage] = useState<string | null>(null);
 
   const [localArticles, setLocalArticles] = useState<Article[]>([]);
+  
+  const recursiveArticles = React.useMemo(() => {
+    const getRecursiveIds = (parentId: string): string[] => {
+      const children = allCategories.filter(c => c.parentId === parentId);
+      return [parentId, ...children.flatMap(c => getRecursiveIds(c.id))];
+    };
+    const validIds = getRecursiveIds(categoryId);
+    return allArticles.filter(a => a.categoryId && validIds.includes(a.categoryId));
+  }, [allCategories, allArticles, categoryId]);
+
+  const isParentCategory = React.useMemo(() => allCategories.some(c => c.parentId === categoryId), [allCategories, categoryId]);
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
   const [isSyncEditing, setIsSyncEditing] = useState(true);
@@ -137,7 +150,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     }
   }, [localArticles, cursorInfo]);
 
-  const handleUpdateLocalArticle = (id: string, field: keyof Article, value: string, pos?: number) => {
+  const handleUpdateLocalArticle = (id: string, field: keyof Article | 'supplierArticleNumber', value: string, pos?: number) => {
     setHasUnsavedChanges(true);
     setLocalArticles(current => {
       const next = [...current];
@@ -145,6 +158,13 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       if (articleIndex === -1) return current;
 
       const article = next[articleIndex];
+
+      if (field === 'supplierArticleNumber') {
+        if (!article.supplierId) return current; // Shouldn't happen
+        const newMap = { ...(article.supplierArticleNumbers || {}), [article.supplierId]: value };
+        next[articleIndex] = { ...article, supplierArticleNumbers: newMap };
+        return next;
+      }
 
       if ((field === 'unit' || field === 'supplierId') && isSyncEditing) {
         return next.map(art => ({ ...art, [field]: value }));
@@ -393,6 +413,10 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   };
 
   const handlePdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (selectedSupplierId === 'none') {
+      toast({ title: "Fehlender Großhändler", description: "Bitte wählen Sie vor dem KI-Import zwingend einen Großhändler aus.", variant: "destructive" });
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -411,6 +435,9 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       onError: (_id, errorMessage) => {
         toast({ title: "KI Analyse fehlgeschlagen", description: errorMessage, variant: "destructive" });
       },
+    }, {
+      mode: importMode,
+      existingArticles: importMode === 'extend' ? recursiveArticles : []
     });
 
     if (!draftId) {
@@ -420,6 +447,10 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   };
 
   const handleClipboardAiScan = async () => {
+    if (selectedSupplierId === 'none') {
+      toast({ title: "Fehlender Großhändler", description: "Bitte wählen Sie vor dem KI-Import zwingend einen Großhändler aus.", variant: "destructive" });
+      return;
+    }
     try {
       const items = await navigator.clipboard.read();
       let blob: Blob | null = null;
@@ -445,9 +476,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         selectedSupplierId,
         categoryId,
         {
-          onDraftCreated: () => {
-            setIsImportingClipboard(false);
-          },
+          onDraftCreated: () => setIsImportingClipboard(false),
           onSuccess: () => {
             toast({ title: "KI Analyse abgeschlossen", description: "Ein neuer Entwurf ist bereit zur Prüfung." });
             impactMedium();
@@ -455,6 +484,10 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
           onError: (_id, errorMessage) => {
             toast({ title: "KI Analyse fehlgeschlagen", description: errorMessage, variant: "destructive" });
           },
+        },
+        {
+          mode: importMode,
+          existingArticles: importMode === 'extend' ? recursiveArticles : []
         }
       );
 
@@ -475,7 +508,23 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   };
 
   const handleConfirmImport = async (id: string, data: any, targetId: string | null, supplierId: string | null, importMode?: string) => {
-    if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
+    const actualMode = reviewingDraft?.import_options?.mode || importMode;
+
+    if (actualMode === 'extend') {
+      const allArticles = data.flatMap((c: any) => c.articles || []);
+      const validMatches = allArticles.filter((a: any) => a.matchedArticleId && a.articleNumber);
+      
+      const { supabase } = await import('@/lib/supabase');
+      for (const art of validMatches) {
+        // Fetch current to merge jsonb correctly
+        const { data: existing } = await supabase.from('articles').select('supplier_article_numbers').eq('id', art.matchedArticleId).single();
+        if (existing) {
+          const currentMap = existing.supplier_article_numbers || {};
+          currentMap[supplierId!] = art.articleNumber;
+          await supabase.from('articles').update({ supplier_article_numbers: currentMap }).eq('id', art.matchedArticleId);
+        }
+      }
+    } else if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
       const { supabase } = await import('@/lib/supabase');
 
       if (importMode === 'replace_all') {
@@ -592,14 +641,24 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                 <PlusCircle className="mr-2 h-4 w-4" /> Hinzufügen
               </Button>
               
-              <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-xl border border-border flex-1 sm:flex-none">
+              <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-xl border border-border flex-1 sm:flex-none flex-wrap">
                 <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-                  <SelectTrigger className="w-full sm:w-[200px] border-none bg-transparent text-foreground focus:ring-0 h-9">
+                  <SelectTrigger className="w-full sm:w-[160px] border-none bg-transparent text-foreground focus:ring-0 h-9">
                     <SelectValue placeholder="Großhändler" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border text-foreground">
                     <SelectItem value="none" className="text-muted-foreground">Kein Großhändler</SelectItem>
                     {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <div className="hidden sm:block w-[1px] h-6 bg-border"></div>
+                <Select value={importMode} onValueChange={(val: 'import' | 'extend') => setImportMode(val)}>
+                  <SelectTrigger className="w-full sm:w-[160px] border-none bg-transparent text-foreground focus:ring-0 h-9">
+                    <SelectValue placeholder="Modus" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border text-foreground">
+                    <SelectItem value="import" className="text-muted-foreground">Neu importieren</SelectItem>
+                    <SelectItem value="extend" className="text-muted-foreground">Artikelnummern ergänzen</SelectItem>
                   </SelectContent>
                 </Select>
                 <div className="hidden sm:block w-[1px] h-6 bg-border"></div>
@@ -663,180 +722,203 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
             <div className="border border-border rounded-2xl overflow-hidden bg-muted/10 flex-1">
               <ScrollArea className="h-full">
-                <Table>
-                    <TableHeader className="bg-muted/30 sticky top-0 z-10">
-                        <TableRow className="border-border hover:bg-transparent">
-                            <TableHead className="w-12 text-center"><Checkbox checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}/></TableHead>
-                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
-                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
-                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
-                            <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
-                            <TableHead className="text-right text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <AnimatePresence initial={false}>
-                        {localArticles.map(article => (
-                          deletingArticleId === article.id ? (
-                            <motion.tr 
-                              key={`del-${article.id}`} 
-                              layout 
-                              initial={{ opacity: 0, height: 0 }} 
-                              animate={{ opacity: 1, height: 'auto' }} 
-                              exit={{ opacity: 0, scale: 0.95 }} 
-                              className="border-b transition-colors border-destructive/30 bg-destructive/10"
-                            >
-                              <TableCell colSpan={6} className="p-2">
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-destructive/20 text-destructive border border-destructive/30">
-                                      <Trash2 size={16} />
+                {!isParentCategory ? (
+                  <>
+                    <Table>
+                        <TableHeader className="bg-muted/30 sticky top-0 z-10">
+                            <TableRow className="border-border hover:bg-transparent">
+                                <TableHead className="w-12 text-center"><Checkbox checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}/></TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
+                                <TableHead className="text-right text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <AnimatePresence initial={false}>
+                            {localArticles.map(article => (
+                              deletingArticleId === article.id ? (
+                                <motion.tr 
+                                  key={`del-${article.id}`} 
+                                  layout 
+                                  initial={{ opacity: 0, height: 0 }} 
+                                  animate={{ opacity: 1, height: 'auto' }} 
+                                  exit={{ opacity: 0, scale: 0.95 }} 
+                                  className="border-b transition-colors border-destructive/30 bg-destructive/10"
+                                >
+                                  <TableCell colSpan={6} className="p-2">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-2">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-destructive/20 text-destructive border border-destructive/30">
+                                          <Trash2 size={16} />
+                                        </div>
+                                        <span className="text-sm font-semibold text-destructive/80 truncate">
+                                          "{article.name}" wirklich löschen?
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <Button onClick={() => {
+                                           onDeleteArticles([article.id]);
+                                           setLocalArticles(prev => prev.filter(a => a.id !== article.id));
+                                           setDeletingArticleId(null);
+                                           if (selectedArticleIds.has(article.id)) {
+                                             const nextSelected = new Set(selectedArticleIds);
+                                             nextSelected.delete(article.id);
+                                             setSelectedArticleIds(nextSelected);
+                                           }
+                                           impactMedium();
+                                        }} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold h-9">Löschen</Button>
+                                        <Button variant="ghost" onClick={() => setDeletingArticleId(null)} className="text-muted-foreground hover:text-foreground h-9 bg-muted/50">Abbrechen</Button>
+                                      </div>
                                     </div>
-                                    <span className="text-sm font-semibold text-destructive/80 truncate">
-                                      "{article.name}" wirklich löschen?
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <Button onClick={() => {
-                                       onDeleteArticles([article.id]);
-                                       setLocalArticles(prev => prev.filter(a => a.id !== article.id));
-                                       setDeletingArticleId(null);
-                                       if (selectedArticleIds.has(article.id)) {
-                                         const nextSelected = new Set(selectedArticleIds);
-                                         nextSelected.delete(article.id);
-                                         setSelectedArticleIds(nextSelected);
-                                       }
-                                       impactMedium();
-                                    }} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold h-9">Löschen</Button>
-                                    <Button variant="ghost" onClick={() => setDeletingArticleId(null)} className="text-muted-foreground hover:text-foreground h-9 bg-muted/50">Abbrechen</Button>
-                                  </div>
-                                </div>
-                              </TableCell>
-                            </motion.tr>
-                          ) : (
-                            <motion.tr 
-                              key={article.id} 
-                              layout 
-                              initial={{ opacity: 0, y: -10 }} 
-                              animate={{ 
-                                opacity: 1, 
-                                y: 0,
-                                scale: activeRowId === article.id ? 1.005 : 1,
-                                zIndex: activeRowId === article.id ? 20 : 0
-                              }} 
-                              exit={{ opacity: 0, scale: 0.95, backgroundColor: "rgba(239, 68, 68, 0.1)" }} 
-                              transition={{ duration: 0.2 }}
-                              onFocusCapture={() => setActiveRowId(article.id)}
-                              onClick={() => setActiveRowId(article.id)}
-                              className={cn(
-                                "border-b transition-colors data-[state=selected]:bg-muted group relative",
-                                activeRowId === article.id 
-                                  ? "bg-card shadow-[0_8px_30px_rgba(245,158,11,0.12)] outline outline-2 outline-amber-500/40 border-transparent rounded-xl" 
-                                  : "border-border hover:bg-muted/30"
-                              )}
-                            >
-                                <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
-                                <TableCell className="font-bold text-foreground p-2">
-                                  <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2">
-                                     {(article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)) && (
-                                       <div className="w-8 h-8 rounded-md border border-border shrink-0 bg-background overflow-hidden flex items-center justify-center">
-                                         <img src={article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)} alt="" className="w-full h-full object-contain" />
-                                       </div>
-                                     )}
-                                     <textarea 
-                                        ref={el => { 
-                                          if (el) {
-                                            inputRefs.current[`${article.id}-name`] = el;
-                                            // Auto-resize on mount
-                                            el.style.height = '0px';
-                                            el.style.height = el.scrollHeight + 'px';
-                                          } 
-                                        }}
-                                        rows={1}
-                                        value={article.name || ''}
-                                        onChange={(e) => {
-                                          e.target.style.height = '0px';
-                                          e.target.style.height = e.target.scrollHeight + 'px';
-                                          handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
-                                        }}
-                                        className="w-full bg-background/50 border border-border min-h-[40px] py-2 px-3 rounded-lg text-sm text-foreground focus:border-primary/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
-                                        style={{ fieldSizing: 'content' } as React.CSSProperties}
+                                  </TableCell>
+                                </motion.tr>
+                              ) : (
+                                <motion.tr 
+                                  key={article.id} 
+                                  layout 
+                                  initial={{ opacity: 0, y: -10 }} 
+                                  animate={{ 
+                                    opacity: 1, 
+                                    y: 0,
+                                    scale: activeRowId === article.id ? 1.005 : 1,
+                                    zIndex: activeRowId === article.id ? 20 : 0
+                                  }} 
+                                  exit={{ opacity: 0, scale: 0.95, backgroundColor: "rgba(239, 68, 68, 0.1)" }} 
+                                  transition={{ duration: 0.2 }}
+                                  onFocusCapture={() => setActiveRowId(article.id)}
+                                  onClick={() => setActiveRowId(article.id)}
+                                  className={cn(
+                                    "border-b transition-colors data-[state=selected]:bg-muted group relative",
+                                    activeRowId === article.id 
+                                      ? "bg-card shadow-[0_8px_30px_rgba(245,158,11,0.12)] outline outline-2 outline-amber-500/40 border-transparent rounded-xl" 
+                                      : "border-border hover:bg-muted/30"
+                                  )}
+                                >
+                                    <TableCell className="text-center"><Checkbox checked={selectedArticleIds.has(article.id)} onCheckedChange={(checked) => { const next = new Set(selectedArticleIds); if (checked) next.add(article.id); else next.delete(article.id); setSelectedArticleIds(next); }}/></TableCell>
+                                    <TableCell className="font-bold text-foreground p-2">
+                                      <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-2">
+                                         {(article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)) && (
+                                           <div className="w-8 h-8 rounded-md border border-border shrink-0 bg-background overflow-hidden flex items-center justify-center">
+                                             <img src={article.imageUrl || getInheritedCategoryImageUrl(article.categoryId, allCategories)} alt="" className="w-full h-full object-contain" />
+                                           </div>
+                                         )}
+                                         <textarea 
+                                            ref={el => { 
+                                              if (el) {
+                                                inputRefs.current[`${article.id}-name`] = el;
+                                                // Auto-resize on mount
+                                                el.style.height = '0px';
+                                                el.style.height = el.scrollHeight + 'px';
+                                              } 
+                                            }}
+                                            rows={1}
+                                            value={article.name || ''}
+                                            onChange={(e) => {
+                                              e.target.style.height = '0px';
+                                              e.target.style.height = e.target.scrollHeight + 'px';
+                                              handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
+                                            }}
+                                            className="w-full bg-background/50 border border-border min-h-[40px] py-2 px-3 rounded-lg text-sm text-foreground focus:border-primary/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
+                                            style={{ fieldSizing: 'content' } as React.CSSProperties}
+                                          />
+                                        </div>
+                                        
+                                        {/* Actions for tablet/mobile - visible below article name */}
+                                        <div className="flex xl:hidden items-center gap-2 ml-1 sm:ml-10">
+                                            <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                              <ImagePlus size={12}/> Bild
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handlePasteArticleImage(article.id)} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
+                                              <ClipboardPaste size={12}/> Einfügen
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => setDeletingArticleId(article.id)} className="h-8 px-2 text-muted-foreground hover:text-destructive bg-muted/30 hover:bg-destructive/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 ml-auto sm:ml-0">
+                                              <Trash2 size={12}/> Löschen
+                                            </Button>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="hidden sm:table-cell p-2">
+                                      <div className="relative flex items-center">
+                                        <input 
+                                          ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
+                                          value={article.supplierId ? (article.supplierArticleNumbers?.[article.supplierId] || '') : (article.articleNumber || '')}
+                                          onChange={(e) => {
+                                            if (article.supplierId) {
+                                              handleUpdateLocalArticle(article.id, 'supplierArticleNumber', e.target.value, e.target.selectionStart || 0);
+                                            } else {
+                                              handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0);
+                                            }
+                                          }}
+                                          className="w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-primary focus:border-primary/50 outline-none transition-all"
+                                          placeholder={article.supplierId ? `Art.-Nr. für Händler` : `Standard Art.-Nr.`}
+                                        />
+                                        {(article.supplierId ? article.supplierArticleNumbers?.[article.supplierId] : article.articleNumber) && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              navigator.clipboard.writeText((article.supplierId ? article.supplierArticleNumbers?.[article.supplierId] : article.articleNumber) || '');
+                                              toast({ title: 'Kopiert', description: 'Artikelnummer in die Zwischenablage kopiert.' });
+                                            }}
+                                            className="absolute right-1 text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
+                                            title="Artikelnummer kopieren"
+                                          >
+                                            <Copy size={14} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell text-muted-foreground text-xs font-medium p-2">
+                                      <input 
+                                        ref={el => { if (el) inputRefs.current[`${article.id}-unit`] = el; }}
+                                        value={article.unit || ''}
+                                        onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value, e.target.selectionStart || 0)}
+                                        className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all"
                                       />
-                                    </div>
-                                    
-                                    {/* Actions for tablet/mobile - visible below article name */}
-                                    <div className="flex xl:hidden items-center gap-2 ml-1 sm:ml-10">
-                                        <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
-                                          <ImagePlus size={12}/> Bild
-                                        </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => handlePasteArticleImage(article.id)} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
-                                          <ClipboardPaste size={12}/> Einfügen
-                                        </Button>
-                                        <Button variant="ghost" size="sm" onClick={() => setDeletingArticleId(article.id)} className="h-8 px-2 text-muted-foreground hover:text-destructive bg-muted/30 hover:bg-destructive/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5 ml-auto sm:ml-0">
-                                          <Trash2 size={12}/> Löschen
-                                        </Button>
-                                    </div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden sm:table-cell p-2">
-                                  <div className="relative flex items-center">
-                                    <input 
-                                      ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
-                                      value={article.articleNumber || ''}
-                                      onChange={(e) => handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                                      className="w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-primary focus:border-primary/50 outline-none transition-all"
-                                    />
-                                    {article.articleNumber && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          navigator.clipboard.writeText(article.articleNumber || '');
-                                          toast({ title: 'Kopiert', description: 'Artikelnummer in die Zwischenablage kopiert.' });
-                                        }}
-                                        className="absolute right-1 text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
-                                        title="Artikelnummer kopieren"
-                                      >
-                                        <Copy size={14} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell text-muted-foreground text-xs font-medium p-2">
-                                  <input 
-                                    ref={el => { if (el) inputRefs.current[`${article.id}-unit`] = el; }}
-                                    value={article.unit || ''}
-                                    onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value, e.target.selectionStart || 0)}
-                                    className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all"
-                                  />
-                                </TableCell>
-                                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs p-2">
-                                  <Select value={article.supplierId || 'none'} onValueChange={(val) => handleUpdateLocalArticle(article.id, 'supplierId', val === 'none' ? '' : val)}>
-                                    <SelectTrigger className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all">
-                                      <SelectValue placeholder="-" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-card border-border text-foreground">
-                                      <SelectItem value="none" className="text-muted-foreground">-</SelectItem>
-                                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                </TableCell>
-                                <TableCell className="text-right p-2 hidden xl:table-cell">
-                                    <div className="flex justify-end gap-1">
-                                        <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild hochladen"><ImagePlus size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
-                                        <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive"><Trash2 size={14}/></Button>
-                                    </div>
-                                </TableCell>
-                            </motion.tr>
-                          )
-                        ))}
-                      </AnimatePresence>
-                    </TableBody>
-                </Table>
-                {initialArticles.length === 0 && <div className="py-20 text-center text-muted-foreground font-medium">Keine Artikel vorhanden.</div>}
+                                    </TableCell>
+                                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs p-2">
+                                      <Select value={article.supplierId || 'none'} onValueChange={(val) => handleUpdateLocalArticle(article.id, 'supplierId', val === 'none' ? '' : val)}>
+                                        <SelectTrigger className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all">
+                                          <SelectValue placeholder="-" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-card border-border text-foreground">
+                                          <SelectItem value="none" className="text-muted-foreground">-</SelectItem>
+                                          {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    </TableCell>
+                                    <TableCell className="text-right p-2 hidden xl:table-cell">
+                                        <div className="flex justify-end gap-1">
+                                            <Button variant="ghost" size="icon" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild hochladen"><ImagePlus size={14}/></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => handlePasteArticleImage(article.id)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="Bild aus Zwischenablage einfügen"><ClipboardPaste size={14}/></Button>
+                                            <Button variant="ghost" size="icon" onClick={() => setDeletingArticleId(article.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive"><Trash2 size={14}/></Button>
+                                        </div>
+                                    </TableCell>
+                                </motion.tr>
+                              )
+                            ))}
+                          </AnimatePresence>
+                        </TableBody>
+                    </Table>
+                    {initialArticles.length === 0 && <div className="py-20 text-center text-muted-foreground font-medium">Keine Artikel vorhanden.</div>}
+                  </>
+                ) : (
+                   <div className="py-24 text-center space-y-4 px-6">
+                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto">
+                       <LayoutGrid size={32} />
+                     </div>
+                     <div className="max-w-md mx-auto space-y-2">
+                       <h3 className="text-lg font-bold text-foreground">Geber-Kategorie ausgewählt</h3>
+                       <p className="text-sm text-muted-foreground leading-relaxed">
+                         Diese Kategorie enthält Untergruppen. Nutze die KI-Werkzeuge oben, um Artikelnummern für alle enthaltenen Untergruppen gleichzeitig zu ergänzen, oder wähle eine spezifische Untergruppe links im Baum aus.
+                       </p>
+                     </div>
+                   </div>
+                )}
               </ScrollArea>
             </div>
           </div>

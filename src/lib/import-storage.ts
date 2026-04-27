@@ -8,11 +8,12 @@ export interface ImportDraft {
   error_message: string | null;
   default_supplier_id: string | null;
   default_target_category_id: string | null;
+  import_options?: any;
   created_at: string;
   updated_at: string;
 }
 
-export async function createImportDraft(fileName: string, supplierId?: string | null, targetCategoryId?: string | null): Promise<string | null> {
+export async function createImportDraft(fileName: string, supplierId?: string | null, targetCategoryId?: string | null, importOptions?: any): Promise<string | null> {
   try {
     const { data, error } = await supabase
       .from('import_drafts')
@@ -20,7 +21,8 @@ export async function createImportDraft(fileName: string, supplierId?: string | 
         file_name: fileName, 
         status: 'processing',
         default_supplier_id: supplierId === 'none' ? null : supplierId,
-        default_target_category_id: targetCategoryId === 'root' ? null : (targetCategoryId || null)
+        default_target_category_id: targetCategoryId === 'root' ? null : (targetCategoryId || null),
+        import_options: importOptions || {}
       })
       .select('id')
       .single();

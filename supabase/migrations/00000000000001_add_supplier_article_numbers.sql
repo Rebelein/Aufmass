@@ -1,0 +1,1 @@
+ALTER TABLE public.articles ADD COLUMN IF NOT EXISTS supplier_article_numbers jsonb DEFAULT '{}'::jsonb; ALTER TABLE public.project_items ADD COLUMN IF NOT EXISTS supplier_article_numbers jsonb DEFAULT '{}'::jsonb;

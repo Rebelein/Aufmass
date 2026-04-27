@@ -147,17 +147,16 @@ const SortableCategoryItem = ({
             "flex justify-between items-center p-2.5 min-h-[44px] rounded-xl cursor-pointer transition-all duration-200 border",
             onReorderCategory ? "pl-1" : "",
             isDeepestExpanded && "sticky top-0 z-10 bg-background backdrop-blur-md border-border text-foreground shadow-lg",
-            isSelected && !hasChildren
+            isSelected
               ? "bg-primary/10 border-primary/20 text-primary shadow-sm" 
               : !isDeepestExpanded && isExpanded
                 ? "border-border bg-muted text-foreground" 
                 : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-muted hover:border-border text-muted-foreground hover:text-accent-foreground"
           )}
           onClick={(e) => {
+            onSelectCategory(category.id);
             if (hasChildren) {
               onToggleExpansion(category.id, e);
-            } else {
-              onSelectCategory(category.id);
             }
           }}
         >
@@ -175,7 +174,7 @@ const SortableCategoryItem = ({
 
             <div className={cn(
                 "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
-                isSelected && !hasChildren ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover/item:bg-muted group-hover/item:text-muted-foreground"
+                isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover/item:bg-muted group-hover/item:text-muted-foreground"
             )}>
                 {category.imageUrl ? (
                   <img src={category.imageUrl} alt="" className="w-full h-full object-contain p-0.5" />

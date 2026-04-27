@@ -14,7 +14,7 @@ export const generateGCCsv = (items: ProcessedSummaryItem[]): string => {
   const rows = items
     .filter((item) => item.type === 'article')
     .map((item) => {
-      const articleNumber = item.article?.articleNumber || (item as any).article_number || '';
+      const articleNumber = (item.article?.supplierId && item.article?.supplierArticleNumbers?.[item.article.supplierId]) || item.article?.articleNumber || (item as any).article_number || '';
       const quantity = item.quantity || 0;
       
       const qtyStr = formatGermanNumber(quantity, 3);
@@ -100,7 +100,7 @@ export const generateHeinzeUgs = (items: ProcessedSummaryItem[]): string => {
   const rows = items
     .filter((item) => item.type === 'article')
     .map((item) => {
-      const articleNumber = item.article?.articleNumber || (item as any).article_number || '';
+      const articleNumber = (item.article?.supplierId && item.article?.supplierArticleNumbers?.[item.article.supplierId]) || item.article?.articleNumber || (item as any).article_number || '';
       const quantity = item.quantity || 0;
       
       const posStr = String(index++).padEnd(4, ' ');

@@ -10,6 +10,8 @@ export interface ProcessedSummaryItem {
     id?: string;
     name?: string;
     articleNumber?: string;
+    supplierArticleNumbers?: Record<string, string>;
+    supplierId?: string;
     unit?: string;
     supplierName?: string;
     categoryId?: string;
@@ -34,9 +36,11 @@ export interface ProposedArticle {
   unit: string;
   supplierId?: string;
   supplierName?: string;
+  matchedArticleId?: string;
 }
 
 export interface ProposedCategory {
+  id?: string;
   categoryName: string;
   articles: ProposedArticle[];
   subCategories: ProposedCategory[];

@@ -364,6 +364,24 @@ export async function updateProjectItemQuantity(itemId: string, quantity: number
 }
 
 /**
+ * Update the supplier and article number for a project item.
+ */
+export async function updateProjectItemSupplier(itemId: string, supplierName: string | null, articleNumber: string | null): Promise<boolean> {
+  const { error } = await supabase
+    .from('project_items')
+    .update({ 
+      supplier_name: supplierName,
+      article_number: articleNumber
+    })
+    .eq('id', itemId);
+
+  if (error) {
+    console.error('Fehler beim Aktualisieren des Händlers:', error);
+  }
+  return !error;
+}
+
+/**
  * Add a new section to a project.
  */
 export async function addSection(

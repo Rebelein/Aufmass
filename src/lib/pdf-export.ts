@@ -98,7 +98,7 @@ export function generateAufmassPdf({ projectName, sectionItems, articleItems }: 
     if (!supplierGroups.has(supplier)) supplierGroups.set(supplier, []);
     const group = supplierGroups.get(supplier)!;
     
-    const artNum = i.article?.articleNumber ?? (i as any).article_number ?? '';
+    const artNum = ((i.article?.supplierId && i.article?.supplierArticleNumbers?.[i.article.supplierId]) || i.article?.articleNumber) ?? (i as any).article_number ?? '';
     const name = i.article?.name ?? (i as any).name ?? 'Manuelle Position';
     const unit = i.article?.unit ?? (i as any).unit ?? '';
     const qty = i.quantity ?? 0;
@@ -239,7 +239,7 @@ export function generateAufmassPdf({ projectName, sectionItems, articleItems }: 
       checkPageBreak(12);
       const name = i.article?.name ?? (i as any).name ?? 'Manuell';
       const qty = i.quantity ?? 0;
-      const artNum = i.article?.articleNumber ?? (i as any).article_number ?? '';
+      const artNum = ((i.article?.supplierId && i.article?.supplierArticleNumbers?.[i.article.supplierId]) || i.article?.articleNumber) ?? (i as any).article_number ?? '';
       const unit = i.article?.unit ?? (i as any).unit ?? '';
       const cleanUnit = unit.replace(/^[0-9xX\s]+/, '').trim();
 
