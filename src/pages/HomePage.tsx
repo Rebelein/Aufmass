@@ -556,15 +556,25 @@ export default function HomePage() {
               </p>
             </div>
             
-            <Button 
-              onClick={() => setIsNewProjectSheetOpen(true)} 
-              className="group relative z-10 bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-lg h-14 px-8 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
-              title="Neue Baustelle anlegen"
-            >
-              <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12" />
-              <Plus className="h-6 w-6 transition-transform group-hover:rotate-90 duration-300" />
-              <span className="text-lg">Neues Projekt</span>
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+              <Button 
+                onClick={() => setIsQuickMeasurementDialogOpen(true)}
+                variant="outline"
+                className="group border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10 text-foreground font-black rounded-2xl shadow-sm h-14 px-6 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Zap className="h-5 w-5 text-purple-500" />
+                <span>Schnellaufmaß</span>
+              </Button>
+              <Button 
+                onClick={() => setIsNewProjectSheetOpen(true)} 
+                className="group relative bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-lg h-14 px-8 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
+                title="Neue Baustelle anlegen"
+              >
+                <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12" />
+                <Plus className="h-6 w-6 transition-transform group-hover:rotate-90 duration-300" />
+                <span className="text-lg">Neues Projekt</span>
+              </Button>
+            </div>
           </div>
 
           <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4 h-auto md:h-[240px]">
