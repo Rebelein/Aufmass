@@ -68,14 +68,17 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
 
   const articleCount = selectedItems.filter(i => i.type === 'article').length;
 
-  const handleExport = (type: 'gc' | 'heinze') => {
+  const handleExport = (type: 'gc' | 'heinze_ugl' | 'heinze_ugs') => {
     const dateStr = new Date().toISOString().split('T')[0];
     if (type === 'gc') {
       const csv = generateGCCsv(selectedItems);
-      downloadCsv(csv, `bestellung_gc_${dateStr}.csv`);
-    } else {
-      const csv = generateHeinzeCsv(selectedItems);
-      downloadCsv(csv, `bestellung_heinze_${dateStr}.csv`);
+      downloadFile(csv, `bestellung_gc_${dateStr}.csv`, true);
+    } else if (type === 'heinze_ugl') {
+      const ugl = generateHeinzeUgl(selectedItems);
+      downloadFile(ugl, `bestellung_heinze_${dateStr}.ugl`, false);
+    } else if (type === 'heinze_ugs') {
+      const ugs = generateHeinzeUgs(selectedItems);
+      downloadFile(ugs, `warenkorb_heinze_${dateStr}.ugs`, false);
     }
   };
 
@@ -234,8 +237,20 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                   <DropdownMenuItem onClick={() => handleExport('heinze')} className="hover:bg-muted cursor-pointer gap-3 py-3">
                       <FileSpreadsheet size={18} className="text-primary" />
                       <div className="flex flex-col">
-                        <span className="font-medium">UGL (Sanitär Heinze)</span>
-                        <span className="text-[10px] text-muted-foreground">Format für den Import</span>
+                        <span className="font-medium">UGS (Sanitär Heinze)</span>
+                        <span className="text-[10px] text-muted-foreground">Warenkorb Upload</span>
+                      </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+        </div>
+      </CardContent>
+    </div>
+  );
+};
+
+export default SelectionSummary;lectionSummary;lectionSummary;text-[10px] text-muted-foreground">UGS Format (Warenkorb-Upload)</span>
                       </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
