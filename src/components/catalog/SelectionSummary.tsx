@@ -35,7 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { generateGCCsv, generateHeinzeCsv, downloadCsv } from '@/lib/csv-export';
+import { generateGCCsv, generateHeinzeUgl, generateHeinzeUgs, downloadFile } from '@/lib/csv-export';
 
 interface SelectionSummaryProps {
   selectedItems: ProcessedSummaryItem[];
@@ -237,8 +237,8 @@ const SelectionSummary: React.FC<SelectionSummaryProps> = ({
                   <DropdownMenuItem onClick={() => handleExport('heinze')} className="hover:bg-muted cursor-pointer gap-3 py-3">
                       <FileSpreadsheet size={18} className="text-primary" />
                       <div className="flex flex-col">
-                        <span className="font-medium">UGS (Sanitär Heinze)</span>
-                        <span className="text-[10px] text-muted-foreground">Warenkorb Upload</span>
+                        <span className="font-medium">UGL (Sanitär Heinze)</span>
+                        <span className="text-[10px] text-muted-foreground">Bestell-Format (UGL)</span>
                       </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>

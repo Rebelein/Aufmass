@@ -121,7 +121,7 @@ export const generateHeinzeCsv = (items: ProcessedSummaryItem[]): string => {
 export const generateExportForSupplier = (supplier: string, items: ProcessedSummaryItem[]): { content: string, extension: string, useBom: boolean } => {
   const normalizedSupplier = supplier.toUpperCase();
   if (normalizedSupplier.includes('HEINZE')) {
-    return { content: generateHeinzeUgs(items), extension: 'ugs', useBom: false };
+    return { content: generateHeinzeUgl(items), extension: 'ugl', useBom: false };
   } else {
     // Default to GC format as requested
     return { content: generateGCCsv(items), extension: 'csv', useBom: true };
