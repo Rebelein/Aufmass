@@ -48,7 +48,7 @@ export interface ProjectSelectedItem {
 export interface Project {
   id: string;
   name: string;
-  status: 'planning' | 'active' | 'completed';
+  status: 'planning' | 'active' | 'completed' | 'quick';
   address?: string | null;
   client_name?: string | null;
   start_date?: string | null;

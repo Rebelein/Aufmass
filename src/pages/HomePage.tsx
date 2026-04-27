@@ -77,6 +77,9 @@ export default function HomePage() {
   // Neu: State für das hervorgehobene Projekt (Info-Screen)
   const [expandedProject, setExpandedProject] = useState<Project | null>(null);
 
+  const [isQuickMeasurementDialogOpen, setIsQuickMeasurementDialogOpen] = useState(false);
+  const [quickMeasurementName, setQuickMeasurementName] = useState('');
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -93,6 +96,7 @@ export default function HomePage() {
   const planningProjects = useMemo(() => projects.filter(p => p.status === 'planning'), [projects]);
   const activeProjects = useMemo(() => projects.filter(p => !p.status || p.status === 'active'), [projects]);
   const completedProjects = useMemo(() => projects.filter(p => p.status === 'completed'), [projects]);
+  const quickProjects = useMemo(() => projects.filter(p => p.status === 'quick'), [projects]);
 
   const stats = useMemo(() => {
     let totalItems = 0;
@@ -104,9 +108,29 @@ export default function HomePage() {
       planning: planningProjects.length,
       active: activeProjects.length,
       completed: completedProjects.length,
+      quick: quickProjects.length,
       totalItems
     };
-  }, [projects, planningProjects, activeProjects, completedProjects]);
+  }, [projects, planningProjects, activeProjects, completedProjects, quickProjects]);
+
+  const handleCreateQuickMeasurement = async () => {
+    if (quickMeasurementName.trim() === '') return;
+    try {
+      const addedProject = await addProjectToSupabase(quickMeasurementName, {
+        status: 'quick' as any
+      });
+      if (addedProject) {
+        toast({ title: "Schnellaufmaß angelegt", description: `"${quickMeasurementName}" wurde erfolgreich erstellt.` });
+        setProjects(prev => [addedProject, ...prev]);
+        setQuickMeasurementName('');
+        setIsQuickMeasurementDialogOpen(false);
+        handleSelectProject(addedProject.id);
+      }
+    } catch (error) {
+      console.error("Error adding quick measurement:", error);
+      toast({ title: "Fehler", description: "Schnellaufmaß konnte nicht erstellt werden.", variant: "destructive" });
+    }
+  };
 
   const handleAddProject = async () => {
     if (newProject.name.trim() === '') return;
@@ -611,8 +635,25 @@ export default function HomePage() {
             </motion.div>
           </motion.div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 pt-4">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 pt-4">
             
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between pb-3 border-b-2 border-purple-500/20">
+                <h2 className="text-xl font-black flex items-center gap-2 text-foreground">
+                  <Zap className="text-purple-500" size={24} /> Schnellaufmaß
+                </h2>
+                <div className="bg-purple-500/10 text-purple-500 text-sm font-black px-3 py-1 rounded-xl border border-purple-500/20">{stats.quick}</div>
+              </div>
+              <motion.div variants={containerVariants} initial="hidden" animate="show" className="flex flex-col gap-4 min-h-[200px]">
+                <AnimatePresence mode="popLayout">
+                  {quickProjects.length === 0 && !isLoading && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-muted-foreground text-sm text-center py-12 bg-card/30 rounded-3xl border border-dashed border-border italic">Keine Schnellaufmaße</motion.div>
+                  )}
+                  {quickProjects.map((p, i) => renderProjectCard(p, i))}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between pb-3 border-b-2 border-amber-500/20">
                 <h2 className="text-xl font-black flex items-center gap-2 text-foreground">
@@ -762,6 +803,41 @@ export default function HomePage() {
             </div>
           </div>
       </ResizableSidePanel>
+
+      <Dialog open={isQuickMeasurementDialogOpen} onOpenChange={setIsQuickMeasurementDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-card border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-foreground flex items-center gap-3">
+              <div className="bg-purple-500/10 p-2 rounded-xl"><Zap className="text-purple-500" size={24} /></div>
+              Schnellaufmaß
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-6 space-y-4">
+            <p className="text-muted-foreground text-sm">
+              Erstelle schnell und unkompliziert ein Aufmaß ohne es einer Baustelle zuordnen zu müssen.
+            </p>
+            <div className="space-y-2">
+              <Label className="text-foreground font-bold">Bezeichnung</Label>
+              <Input 
+                autoFocus
+                className="h-12 bg-background border-border text-foreground focus:ring-purple-500/50" 
+                value={quickMeasurementName} 
+                onChange={(e) => setQuickMeasurementName(e.target.value)} 
+                placeholder="z.B. Heizungskeller Meier, Bestellung MusterGmbH" 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateQuickMeasurement();
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setIsQuickMeasurementDialogOpen(false)} className="rounded-xl">Abbrechen</Button>
+            <Button onClick={handleCreateQuickMeasurement} disabled={quickMeasurementName.trim() === ''} className="bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-md gap-2">
+              <Plus size={16} /> Aufmaß starten
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
