@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Label } from '@/components/ui/label';
-import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, ListPlus, X as CloseIcon, Layers } from 'lucide-react';
+import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, ListPlus, X as CloseIcon, Layers, Zap } from 'lucide-react';
 import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId, markProjectItemsAsAngebot, createProjectList } from '@/lib/project-storage';
 import { preloadCatalog } from '@/lib/catalog-storage';
 import type { Project, ProjectList } from '@/lib/project-storage';
