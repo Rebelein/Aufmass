@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Download, Archive, FileText } from 'lucide-react';
 import type { ProcessedSummaryItem } from '@/lib/types';
-import { generateExportForSupplier, downloadFile, getSupplierName } from '@/lib/csv-export';
+import { generateExportForSupplier, generateHeinzeUgl, generateHeinzeUgs, downloadFile, getSupplierName } from '@/lib/csv-export';
 import JSZip from 'jszip';
 import { useToast } from '@/hooks/use-toast';
 
@@ -51,6 +51,16 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
     const filename = `${projectName}_${supplier}_${getDateString()}.${extension}`;
     downloadFile(content, filename, useBom);
     toast({ title: `${extension.toUpperCase()} heruntergeladen`, description: filename });
+  };
+
+  const handleDownloadSpecial = (supplier: string, type: 'ugl' | 'ugs') => {
+    const items = projectItems.filter(
+      (item) => item.type === 'article' && getSupplierName(item) === supplier
+    );
+    const content = type === 'ugl' ? generateHeinzeUgl(items) : generateHeinzeUgs(items);
+    const filename = `${projectName}_${supplier}_${getDateString()}.${type}`;
+    downloadFile(content, filename, false);
+    toast({ title: `${type.toUpperCase()} heruntergeladen`, description: filename });
   };
 
   const handleDownloadAllSeparately = () => {
@@ -132,15 +142,37 @@ export const CsvExportDialog: React.FC<CsvExportDialogProps> = ({
           
           <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
             {suppliers.map((supplier) => (
-              <Button
-                key={supplier}
-                onClick={() => handleDownloadSingle(supplier)}
-                variant="ghost"
-                className="w-full justify-start gap-3 text-muted-foreground hover:text-accent-foreground hover:bg-emerald-500/10 h-11 px-3 border border-transparent hover:border-emerald-500/20"
-              >
-                <FileText size={16} className="text-emerald-400/70" />
-                <span className="truncate">Download {supplier} Datei</span>
-              </Button>
+              <React.Fragment key={supplier}>
+                {supplier.toUpperCase().includes('HEINZE') ? (
+                  <>
+                    <Button
+                      onClick={() => handleDownloadSpecial(supplier, 'ugl')}
+                      variant="ghost"
+                      className="w-full justify-start gap-3 text-muted-foreground hover:text-accent-foreground hover:bg-emerald-500/10 h-11 px-3 border border-transparent hover:border-emerald-500/20"
+                    >
+                      <FileText size={16} className="text-emerald-400/70" />
+                      <span className="truncate">Download {supplier} (UGL Bestellung)</span>
+                    </Button>
+                    <Button
+                      onClick={() => handleDownloadSpecial(supplier, 'ugs')}
+                      variant="ghost"
+                      className="w-full justify-start gap-3 text-muted-foreground hover:text-accent-foreground hover:bg-emerald-500/10 h-11 px-3 border border-transparent hover:border-emerald-500/20"
+                    >
+                      <FileText size={16} className="text-emerald-400/70" />
+                      <span className="truncate">Download {supplier} (UGS Warenkorb)</span>
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => handleDownloadSingle(supplier)}
+                    variant="ghost"
+                    className="w-full justify-start gap-3 text-muted-foreground hover:text-accent-foreground hover:bg-emerald-500/10 h-11 px-3 border border-transparent hover:border-emerald-500/20"
+                  >
+                    <FileText size={16} className="text-emerald-400/70" />
+                    <span className="truncate">Download {supplier} Datei</span>
+                  </Button>
+                )}
+              </React.Fragment>
             ))}
             {suppliers.length === 0 && (
               <p className="text-center py-4 text-muted-foreground text-sm">Keine Artikel gefunden</p>
