@@ -240,22 +240,21 @@ export default function HomePage() {
     const isExpanded = expandedProject?.id === project.id;
 
     return (
-      <motion.div 
+      <motion.div
         layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ 
-          type: 'spring', 
-          stiffness: 400, 
+        transition={{
+          type: 'spring',
+          stiffness: 400,
           damping: 30,
-          delay: index * 0.05 
+          delay: index * 0.05
         }}
-        key={project.id} 
+        key={`${project.id}-${index}`}
         className="w-full cursor-pointer"
         onClick={() => setExpandedProject(isExpanded ? null : project)}
-      >
-        <SpotlightCard className={cn(
+      >        <SpotlightCard className={cn(
           "bg-card border rounded-xl shadow-sm overflow-hidden group flex flex-col transition-all duration-300",
           isExpanded ? "border-primary shadow-md ring-2 ring-primary/20" : "border-border hover:shadow-md hover:border-primary/30"
         )}>

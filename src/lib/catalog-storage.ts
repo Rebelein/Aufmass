@@ -17,7 +17,21 @@ function saveToCache(key: string, data: any) {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.warn("Failed to save to local cache (quota exceeded?)", e);
+    // Quota exceeded: try to clear other catalog caches to make room
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('cat_cache_') && k !== key) {
+           keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      // Retry after clearing
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch(e2) {
+      // Data is simply too large for localStorage, silently ignore to avoid dev tools spam
+    }
   }
 }
 

@@ -70,7 +70,7 @@ const AdminPage = () => {
   useEffect(() => { refreshData(); }, []);
 
   const handleAddMainCategory = async () => { if (!newMainCategoryName.trim()) return; const nextOrder = categories.filter(c => !c.parentId).length; const newCat = await addCategory({ name: newMainCategoryName.trim(), order: nextOrder, source: 'own' }); if (newCat) { setNewMainCategoryName(''); toast({ title: 'Hauptgruppe erstellt' }); refreshData(); } };
-  const handleSelectCategory = (id: string) => { setActiveCategoryId(id); setIsCategorySheetOpen(false); };
+  const handleSelectCategory = (id: string, hasChildren?: boolean) => { setActiveCategoryId(id); if (!hasChildren) setIsCategorySheetOpen(false); };
   const toggleCategoryExpansion = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const next = new Set(expandedCategories); if (next.has(id)) next.delete(id); else next.add(id); setExpandedCategories(next); };
 
   const handleAddNewArticleToCategory = async (catId: string, data: any) => { const newArt = await addArticle({ ...data, categoryId: catId, order: 0, source: 'own', supplierArticleNumbers: data.supplierId ? { [data.supplierId]: data.articleNumber } : {} }); if (newArt) { toast({ title: 'Artikel hinzugefügt' }); refreshData(); } };

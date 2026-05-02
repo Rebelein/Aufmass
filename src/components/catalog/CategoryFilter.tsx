@@ -11,7 +11,7 @@ interface CategoryFilterProps {
   articles: Article[];
   categories: Category[];
   selectedCategoryId: string | null;
-  onSelectCategory: (categoryId: string) => void;
+  onSelectCategory: (categoryId: string, hasChildren?: boolean) => void;
   expandedCategories: Set<string>;
   onToggleExpand: (categoryId: string) => void;
   onOpenSearchDialog: () => void;
@@ -87,7 +87,7 @@ const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 <button
                     data-category-button-id={category.id}
                     onClick={() => {
-                        onSelectCategory(category.id);
+                        onSelectCategory(category.id, hasChildren);
                         if (hasChildren && !isExpanded) onToggleExpand(category.id);
                     }}
                     className={cn(

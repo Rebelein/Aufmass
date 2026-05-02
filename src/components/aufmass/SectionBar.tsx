@@ -79,7 +79,7 @@ export function SectionBar({
         Allgemein
       </button>
 
-      {sections.map(sec => {
+      {sections.map((sec, idx) => {
         const isActive = activeSectionId === sec.id;
         const isEditing = editingSectionId === sec.id;
 
@@ -107,7 +107,7 @@ export function SectionBar({
         }
 
         return (
-          <div key={sec.id} className="relative group shrink-0">
+          <div key={`${sec.id}-${idx}`} className="relative group shrink-0">
             <button
               onClick={() => onSelectSection(sec.id)}
               className={cn(

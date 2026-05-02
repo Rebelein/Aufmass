@@ -15,11 +15,13 @@ import { NoteEditorDialog } from '@/components/dialogs/NoteEditorDialog';
 interface AngebotToolProps {
   project: Project;
   activeSectionId: string | null;
+  activeListId?: string | null;
   onUpdateLocalItem: (item: ProjectSelectedItem) => void;
   onRemoveLocalItem: (itemId: string) => void;
+  onUpdateProject?: (updates: Partial<Project>) => void;
 }
 
-export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRemoveLocalItem }: AngebotToolProps) {
+export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLocalItem, onRemoveLocalItem, onUpdateProject }: AngebotToolProps) {
   const { toast } = useToast();
   const [isNoteEditorOpen, setIsNoteEditorOpen] = useState(false);
 
@@ -36,6 +38,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
     const newItem: ProjectSelectedItem = {
       id: generateUUID(),
       project_id: project.id,
+      list_id: activeListId ?? null,
       type: 'article',
       order: project.selectedItems.length,
       article_id: null,
@@ -56,6 +59,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
   };
 
   const deleteImage = async (section: ProjectSelectedItem, imageIndex: number) => {
+    if (activeSectionId === null) return;
     if (!section.images) return;
     const newImages = section.images.filter((_, idx) => idx !== imageIndex);
     const updated = await upsertProjectItem({ ...section, images: newImages });
@@ -63,6 +67,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
   };
 
   const handleTitleChange = async (section: ProjectSelectedItem, newTitle: string) => {
+    if (activeSectionId === null) return;
     if (newTitle.trim() && newTitle !== section.text) {
       const updated = await upsertProjectItem({ ...section, text: newTitle.trim() });
       if (updated) onUpdateLocalItem(updated);
@@ -70,11 +75,25 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
   };
 
   const handleDescriptionChange = async (section: ProjectSelectedItem, desc: string) => {
-    const updated = await upsertProjectItem({ ...section, description: desc });
-    if (updated) onUpdateLocalItem(updated);
+    if (activeSectionId === null) {
+      const { updateProject } = await import('@/lib/project-storage');
+      const success = await updateProject(project.id, { notes: desc });
+      if (success && onUpdateProject) onUpdateProject({ notes: desc });
+    } else {
+      const updated = await upsertProjectItem({ ...section, description: desc });
+      if (updated) onUpdateLocalItem(updated);
+    }
   };
 
-  const activeSection = project.selectedItems.find(i => i.id === activeSectionId && i.type === 'section');
+  const activeSection = activeSectionId === null 
+    ? {
+        id: 'allgemein',
+        type: 'section',
+        text: 'Allgemein',
+        description: project.notes || '',
+        images: []
+      } as unknown as ProjectSelectedItem
+    : project.selectedItems.find(i => i.id === activeSectionId && i.type === 'section');
 
   if (!activeSection) {
     return (
@@ -99,6 +118,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
              onBlur={(e) => handleTitleChange(activeSection, e.target.value)}
              onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
              placeholder="Bauabschnitt Name..."
+             readOnly={activeSectionId === null}
           />
           <p className="text-emerald-400 font-medium text-sm mt-2 uppercase tracking-widest flex items-center gap-2">
             {project.name} <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" /> Abschnitt Dokumentation
@@ -106,6 +126,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
         </div>
         
         <div className="flex items-center gap-2 shrink-0">
+          {activeSectionId !== null && (
            <AlertDialog>
              <AlertDialogTrigger asChild>
                <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11 w-11 shrink-0 rounded-full">
@@ -125,6 +146,7 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
                </AlertDialogFooter>
              </AlertDialogContent>
            </AlertDialog>
+          )}
            <Button onClick={() => setIsNoteEditorOpen(true)} className="bg-emerald-500 hover:bg-emerald-600 text-primary-foreground rounded-full h-11 px-6 shadow-lg shadow-emerald-500/20 font-bold">
              <ImagePlus className="w-5 h-5 mr-2" /> Foto / Skizze
            </Button>
@@ -154,7 +176,10 @@ export function AngebotTool({ project, activeSectionId, onUpdateLocalItem, onRem
         {(() => {
           const sectionImages = activeSection.images?.map((img, idx) => ({ url: img, type: 'section', index: idx })) || [];
           const itemImages = project.selectedItems
-            .filter(i => i.section_id === activeSection.id && i.type === 'article' && i.images && i.images.length > 0)
+            .filter(i => {
+              const matchesSection = activeSection.id === 'allgemein' ? i.section_id === null : i.section_id === activeSection.id;
+              return matchesSection && i.type === 'article' && i.images && i.images.length > 0;
+            })
             .flatMap(i => i.images!.map(img => ({ url: img, type: 'item', id: i.id, name: i.name })));
           
           const allImages = [...sectionImages, ...itemImages];

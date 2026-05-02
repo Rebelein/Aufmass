@@ -12,7 +12,7 @@ export interface CategoryTreeProps {
   activeCategoryId: string | null;
   expandedCategories: Set<string>;
   forceExpandedIds?: string[];
-  onSelectCategory: (categoryId: string) => void;
+  onSelectCategory: (categoryId: string, hasChildren?: boolean) => void;
   onToggleExpansion: (categoryId: string, e: React.MouseEvent) => void;
   renderActions?: (category: Category, meta: { isFirst: boolean; isLast: boolean }) => React.ReactNode;
   
@@ -70,7 +70,7 @@ const SortableCategoryItem = ({
   activeCategoryId: string | null, 
   expandedCategories: Set<string>, 
   forceExpandedIds: string[], 
-  onSelectCategory: (id: string) => void, 
+  onSelectCategory: (id: string, hasChildren?: boolean) => void, 
   onToggleExpansion: (id: string, e: React.MouseEvent) => void, 
   renderActions: CategoryTreeProps['renderActions'], 
   onReorderCategory: CategoryTreeProps['onReorderCategory'], 
@@ -154,7 +154,7 @@ const SortableCategoryItem = ({
                 : !isDeepestExpanded && "bg-transparent border-transparent hover:bg-muted hover:border-border text-muted-foreground hover:text-accent-foreground"
           )}
           onClick={(e) => {
-            onSelectCategory(category.id);
+            onSelectCategory(category.id, hasChildren);
             if (hasChildren) {
               onToggleExpansion(category.id, e);
             }

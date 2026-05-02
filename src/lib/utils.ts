@@ -31,3 +31,36 @@ export function getInheritedCategoryImageUrl(categoryId: string | null | undefin
   
   return undefined;
 }
+
+export function normalizeArticleNameForSort(name: string | null | undefined): string {
+  if (!name) return "";
+  
+  let normalized = name.replace(/\s+/g, " ").trim();
+  
+  // Replace fractions first e.g. "1 1/4"" or "3/4""
+  normalized = normalized.replace(/(?:(\d+)\s+)?(\d+)\/(\d+)\s*("|zoll|inch)/gi, (match, whole, num, den, unit) => {
+    const w = whole ? parseInt(whole, 10) : 0;
+    const n = parseInt(num, 10);
+    const d = parseInt(den, 10);
+    if (d === 0) return match;
+    const decimal = w + (n / d);
+    const paddedDecimal = decimal.toFixed(3).padStart(8, "0");
+    return ` __INCH_${paddedDecimal}_${unit}`;
+  });
+  
+  // Then replace whole inches e.g. "1"" or "2""
+  normalized = normalized.replace(/(\d+)\s*("|zoll|inch)/gi, (match, whole, unit) => {
+    const w = parseInt(whole, 10);
+    const paddedDecimal = w.toFixed(3).padStart(8, "0");
+    return ` __INCH_${paddedDecimal}_${unit}`;
+  });
+
+  return normalized.replace(/\s+/g, " ").trim();
+}
+
+export function compareArticleNames(nameA: string | null | undefined, nameB: string | null | undefined): number {
+  const normA = normalizeArticleNameForSort(nameA);
+  const normB = normalizeArticleNameForSort(nameB);
+  return normA.localeCompare(normB, undefined, { numeric: true, sensitivity: 'base' });
+}
+

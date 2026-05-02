@@ -14,7 +14,7 @@ import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { ChevronLeft, FileDown, Menu, Package, Sparkles, FileSpreadsheet, BookMarked, Search, X as CloseIcon, PenLine, Edit3, Sun, Moon, Mic, Copy, FileText, Database, FileUp, CloudOff, ListPlus, LayoutGrid, CheckCircle2, Plus } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { cn, generateUUID, getInheritedCategoryImageUrl } from '@/lib/utils';
+import { cn, generateUUID, getInheritedCategoryImageUrl, compareArticleNames } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CsvExportDialog } from '@/components/dialogs/CsvExportDialog';
@@ -210,7 +210,11 @@ const AufmassPage = () => {
     return () => { isMounted = false; unsubCats(); unsubWCats(); unsubArts(); unsubWArts(); unsubSupps(); };
   }, [navigate]);
 
-  useEffect(() => { setActiveCategoryId(null); setTimeout(() => { setActiveCategoryId(activeCategories.find(c => c.parentId === null)?.id || null); }, 0); }, [catalogSource]);
+  useEffect(() => { 
+    setActiveCategoryId(null);
+    const firstCat = (catalogSource === 'own' ? categories : wholesaleCategories).find(c => c.parentId === null);
+    setActiveCategoryId(firstCat?.id || null);
+  }, [catalogSource, categories, wholesaleCategories]);
 
   useEffect(() => { if (categories.length > 0 && !activeCategoryId && catalogSource === 'own') { setActiveCategoryId(categories.find(c => c.parentId === null)?.id || null); } }, [categories, activeCategoryId, catalogSource]);
 
@@ -222,7 +226,7 @@ const AufmassPage = () => {
 
   const searchExpandedIds = useMemo(() => { if (!searchQuery.trim()) return []; const ids = new Set<string>(); const resultsToUse = catalogSource === 'own' ? searchResults : dynamicWholesaleArticles; resultsToUse.forEach(art => { let currentId = art.categoryId; while (currentId) { ids.add(currentId); const parentId = activeCategories.find(c => c.id === currentId)?.parentId; if (parentId) ids.add(parentId); currentId = parentId || null; } }); return Array.from(ids); }, [searchResults, dynamicWholesaleArticles, activeCategories, searchQuery, catalogSource]);
 
-  const viewArticles = useMemo(() => { let result = []; if (catalogSource === 'wholesale') { result = dynamicWholesaleArticles; } else if (searchQuery.trim().length > 0) { result = searchResults; } else if (!activeCategoryId) { result = []; } else { const subcats = activeCategories.filter(c => c.parentId === activeCategoryId); const validIds = [activeCategoryId, ...subcats.map(c => c.id)]; result = articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)); } return [...result].sort((a,b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' })); }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
+  const viewArticles = useMemo(() => { let result = []; if (catalogSource === 'wholesale') { result = dynamicWholesaleArticles; } else if (searchQuery.trim().length > 0) { result = searchResults; } else if (!activeCategoryId) { result = []; } else { const subcats = activeCategories.filter(c => c.parentId === activeCategoryId); const validIds = [activeCategoryId, ...subcats.map(c => c.id)]; result = articlesData.filter(a => a.categoryId && validIds.includes(a.categoryId)); } return [...result].sort((a,b) => compareArticleNames(a.name, b.name)); }, [articlesData, activeCategoryId, searchQuery, searchResults, activeCategories, catalogSource, dynamicWholesaleArticles]);
 
   const sections = useMemo(() => (currentProject?.selectedItems ?? []).filter(i => {
     const isSection = i.type === 'section';
@@ -241,7 +245,7 @@ const AufmassPage = () => {
     });
 
     const enrichedItems = filteredByList.map(item => { if (item.type === 'article' && item.article_id) { const articleDetail = articlesData.find(a => a.id === item.article_id) ?? dynamicWholesaleArticles.find(a => a.id === item.article_id) ?? projectWholesaleArticles.find(a => a.id === item.article_id); const allCats = [...categories, ...wholesaleCategories]; const categoryImageUrl = getInheritedCategoryImageUrl(articleDetail?.categoryId, allCats); return { ...item, article: articleDetail, categoryImageUrl }; } return item as ProcessedSummaryItem; });
-    return enrichedItems.sort((a, b) => { if (a.type === 'section' || b.type === 'section') return (a.order ?? 0) - (b.order ?? 0); const getCategoryPathOrder = (categoryId?: string): string => { if (!categoryId) return '999999'; const path: number[] = []; let currId: string | undefined | null = categoryId; const allCats = [...categories, ...wholesaleCategories]; while (currId) { const cat = allCats.find(c => c.id === currId); if (!cat) break; path.unshift(cat.order ?? 0); currId = cat.parentId; } return path.map(n => n.toString().padStart(5, '0')).join('-'); }; const pathA = getCategoryPathOrder(a.article?.categoryId); const pathB = getCategoryPathOrder(b.article?.categoryId); if (pathA !== pathB) return pathA.localeCompare(pathB); const nameA = (a.article?.name ?? a.name ?? '').replace(/\s+/g, ' ').trim(); const nameB = (b.article?.name ?? b.name ?? '').replace(/\s+/g, ' ').trim(); return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' }); });
+    return enrichedItems.sort((a, b) => { if (a.type === 'section' || b.type === 'section') return (a.order ?? 0) - (b.order ?? 0); const getCategoryPathOrder = (categoryId?: string): string => { if (!categoryId) return '999999'; const path: number[] = []; let currId: string | undefined | null = categoryId; const allCats = [...categories, ...wholesaleCategories]; while (currId) { const cat = allCats.find(c => c.id === currId); if (!cat) break; path.unshift(cat.order ?? 0); currId = cat.parentId; } return path.map(n => n.toString().padStart(5, '0')).join('-'); }; const pathA = getCategoryPathOrder(a.article?.categoryId); const pathB = getCategoryPathOrder(b.article?.categoryId); if (pathA !== pathB) return pathA.localeCompare(pathB); return compareArticleNames(a.article?.name ?? a.name, b.article?.name ?? b.name); });
   }, [currentProject, articlesData, dynamicWholesaleArticles, projectWholesaleArticles, categories, wholesaleCategories, activeListId]);
 
   const totalArticleCount = useMemo(() => processedSummaryItems.filter(i => i.type === 'article').reduce((s, i) => s + (i.quantity ?? 0), 0), [processedSummaryItems]);
@@ -398,14 +402,17 @@ const AufmassPage = () => {
 
   const handleGeneratePdf = async () => { if (!currentProject) return; const sectionItems = currentProject.selectedItems.filter(i => i.type === 'section').sort((a, b) => a.order - b.order); const articleItems = processedSummaryItems.filter(i => i.type === 'article'); generateAufmassPdf({ projectName: currentProject.name, sectionItems, articleItems }); toast({ title: 'PDF erstellt' }); };
 
-  const handleSelectCategory = (categoryId: string) => { setActiveCategoryId(categoryId); if (window.innerWidth < 1024) setIsCategorySheetOpen(false); };
+  const handleSelectCategory = (categoryId: string, hasChildren?: boolean) => { setActiveCategoryId(categoryId); if (window.innerWidth < 1024 && !hasChildren) setIsCategorySheetOpen(false); };
 
   if (isLoadingData || !currentProject) return <div className="flex items-center justify-center min-h-[70vh]"><div className="animate-pulse">Lädt...</div></div>;
 
   return (
     <motion.div className="flex h-[calc(100vh-3rem)] overflow-hidden relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="hidden lg:block relative shrink-0 h-full border-r" style={{ width: sidebarWidth }}>
-        <aside className="absolute inset-0 flex flex-col bg-card">
+      <div className={cn(
+        "hidden lg:block relative shrink-0 h-full border-r transition-all duration-300",
+        viewMode === 'angebot' ? "w-0 border-r-0 overflow-hidden" : ""
+      )} style={{ width: viewMode === 'angebot' ? 0 : sidebarWidth }}>
+        <aside className="absolute inset-0 flex flex-col bg-card w-[inherit]">
           <div className="p-3 border-b shrink-0 space-y-2">
             <div className="flex bg-background border rounded-xl p-1">
               <button onClick={() => setCatalogSource('own')} className={cn("flex-1 px-2 py-1.5 text-[10px] font-bold rounded-lg transition-all", catalogSource === 'own' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}>Katalog</button>
@@ -426,19 +433,48 @@ const AufmassPage = () => {
               <Menu size={20} />
             </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/')} className="shrink-0"><ChevronLeft /></Button>
-            <div className="min-w-0 cursor-pointer group flex flex-col" onClick={handleOpenEditProject}>
-              <div className="flex items-center gap-2 overflow-hidden">
-                <ShinyText text={currentProject.name || ''} className="font-bold truncate" />
-                <span className="text-muted-foreground/50 text-sm hidden sm:inline">/</span>
-                <span className="text-sm font-semibold text-primary truncate hidden sm:inline group-hover:underline decoration-primary/50 underline-offset-4">
-                  {currentProject.lists?.find(l => l.id === activeListId)?.name || 'Lädt...'}
-                </span>
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="min-w-0 cursor-pointer group hidden sm:flex flex-col" onClick={handleOpenEditProject}>
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <ShinyText text={currentProject.name || ''} className="font-bold truncate" />
+                  <span className="text-muted-foreground/50 text-sm">/</span>
+                  <span className="text-sm font-semibold text-primary truncate group-hover:underline decoration-primary/50 underline-offset-4">
+                    {currentProject.lists?.find(l => l.id === activeListId)?.name || 'Lädt...'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                  {totalArticleCount} Positionen
+                </p>
               </div>
-              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                <span className="sm:hidden font-semibold text-primary truncate max-w-[120px]">{currentProject.lists?.find(l => l.id === activeListId)?.name}</span>
-                <span className="sm:hidden text-muted-foreground/50">•</span>
-                {totalArticleCount} Positionen
-              </p>
+
+              {currentProject.status === 'planning' && (
+                <div className="flex bg-muted/50 p-1 rounded-xl border border-border">
+                  <button 
+                    onClick={() => setViewMode('angebot')}
+                    className={cn(
+                      "px-3 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1.5",
+                      viewMode === 'angebot' 
+                        ? "bg-primary text-primary-foreground shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <BookMarked size={14} />
+                    <span className="hidden sm:inline">Planung</span>
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('aufmass')}
+                    className={cn(
+                      "px-3 py-1 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1.5",
+                      viewMode === 'aufmass' 
+                        ? "bg-primary text-primary-foreground shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Package size={14} />
+                    <span className="hidden sm:inline">Material</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -453,12 +489,34 @@ const AufmassPage = () => {
 
         <SectionBar sections={sections} activeSectionId={activeSectionId} onSelectSection={setActiveSectionId} onAddSection={handleAddSection} onDeleteSection={handleDeleteSection} onUpdateSection={handleUpdateSection} />
 
-        <main className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col gap-3">
-            {viewArticles.map(article => (
-              <ArticleCard key={article.id} article={article} categoryImageUrl={getInheritedCategoryImageUrl(article.categoryId, activeCategories)} quantity={getQuantityInSection(article.id)} onIncrement={() => handleIncrement(article)} onDecrement={() => handleDecrement(article)} onReset={() => handleResetArticle(article)} />
-            ))}
-          </div>
+        <main className="flex-1 overflow-y-auto relative bg-background/50">
+          <AnimatePresence mode="wait">
+            {viewMode === 'angebot' ? (
+              <motion.div 
+                key="planung-view"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="absolute inset-0 overflow-y-auto p-4"
+              >
+                <AngebotTool project={currentProject} activeSectionId={activeSectionId} activeListId={activeListId} onUpdateLocalItem={updateLocalItem} onRemoveLocalItem={removeLocalItem} onUpdateProject={updates => setCurrentProject(prev => prev ? { ...prev, ...updates } : prev)} />
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="material-view"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="absolute inset-0 overflow-y-auto p-4"
+              >
+                <div className="flex flex-col gap-3">
+                  {viewArticles.map((article, idx) => (
+                    <ArticleCard key={`${article.id}-${idx}`} article={article} categoryImageUrl={getInheritedCategoryImageUrl(article.categoryId, activeCategories)} quantity={getQuantityInSection(article.id)} onIncrement={() => handleIncrement(article)} onDecrement={() => handleDecrement(article)} onReset={() => handleResetArticle(article)} />
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </main>
       </div>
 

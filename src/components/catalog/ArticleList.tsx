@@ -7,7 +7,7 @@ import { Minus, Plus, ImageIcon, Clipboard } from 'lucide-react';
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, compareArticleNames } from '@/lib/utils';
 
 interface ArticleListProps {
   articles: Article[];
@@ -39,7 +39,7 @@ const ArticleList: React.FC<ArticleListProps> = ({
   };
 
   const sortedArticles = [...articles].sort((a, b) => 
-    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    compareArticleNames(a.name, b.name)
   );
 
   return (

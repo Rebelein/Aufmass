@@ -9,11 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Sparkles, ChevronDown, Loader2, Save, Check, Trash2, FolderPlus, ListPlus, X } from 'lucide-react';
+import { Sparkles, ChevronDown, Loader2, Save, Check, Trash2, FolderPlus, ListPlus, X, Search } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { Category, Supplier, Article } from '@/lib/data';
 import type { ImportDraft } from '@/lib/import-storage';
+import { CategoryTree } from '../catalog/CategoryTree';
 
 export type ImportMode = 'add_to_existing' | 'create_new' | 'replace_all';
 
@@ -54,6 +55,12 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
   const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set());
   const [targetMoveIdx, setTargetMoveIdx] = useState<string>('');
   const [newCategoryName, setNewCategoryName] = useState('');
+
+  // States for matching dialog
+  const [matchingArticle, setMatchingArticle] = useState<{ catIdx: number, artIdx: number } | null>(null);
+  const [matchCategoryId, setMatchCategoryId] = useState<string | null>(null);
+  const [matchSearchQuery, setMatchSearchQuery] = useState('');
+  const [matchExpandedCategories, setMatchExpandedCategories] = useState<Set<string>>(new Set());
 
   const inputRefs = useRef<Record<string, HTMLInputElement>>({});
 
@@ -470,19 +477,14 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                  />
                                </TableCell>
                                <TableCell className="p-1.5">
-                                 <Select value={article.matchedArticleId || 'none'} onValueChange={(val) => handleUpdateItem(catIdx, artIdx, 'matchedArticleId', val === 'none' ? '' : val)}>
-                                   <SelectTrigger className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all">
-                                     <SelectValue placeholder="Nicht zugeordnet">
-                                       {originalArticle ? <span className="font-semibold text-emerald-500">{originalArticle.name}</span> : <span className="text-red-400">Keine Zuordnung</span>}
-                                     </SelectValue>
-                                   </SelectTrigger>
-                                   <SelectContent className="bg-card border-border text-foreground max-w-sm max-h-60">
-                                     <SelectItem value="none" className="text-muted-foreground">Ignorieren</SelectItem>
-                                     {availableArticles.map((a, idx) => (
-                                       <SelectItem key={`${a.id}-${idx}`} value={a.id}>{a.name} <span className="text-muted-foreground ml-2">{a.articleNumber}</span></SelectItem>
-                                     ))}
-                                   </SelectContent>
-                                 </Select>
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={() => setMatchingArticle({ catIdx, artIdx })}
+                                   className="w-full justify-start text-xs text-left bg-background/50 border-border h-8 px-2 font-normal"
+                                 >
+                                   {originalArticle ? <span className="font-semibold text-emerald-500 truncate">{originalArticle.name}</span> : <span className="text-red-400">Keine Zuordnung</span>}
+                                 </Button>
                                </TableCell>
                                <TableCell className="p-1.5 pl-1">
                                  <input 
@@ -640,6 +642,91 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Article Match Dialog for Extend Mode */}
+    <Dialog open={matchingArticle !== null} onOpenChange={(open) => !open && setMatchingArticle(null)}>
+      <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-background border-border rounded-2xl">
+        <DialogHeader className="p-4 border-b border-border shrink-0 bg-muted/20">
+          <DialogTitle>Original-Artikel zuordnen</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 flex overflow-hidden">
+           {/* Left: CategoryTree */}
+           <div className="w-1/3 border-r border-border flex flex-col bg-muted/10">
+              <div className="p-3 border-b border-border">
+                 <div className="relative">
+                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={14} />
+                   <Input 
+                     value={matchSearchQuery}
+                     onChange={e => setMatchSearchQuery(e.target.value)}
+                     placeholder="Kategorie suchen..."
+                     className="h-9 pl-8 text-xs bg-background border-border focus-visible:ring-primary/50"
+                   />
+                 </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                 <CategoryTree 
+                   categories={categories} 
+                   activeCategoryId={matchCategoryId} 
+                   expandedCategories={matchExpandedCategories} 
+                   onSelectCategory={(id, hasChildren) => {
+                     setMatchCategoryId(id);
+                     if (hasChildren) {
+                        const next = new Set(matchExpandedCategories);
+                        if (next.has(id)) next.delete(id); else next.add(id);
+                        setMatchExpandedCategories(next);
+                     }
+                   }} 
+                   onToggleExpansion={(id, e) => {
+                     e.stopPropagation();
+                     const next = new Set(matchExpandedCategories);
+                     if (next.has(id)) next.delete(id); else next.add(id);
+                     setMatchExpandedCategories(next);
+                   }}
+                 />
+              </div>
+           </div>
+           {/* Right: ArticleList */}
+           <div className="flex-1 flex flex-col bg-background">
+              <div className="p-3 border-b border-border flex items-center justify-between bg-muted/5">
+                <p className="text-sm font-bold text-muted-foreground">
+                   {matchCategoryId ? categories.find(c => c.id === matchCategoryId)?.name : 'Keine Kategorie gewählt'}
+                </p>
+                <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => {
+                   if (matchingArticle) {
+                      handleUpdateItem(matchingArticle.catIdx, matchingArticle.artIdx, 'matchedArticleId', 'none');
+                      setMatchingArticle(null);
+                   }
+                }}>
+                   Keine Zuordnung (Ignorieren)
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                 {articles.filter(a => a.categoryId === matchCategoryId).map(a => (
+                   <div 
+                     key={a.id} 
+                     className="flex items-center justify-between p-3 bg-card border border-border rounded-xl hover:border-primary hover:bg-primary/5 cursor-pointer transition-colors" 
+                     onClick={() => {
+                       if (matchingArticle) {
+                          handleUpdateItem(matchingArticle.catIdx, matchingArticle.artIdx, 'matchedArticleId', a.id);
+                          setMatchingArticle(null);
+                       }
+                     }}
+                   >
+                      <div className="text-sm font-semibold text-foreground">{a.name}</div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-xs text-muted-foreground">{a.unit}</div>
+                        <div className="text-xs font-mono text-primary bg-primary/10 px-2 py-1 rounded-md">{a.articleNumber}</div>
+                      </div>
+                   </div>
+                 ))}
+                 {matchCategoryId && articles.filter(a => a.categoryId === matchCategoryId).length === 0 && (
+                   <div className="text-center p-8 text-muted-foreground text-sm">Keine Artikel in dieser Kategorie vorhanden.</div>
+                 )}
+              </div>
+           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 };

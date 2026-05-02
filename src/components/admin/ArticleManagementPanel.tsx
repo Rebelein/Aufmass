@@ -20,7 +20,7 @@ import ImportDraftsDialog from '../dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '../dialogs/ImportReviewDialog';
 import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp, Loader2, Trash2, Edit3, Package, BookMarked, Camera, ImagePlus, FileText, ClipboardPaste, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { cn, generateUUID, getInheritedCategoryImageUrl } from '@/lib/utils';
+import { cn, generateUUID, getInheritedCategoryImageUrl, compareArticleNames } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { batchAddCatalog, updateCategoryImage, batchUpdateArticles, findWholesaleArticleByNumber } from '@/lib/catalog-storage';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -129,7 +129,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     // Nur resetten, wenn sich die Kategorie ändert ODER der User gerade keine ungespeicherten Daten tippt.
     if (categoryChanged || !hasUnsavedChangesRef.current) {
       setSelectedArticleIds(new Set());
-      const sorted = [...initialArticles].sort((a, b) => (a.name || '').replace(/\s+/g, ' ').trim().localeCompare((b.name || '').replace(/\s+/g, ' ').trim(), undefined, { numeric: true, sensitivity: 'base' }));
+      const sorted = [...initialArticles].sort((a, b) => compareArticleNames(a.name, b.name));
       setLocalArticles(sorted.map(a => ({ ...a })));
       setHasUnsavedChanges(false);
     }

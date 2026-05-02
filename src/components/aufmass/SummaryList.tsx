@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, FolderOpen, Trash2, Plus, Minus, Package, Copy, Check, RotateCcw, ArrowDownAZ } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, compareArticleNames } from '@/lib/utils';
 import { SwipeableItem } from '@/components/catalog/SwipeableItem';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProcessedSummaryItem } from '@/lib/types';
@@ -86,7 +86,7 @@ export function SummaryList({
     impactLight();
   }, [articleItems, impactLight]);
 
-  const renderSectionGroup = (sId: string | null, label: string) => {
+  const renderSectionGroup = (sId: string | null, label: string, idx: number = 0) => {
     const items = articleItems.filter(i => (i as any).section_id === sId);
     if (items.length === 0 && sId !== null) return null;
 
@@ -103,14 +103,12 @@ export function SummaryList({
           const sA = (a.article?.supplierName ?? (a as any).supplier_name ?? 'ZZZ').toLowerCase();
           const sB = (b.article?.supplierName ?? (b as any).supplier_name ?? 'ZZZ').toLowerCase();
           if (sA !== sB) return sA.localeCompare(sB);
-          const nA = (a.article?.name ?? (a as any).name ?? '').replace(/\s+/g, ' ').trim();
-          const nB = (b.article?.name ?? (b as any).name ?? '').replace(/\s+/g, ' ').trim();
-          return nA.localeCompare(nB, undefined, { numeric: true, sensitivity: 'base' });
+          return compareArticleNames(a.article?.name ?? (a as any).name, b.article?.name ?? (b as any).name);
         })
       : items;
 
     return (
-      <div key={collapseKey} className="mb-2">
+      <div key={`${collapseKey}-${idx}`} className="mb-2">
         {/* Section Header */}
         <div className={cn(
           'w-full flex items-center gap-2 px-2.5 py-2 rounded-lg mb-1 transition-all',
@@ -229,7 +227,7 @@ export function SummaryList({
                       const showSupplierDivider = isSortedBySupplier && currentSupplier !== prevSupplier;
 
                       return (
-                        <div key={item.id}>
+                        <div key={`${item.id}-${idx}`}>
                           {showSupplierDivider && (
                             <div className="flex items-center gap-2 px-2 pt-2 pb-1">
                               <div className="h-px flex-1 bg-cyan-500/20" />
@@ -395,7 +393,7 @@ export function SummaryList({
   return (
     <div className="overflow-y-auto flex-1 p-3 space-y-0.5">
       {renderSectionGroup(null, 'Allgemein')}
-      {sectionItems.map(s => renderSectionGroup(s.id, s.text ?? 'Abschnitt'))}
+      {sectionItems.map((s, idx) => renderSectionGroup(s.id, s.text ?? 'Abschnitt', idx))}
       {articleItems.length === 0 && (
         <div className="text-center py-12 text-muted-foreground text-sm">Keine Artikel im Aufmaß</div>
       )}

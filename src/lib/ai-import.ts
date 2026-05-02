@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { generateUUID } from '@/lib/utils';
+import { generateUUID, compareArticleNames } from '@/lib/utils';
 import { createImportDraft, updateImportDraftSuccess, updateImportDraftError } from '@/lib/import-storage';
 import type { ProposedCategory } from '@/lib/types';
 import type { Article } from '@/lib/data';
@@ -94,7 +94,7 @@ Lass Artikel weg, die du keinem bestehenden Artikel zuordnen kannst.`;
         .sort((a: any, b: any) => {
           const nameA = a.name || '';
           const nameB = b.name || '';
-          return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+          return compareArticleNames(nameA, nameB);
         }),
     })
   );
