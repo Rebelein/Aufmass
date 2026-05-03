@@ -264,7 +264,9 @@ const AdminPage = () => {
               nextMap[supplierId] = art.articleNumber;
             }
             await supabase.from('articles').update({ 
-              supplier_article_numbers: nextMap 
+              supplier_article_numbers: nextMap,
+              article_number: art.articleNumber,
+              supplier_id: supplierId === 'none' ? null : supplierId
             }).eq('id', art.matchedArticleId);
           }
         }

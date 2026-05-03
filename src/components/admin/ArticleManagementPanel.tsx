@@ -160,13 +160,28 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       const article = next[articleIndex];
 
       if (field === 'supplierArticleNumber') {
-        if (!article.supplierId) return current; // Shouldn't happen
+        if (!article.supplierId) return current; 
         const newMap = { ...(article.supplierArticleNumbers || {}), [article.supplierId]: value };
-        next[articleIndex] = { ...article, supplierArticleNumbers: newMap };
+        // Sync primary articleNumber with the current supplier's number
+        next[articleIndex] = { ...article, supplierArticleNumbers: newMap, articleNumber: value };
         return next;
       }
 
-      if ((field === 'unit' || field === 'supplierId') && isSyncEditing) {
+      if (field === 'supplierId') {
+        const newSupplierId = value;
+        if (isSyncEditing) {
+          return next.map(art => {
+            const newArtNr = newSupplierId ? (art.supplierArticleNumbers?.[newSupplierId] || '') : art.articleNumber;
+            return { ...art, supplierId: newSupplierId, articleNumber: newArtNr };
+          });
+        } else {
+          const newArtNr = newSupplierId ? (article.supplierArticleNumbers?.[newSupplierId] || '') : article.articleNumber;
+          next[articleIndex] = { ...article, supplierId: newSupplierId, articleNumber: newArtNr };
+          return next;
+        }
+      }
+
+      if (field === 'unit' && isSyncEditing) {
         return next.map(art => ({ ...art, [field]: value }));
       } else if ((field === 'name' || field === 'articleNumber') && isSyncEditing && pos !== undefined) {
         const oldValue = String(article[field]) || '';
@@ -191,6 +206,11 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
         return next.map(art => {
           if (art.id === id) {
+            // Also update supplierArticleNumbers if we are editing articleNumber and a supplier is selected
+            if (field === 'articleNumber' && art.supplierId) {
+              const newMap = { ...(art.supplierArticleNumbers || {}), [art.supplierId]: value };
+              return { ...art, [field]: value, supplierArticleNumbers: newMap };
+            }
             return { ...art, [field]: value };
           }
           const oldArtVal = String(art[field]) || '';
@@ -200,10 +220,22 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
           
           const newArtVal = oldArtVal.substring(0, replaceStart) + stringToInsert + oldArtVal.substring(replaceEnd);
           
+          // Also update supplierArticleNumbers for other articles if we are in sync mode
+          if (field === 'articleNumber' && art.supplierId) {
+            const newMap = { ...(art.supplierArticleNumbers || {}), [art.supplierId]: newArtVal };
+            return { ...art, [field]: newArtVal, supplierArticleNumbers: newMap };
+          }
+          
           return { ...art, [field]: newArtVal };
         });
       } else {
-        next[articleIndex] = { ...article, [field]: value };
+        // Default update for single article
+        if (field === 'articleNumber' && article.supplierId) {
+          const newMap = { ...(article.supplierArticleNumbers || {}), [article.supplierId]: value };
+          next[articleIndex] = { ...article, [field]: value, supplierArticleNumbers: newMap };
+        } else {
+          next[articleIndex] = { ...article, [field]: value };
+        }
         return next;
       }
     });
@@ -307,6 +339,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         articleNumber: a.articleNumber, 
         unit: a.unit,
         supplierId: a.supplierId,
+        supplierArticleNumbers: a.supplierArticleNumbers,
         imageUrl: a.imageUrl
       }));
       await batchUpdateArticles(changes);
@@ -521,7 +554,11 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         if (existing) {
           const currentMap = existing.supplier_article_numbers || {};
           currentMap[supplierId!] = art.articleNumber;
-          await supabase.from('articles').update({ supplier_article_numbers: currentMap }).eq('id', art.matchedArticleId);
+          await supabase.from('articles').update({ 
+            supplier_article_numbers: currentMap,
+            article_number: art.articleNumber,
+            supplier_id: supplierId === 'none' ? null : supplierId
+          }).eq('id', art.matchedArticleId);
         }
       }
     } else if ((importMode === 'add_to_existing' || importMode === 'replace_all') && targetId) {
