@@ -98,7 +98,9 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   const articleImageInputRef = useRef<HTMLInputElement>(null);
   const [activeArticleIdForImage, setActiveArticleIdForImage] = useState<string | null>(null);
 
+  const [viewSupplierId, setViewSupplierId] = useState<string>('none');
   const [localArticles, setLocalArticles] = useState<Article[]>([]);
+  const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
   
   const recursiveArticles = React.useMemo(() => {
     const getRecursiveIds = (parentId: string): string[] => {
@@ -135,6 +137,39 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     }
   }, [categoryId, initialArticles]);
 
+  const saveArticleNumberRealtime = async (articleId: string, supplierId: string, value: string) => {
+    if (saveTimeouts.current[articleId]) {
+      clearTimeout(saveTimeouts.current[articleId]);
+    }
+
+    saveTimeouts.current[articleId] = setTimeout(async () => {
+      try {
+        const { supabase } = await import('@/lib/supabase');
+        // Holen des aktuellen Zustands für Merge
+        const { data: currentArt } = await supabase
+          .from('articles')
+          .select('supplier_article_numbers, article_number')
+          .eq('id', articleId)
+          .single();
+
+        if (currentArt) {
+          const newMap = { ...(currentArt.supplier_article_numbers || {}), [supplierId]: value };
+          const updatePayload: any = { supplier_article_numbers: newMap };
+          
+          // Wenn "Kein Händler" (Standard) bearbeitet wird
+          if (supplierId === 'none') {
+            updatePayload.article_number = value;
+          }
+
+          await supabase.from('articles').update(updatePayload).eq('id', articleId);
+          console.log(`[Realtime] Artikelnummer für ${articleId} / ${supplierId} gespeichert.`);
+        }
+      } catch (err) {
+        console.error('Fehler beim Realtime-Save:', err);
+      }
+    }, 500); // 500ms Debounce
+  };
+
   useEffect(() => {
     const currentCat = allCategories.find(c => c.id === categoryId);
     setCategoryImage(currentCat?.imageUrl || null);
@@ -151,7 +186,6 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
   }, [localArticles, cursorInfo]);
 
   const handleUpdateLocalArticle = (id: string, field: keyof Article | 'supplierArticleNumber', value: string, pos?: number) => {
-    setHasUnsavedChanges(true);
     setLocalArticles(current => {
       const next = [...current];
       const articleIndex = next.findIndex(a => a.id === id);
@@ -160,23 +194,26 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       const article = next[articleIndex];
 
       if (field === 'supplierArticleNumber') {
-        if (!article.supplierId) return current; 
-        const newMap = { ...(article.supplierArticleNumbers || {}), [article.supplierId]: value };
-        // Sync primary articleNumber with the current supplier's number
-        next[articleIndex] = { ...article, supplierArticleNumbers: newMap, articleNumber: value };
+        const sId = viewSupplierId;
+        const newMap = { ...(article.supplierArticleNumbers || {}), [sId]: value };
+        
+        const updatedArticle = { ...article, supplierArticleNumbers: newMap };
+        if (sId === 'none') {
+          updatedArticle.articleNumber = value;
+        }
+        
+        next[articleIndex] = updatedArticle;
+        saveArticleNumberRealtime(id, sId, value);
         return next;
       }
 
+      setHasUnsavedChanges(true);
+
       if (field === 'supplierId') {
-        const newSupplierId = value;
         if (isSyncEditing) {
-          return next.map(art => {
-            const newArtNr = newSupplierId ? (art.supplierArticleNumbers?.[newSupplierId] || '') : art.articleNumber;
-            return { ...art, supplierId: newSupplierId, articleNumber: newArtNr };
-          });
+          return next.map(art => ({ ...art, [field]: value }));
         } else {
-          const newArtNr = newSupplierId ? (article.supplierArticleNumbers?.[newSupplierId] || '') : article.articleNumber;
-          next[articleIndex] = { ...article, supplierId: newSupplierId, articleNumber: newArtNr };
+          next[articleIndex] = { ...article, [field]: value };
           return next;
         }
       }
@@ -187,13 +224,11 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
         const oldValue = String(article[field]) || '';
         const newValue = value;
         
-        // Find common prefix length
         let commonPrefixLen = 0;
         while (commonPrefixLen < oldValue.length && commonPrefixLen < newValue.length && oldValue[commonPrefixLen] === newValue[commonPrefixLen]) {
           commonPrefixLen++;
         }
         
-        // Find common suffix length
         let commonSuffixLen = 0;
         while (commonSuffixLen < oldValue.length - commonPrefixLen && 
                commonSuffixLen < newValue.length - commonPrefixLen && 
@@ -206,36 +241,16 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
 
         return next.map(art => {
           if (art.id === id) {
-            // Also update supplierArticleNumbers if we are editing articleNumber and a supplier is selected
-            if (field === 'articleNumber' && art.supplierId) {
-              const newMap = { ...(art.supplierArticleNumbers || {}), [art.supplierId]: value };
-              return { ...art, [field]: value, supplierArticleNumbers: newMap };
-            }
             return { ...art, [field]: value };
           }
           const oldArtVal = String(art[field]) || '';
-          
           const replaceStart = Math.min(commonPrefixLen, oldArtVal.length);
           const replaceEnd = Math.min(replaceStart + charsToDelete, oldArtVal.length);
-          
           const newArtVal = oldArtVal.substring(0, replaceStart) + stringToInsert + oldArtVal.substring(replaceEnd);
-          
-          // Also update supplierArticleNumbers for other articles if we are in sync mode
-          if (field === 'articleNumber' && art.supplierId) {
-            const newMap = { ...(art.supplierArticleNumbers || {}), [art.supplierId]: newArtVal };
-            return { ...art, [field]: newArtVal, supplierArticleNumbers: newMap };
-          }
-          
           return { ...art, [field]: newArtVal };
         });
       } else {
-        // Default update for single article
-        if (field === 'articleNumber' && article.supplierId) {
-          const newMap = { ...(article.supplierArticleNumbers || {}), [article.supplierId]: value };
-          next[articleIndex] = { ...article, [field]: value, supplierArticleNumbers: newMap };
-        } else {
-          next[articleIndex] = { ...article, [field]: value };
-        }
+        next[articleIndex] = { ...article, [field]: value };
         return next;
       }
     });
@@ -766,9 +781,22 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                             <TableRow className="border-border hover:bg-transparent">
                                 <TableHead className="w-12 text-center"><Checkbox checked={selectedArticleIds.size === initialArticles.length && initialArticles.length > 0} onCheckedChange={(checked) => setSelectedArticleIds(checked ? new Set(initialArticles.map(a => a.id)) : new Set())}/></TableHead>
                                 <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider">Artikel</TableHead>
-                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell">Nummer</TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden sm:table-cell p-0">
+                                  <div className="flex items-center gap-1.5 px-2">
+                                    <span className="shrink-0">Nummer</span>
+                                    <Select value={viewSupplierId} onValueChange={setViewSupplierId}>
+                                      <SelectTrigger className="h-7 border-none bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[9px] px-2 min-w-[100px] rounded-md focus:ring-0 shadow-none transition-all">
+                                        <SelectValue placeholder="Anzeige..." />
+                                      </SelectTrigger>
+                                      <SelectContent className="bg-card border-border text-foreground">
+                                        <SelectItem value="none" className="text-[10px]">Standard / Fallback</SelectItem>
+                                        {suppliers.map(s => <SelectItem key={s.id} value={s.id} className="text-[10px]">{s.name}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </TableHead>
                                 <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden md:table-cell">Einheit</TableHead>
-                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Händler</TableHead>
+                                <TableHead className="text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden lg:table-cell">Favorit</TableHead>
                                 <TableHead className="text-right text-muted-foreground font-bold uppercase text-[10px] tracking-wider hidden xl:table-cell">Aktionen</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -846,7 +874,6 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                             ref={el => { 
                                               if (el) {
                                                 inputRefs.current[`${article.id}-name`] = el;
-                                                // Auto-resize on mount
                                                 el.style.height = '0px';
                                                 el.style.height = el.scrollHeight + 'px';
                                               } 
@@ -863,7 +890,6 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                           />
                                         </div>
                                         
-                                        {/* Actions for tablet/mobile - visible below article name */}
                                         <div className="flex xl:hidden items-center gap-2 ml-1 sm:ml-10">
                                             <Button variant="ghost" size="sm" onClick={() => { setActiveArticleIdForImage(article.id); articleImageInputRef.current?.click(); }} className="h-8 px-2 text-muted-foreground hover:text-primary bg-muted/30 hover:bg-primary/10 rounded-lg text-[10px] font-bold uppercase tracking-wider gap-1.5">
                                               <ImagePlus size={12}/> Bild
@@ -881,28 +907,26 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                       <div className="relative flex items-center">
                                         <input 
                                           ref={el => { if (el) inputRefs.current[`${article.id}-articleNumber`] = el; }}
-                                          value={article.supplierId ? (article.supplierArticleNumbers?.[article.supplierId] || '') : (article.articleNumber || '')}
+                                          value={viewSupplierId === 'none' ? (article.articleNumber || '') : (article.supplierArticleNumbers?.[viewSupplierId] || '')}
                                           onChange={(e) => {
-                                            if (article.supplierId) {
-                                              handleUpdateLocalArticle(article.id, 'supplierArticleNumber', e.target.value, e.target.selectionStart || 0);
-                                            } else {
-                                              handleUpdateLocalArticle(article.id, 'articleNumber', e.target.value, e.target.selectionStart || 0);
-                                            }
+                                            handleUpdateLocalArticle(article.id, 'supplierArticleNumber', e.target.value, e.target.selectionStart || 0);
                                           }}
-                                          className="w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono text-primary focus:border-primary/50 outline-none transition-all"
-                                          placeholder={article.supplierId ? `Art.-Nr. für Händler` : `Standard Art.-Nr.`}
+                                          className={cn(
+                                            "w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono focus:border-primary/50 outline-none transition-all",
+                                            viewSupplierId === 'none' ? "text-primary" : "text-amber-500"
+                                          )}
+                                          placeholder={viewSupplierId === 'none' ? `Standard Nr.` : `Händler Nr.`}
                                         />
-                                        {(article.supplierId ? article.supplierArticleNumbers?.[article.supplierId] : article.articleNumber) && (
+                                        {(viewSupplierId === 'none' ? article.articleNumber : article.supplierArticleNumbers?.[viewSupplierId]) && (
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.preventDefault();
                                               e.stopPropagation();
-                                              navigator.clipboard.writeText((article.supplierId ? article.supplierArticleNumbers?.[article.supplierId] : article.articleNumber) || '');
-                                              toast({ title: 'Kopiert', description: 'Artikelnummer in die Zwischenablage kopiert.' });
+                                              navigator.clipboard.writeText((viewSupplierId === 'none' ? article.articleNumber : article.supplierArticleNumbers?.[viewSupplierId]) || '');
+                                              toast({ title: 'Kopiert' });
                                             }}
                                             className="absolute right-1 text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
-                                            title="Artikelnummer kopieren"
                                           >
                                             <Copy size={14} />
                                           </button>
