@@ -106,7 +106,7 @@ export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) 
           reader.onloadend = async () => {
             const base64Data = (reader.result as string).split(',')[1];
             
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
             const result = await model.generateContent([
               "Transkribiere dieses Audio auf Deutsch. Antworte NUR mit dem erkannten Text, ohne weitere Formatierung oder Erklärungen. Wenn Mengen und Artikel genannt werden, formatiere sie sauber (z.B. 'FlowFit Bogen 20 5 Stück').",
               {

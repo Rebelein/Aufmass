@@ -51,22 +51,87 @@ async function runGeminiExtraction(base64Data: string, mimeType: string, options
   console.log('[KI-Import] Starte Gemini-Anfrage…', { mimeType, dataLength: base64Data.length, mode: options?.mode });
 
   const genAI = new GoogleGenerativeAI(apiKey.trim());
-  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+  const model = genAI.getGenerativeModel({ 
+    model: 'gemini-3.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json'
+    }
+  });
 
   let prompt = '';
   if (options?.mode === 'extend' && options.existingArticles && options.existingArticles.length > 0) {
     const articlesJson = JSON.stringify(options.existingArticles.map(a => ({ id: a.id, name: a.name, unit: a.unit, articleNumber: a.articleNumber })));
-    prompt = `Du analysierst eine Katalogseite eines Großhändlers. Wir haben bereits bestehende Artikel in unserem System und wollen deren Artikelnummern für diesen Großhändler ergänzen.
-Hier sind unsere bestehenden Artikel:
+    prompt = `Du bist ein Assistent zur Datenanreicherung für Sanitär-, Heizungs- und Materialkataloge.
+Deine Aufgabe ist es, bestehende Artikel aus unserem System in der Katalogseite des Großhändlers wiederzufinden und deren Artikelnummer für diesen Großhändler zu extrahieren.
+
+Hier sind unsere bereits im System angelegten Artikel als JSON-Array:
 ${articlesJson}
 
-Finde diese Artikel auf der Katalogseite. Beachte, dass die Bezeichnungen abweichen können (z.B. "Doppelnippel" statt "Langnippel" oder ähnliche fachliche Synonyme/Abkürzungen).
-Ordne die gefundenen Artikel anhand ihrer Dimensionen/Namen den bestehenden 'id's zu. 
-Rückgabe MUSS exakt dieses JSON-Format sein: 
-[ { "categoryName": "Zugeordnete Artikel", "articles": [ { "name": "Gefundener Name auf Seite", "articleNumber": "Gefundene Art.-Nr.", "unit": "Gefundene Einheit", "matchedArticleId": "id-des-bestehenden-artikels" } ] } ]
-Lass Artikel weg, die du keinem bestehenden Artikel zuordnen kannst.`;
+Richtlinien für den Abgleich und die Extraktion:
+1. **Fuzzy-Matching & Synonyme**:
+   - Die Bezeichnungen auf der Katalogseite können von unseren Systemnamen abweichen.
+   - Gleiche Bezeichnungen fachlich ab. Nutze branchenspezifische Synonyme und Abkürzungen (z. B. "Doppelnippel" statt "Langnippel", "Bogen" statt "Winkel", "Muffe", "Reduzierung" etc.).
+   - Achte extrem präzise auf die Dimensionen (z. B. "1/2\"", "15mm", "dn20", "16 x 2.0"). Ein Abgleich ist nur dann korrekt, wenn auch die Dimension exakt übereinstimmt!
+2. **Keine neuen Artikel**:
+   - Erfasse ausschließlich Artikel, die du eindeutig einem unserer bestehenden Artikel zuordnen kannst.
+   - Füge keine Artikel hinzu, die nicht in der obigen Liste vorhanden sind.
+3. **Rückgabeformat**:
+   Gib ein JSON-Array zurück, in dem alle zugeordneten Artikel unter einer einzigen Kategorie "Zugeordnete Artikel" zusammengefasst sind. Die Artikel müssen über das Feld "matchedArticleId" mit der 'id' des bestehenden Artikels verknüpft werden.
+   
+   TypeScript-Typ:
+   \`\`\`typescript
+   type Output = Array<{
+     categoryName: "Zugeordnete Artikel";
+     articles: Array<{
+       name: string; // Name des gefundenen Artikels auf der Seite
+       articleNumber: string; // Die auf der Seite gefundene Artikelnummer für diesen Großhändler
+       unit: string; // Die auf der Seite gefundene Einheit
+       matchedArticleId: string; // Die 'id' des bestehenden Artikels aus unserem System
+     }>;
+   }>;
+   \`\`\`
+   Da die Ausgabe direkt als JSON erzwungen wird, antworte AUSSCHLIESSLICH mit diesem validen JSON-Array. Gib keinen zusätzlichen Text, Präambeln oder Erklärungen aus.`;
   } else {
-    prompt = `Extrahiere Materialdaten aus dieser Katalogseite. Erfasse verschiedene Produktgruppen jeweils als eine eigene Kategorie. Rückgabe als JSON-Array von Objekten: [ { "categoryName": "Name der Gruppe/Kategorie", "articles": [ { "name": "...", "articleNumber": "...", "unit": "..." } ] } ]. Erzeuge KEINE verschachtelten Unterkategorien.`;
+    prompt = `Du bist ein hochpräziser Assistent für die Beleg- und Katalogextraktion im Sanitär-, Heizungs- und Baubereich.
+Deine Aufgabe ist es, Produkt- und Materialdaten von dieser Katalogseite des Großhändlers zu extrahieren.
+
+Hier sind die strengen Richtlinien für die Extraktion:
+1. **Produktgruppen & Kategorien**: 
+   - Erfasse zusammengehörige Produktfamilien oder Gruppen als jeweils eigene Kategorie mit einem aussagekräftigen "categoryName" (z. B. "Geberit Mepla Rohr", "Kupfer Press-T-Stück").
+   - Erzeuge KEINE verschachtelten Unterkategorien. Jedes Element im Root-Array repräsentiert eine flache Kategorie.
+
+2. **Vollständige Produktnamen (Namensverkettung)**:
+   - In Tabellen oder Katalogen ist der Hauptproduktname (die Produktfamilie) oft nur einmal im Kopfbereich oder Titel genannt (z. B. "Sanpress Bogen 90°"). In den einzelnen Tabellenzeilen stehen dann nur Dimensionen (z. B. "d=15", "d=18", "d=22") und die Artikelnummern.
+   - **WICHTIG**: Du MUSST den Hauptnamen/Familiennamen immer mit der spezifischen Dimension oder Ausführung verketten, um einen vollständigen, aussagekräftigen Namen zu bilden (z. B. "Sanpress Bogen 90° d=15" oder "Geberit Mepla T-Stück 16x20x16"). Ein einzelner Artikelname darf NIEMALS nur aus einer reinen Dimension oder einer Artikelnummer bestehen!
+
+3. **Präzise Artikelnummern**:
+   - Extrahiere die exakte Bestellnummer oder Artikelnummer des Großhändlers.
+   - Verwechsle diese nicht mit EAN-Codes, Preisen, Verpackungsgrößen (VPE) oder Seitenzahlen. Falls keine Artikelnummer für das Produkt existiert, setze sie auf einen leeren String ("").
+
+4. **Einheiten-Normalisierung**:
+   - Lies die Einheit (Unit) aus und normalisiere sie auf genau einen der folgenden Werte in deutscher Abkürzung:
+     - "Stk" (für Stück, St., Stk., Pcs)
+     - "m" (für Meter, m., Mtr.)
+     - "Set" (für Sets, Sätze, Garnituren)
+     - "Rolle" (für Rollen, Rol.)
+     - "Karton" (für Kartons, Krt., Crt.)
+     - "Pkg" (für Packungen, Pkg., VPE, Pkt.)
+     - "Paar" (für Paare, Pr.)
+   - Falls die Einheit unklar oder nicht angegeben ist, verwende standardmäßig "Stk".
+
+5. **JSON-Format**:
+   Gib ein JSON-Array zurück, das exakt diesem TypeScript-Typ entspricht:
+   \`\`\`typescript
+   type Output = Array<{
+     categoryName: string;
+     articles: Array<{
+       name: string; // Vollständiger, verketteter Name
+       articleNumber: string; // Saubere Artikelnummer
+       unit: "Stk" | "m" | "Set" | "Rolle" | "Karton" | "Pkg" | "Paar";
+     }>;
+   }>;
+   \`\`\`
+   Da die Ausgabe direkt als JSON erzwungen wird, antworte AUSSCHLIESSLICH mit diesem validen JSON-Array. Gib keinen zusätzlichen Text, Präambeln oder Erklärungen aus.`;
   }
 
   const result = await model.generateContent([
@@ -79,9 +144,26 @@ Lass Artikel weg, die du keinem bestehenden Artikel zuordnen kannst.`;
   console.log('[KI-Import] Gemini-Antwort erhalten:', text.substring(0, 200) + '…');
 
   const jsonStr = text.trim().replace(/```json|```/g, '').trim();
-  const rawData = JSON.parse(jsonStr);
+  let rawData = JSON.parse(jsonStr);
 
-  const parsedData: ProposedCategory[] = (Array.isArray(rawData) ? rawData : [rawData]).map(
+  // Robustheit: Falls das Modell ein Objekt mit einer Liste zurückgibt statt eines Arrays
+  if (rawData && !Array.isArray(rawData)) {
+    if (Array.isArray(rawData.categories)) {
+      rawData = rawData.categories;
+    } else if (Array.isArray(rawData.data)) {
+      rawData = rawData.data;
+    } else if (Array.isArray(rawData.articles)) {
+      // Falls nur ein flaches Artikel-Array zurückgegeben wurde
+      rawData = [{ categoryName: 'Extrahierte Artikel', articles: rawData.articles }];
+    } else if (rawData.categoryName && Array.isArray(rawData.articles)) {
+      // Falls ein einzelnes Kategorie-Objekt zurückgegeben wurde
+      rawData = [rawData];
+    } else {
+      rawData = [];
+    }
+  }
+
+  const parsedData: ProposedCategory[] = rawData.map(
     (cat: any) => ({
       ...cat,
       id: generateUUID(),
