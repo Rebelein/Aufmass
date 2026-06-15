@@ -132,7 +132,15 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     if (categoryChanged || !hasUnsavedChangesRef.current) {
       setSelectedArticleIds(new Set());
       const sorted = [...initialArticles].sort((a, b) => compareArticleNames(a.name, b.name));
-      setLocalArticles(sorted.map(a => ({ ...a })));
+      
+      const seen = new Set<string>();
+      const uniqueSorted = sorted.filter(a => {
+        if (seen.has(a.id)) return false;
+        seen.add(a.id);
+        return true;
+      });
+      
+      setLocalArticles(uniqueSorted.map(a => ({ ...a })));
       setHasUnsavedChanges(false);
     }
   }, [categoryId, initialArticles]);

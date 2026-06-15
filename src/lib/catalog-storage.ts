@@ -389,17 +389,25 @@ export async function getArticlesList(source?: 'own' | 'wholesale'): Promise<Art
 
   const mapped = mapArticleData(allData);
   
+  // Deduplicate by ID to prevent pagination overlap duplicates
+  const seenIds = new Set<string>();
+  const deduplicated = mapped.filter(a => {
+    if (seenIds.has(a.id)) return false;
+    seenIds.add(a.id);
+    return true;
+  });
+  
   if (isFirstRun) {
-    syncEvents.emit({ type: 'complete', label: 'Artikel initialisiert', changes: mapped.length });
+    syncEvents.emit({ type: 'complete', label: 'Artikel initialisiert', changes: deduplicated.length });
   } else {
-    const diff = mapped.length - (cachedData?.length || 0);
+    const diff = deduplicated.length - (cachedData?.length || 0);
     if (diff !== 0) {
       syncEvents.emit({ type: 'complete', label: 'Neue Artikel verfügbar', changes: Math.abs(diff) });
     }
   }
 
-  saveToCache(cacheKey, mapped);
-  return mapped;
+  saveToCache(cacheKey, deduplicated);
+  return deduplicated;
 }
 
 export async function fetchWholesaleArticlesByCategory(categoryIds: string[]): Promise<Article[]> {

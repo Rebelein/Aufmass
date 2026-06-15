@@ -1,6 +1,6 @@
 import type { Category } from '@/lib/data';
 import { cn } from '@/lib/utils';
-import { Package, FolderPlus, ChevronRight, Check, X, GripVertical, Trash2 } from 'lucide-react';
+import { Package, FolderPlus, ChevronRight, Check, X, GripVertical, Trash2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DndContext, closestCenter, KeyboardSensor, TouchSensor, MouseSensor, useSensor, useSensors, type DragEndEvent, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -33,6 +33,12 @@ export interface CategoryTreeProps {
   deletingCategoryId?: string | null;
   onConfirmDeleteCategory?: (categoryId: string) => void;
   onCancelDeleteCategory?: () => void;
+
+  showCheckboxes?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (categoryId: string) => void;
+
+  updatingIds?: Set<string>;
 }
 
 interface CategoryWithMeta extends Category {
@@ -61,6 +67,10 @@ const SortableCategoryItem = ({
   onConfirmDeleteCategory,
   onCancelDeleteCategory,
   depth,
+  showCheckboxes,
+  selectedIds,
+  onToggleSelect,
+  updatingIds,
   children
 }: { 
   id: string, 
@@ -83,6 +93,10 @@ const SortableCategoryItem = ({
   onConfirmDeleteCategory: ((categoryId: string) => void) | undefined,
   onCancelDeleteCategory: (() => void) | undefined,
   depth: number,
+  showCheckboxes?: boolean,
+  selectedIds?: Set<string>,
+  onToggleSelect?: (categoryId: string) => void,
+  updatingIds?: Set<string>,
   children: React.ReactNode 
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -172,11 +186,26 @@ const SortableCategoryItem = ({
               </div>
             )}
 
+            {showCheckboxes && (
+              <input
+                type="checkbox"
+                checked={selectedIds?.has(category.id) || false}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onToggleSelect?.(category.id);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 rounded border border-border bg-background text-primary focus:ring-primary shrink-0 mr-2 cursor-pointer accent-emerald-500"
+              />
+            )}
+
             <div className={cn(
                 "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors overflow-hidden",
                 isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground group-hover/item:bg-muted group-hover/item:text-muted-foreground"
             )}>
-                {category.imageUrl ? (
+                {updatingIds?.has(category.id) ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                ) : category.imageUrl ? (
                   <img src={category.imageUrl} alt="" className="w-full h-full object-contain p-0.5" />
                 ) : (
                   hasChildren ? <FolderPlus size={14} /> : <Package size={14} />
@@ -264,6 +293,10 @@ const SortableSiblingGroup = ({
   onConfirmDeleteCategory,
   onCancelDeleteCategory,
   depth,
+  showCheckboxes,
+  selectedIds,
+  onToggleSelect,
+  updatingIds,
 }: {
   parentId: string | null;
   categories: Category[];
@@ -328,6 +361,10 @@ const SortableSiblingGroup = ({
             onConfirmDeleteCategory={onConfirmDeleteCategory}
             onCancelDeleteCategory={onCancelDeleteCategory}
             depth={depth}
+            showCheckboxes={showCheckboxes}
+            selectedIds={selectedIds}
+            onToggleSelect={onToggleSelect}
+            updatingIds={updatingIds}
           >
             <AnimatePresence initial={false}>
               {hasChildren && isExpanded && (
@@ -366,6 +403,10 @@ const SortableSiblingGroup = ({
                     onConfirmDeleteCategory={onConfirmDeleteCategory}
                     onCancelDeleteCategory={onCancelDeleteCategory}
                     depth={depth + 1}
+                    showCheckboxes={showCheckboxes}
+                    selectedIds={selectedIds}
+                    onToggleSelect={onToggleSelect}
+                    updatingIds={updatingIds}
                   />
                 </motion.div>
               )}

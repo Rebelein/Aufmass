@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, BookMarked, Search, ChevronLeft, Sun, Moon, ImagePlus, ClipboardPaste } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, BookMarked, Search, ChevronLeft, Sun, Moon, ImagePlus, ClipboardPaste, FolderInput } from 'lucide-react';
 import type { Category, Article, Supplier } from '@/lib/data';
 import { addCategory, updateCategory, batchUpdateCategories, batchUpdateArticles, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import ArticleManagementPanel from '@/components/admin/ArticleManagementPanel';
 import { WholesaleCatalogPanel } from '@/components/admin/WholesaleCatalogPanel';
@@ -46,6 +47,12 @@ const AdminPage = () => {
   const [importDrafts, setImportDrafts] = useState<ImportDraft[]>([]);
   const [isDraftsDialogOpen, setIsDraftsDialogOpen] = useState(false);
   const [reviewingDraft, setReviewingDraft] = useState<ImportDraft | null>(null);
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [categoryToMove, setCategoryToMove] = useState<Category | null>(null);
+  const [destinationCategoryId, setDestinationCategoryId] = useState<string>('none');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
+  const [updatingCategoryIds, setUpdatingCategoryIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const categoryImageInputRef = useRef<HTMLInputElement>(null);
   const [activeCategoryIdForImage, setActiveCategoryIdForImage] = useState<string | null>(null);
@@ -86,7 +93,37 @@ const AdminPage = () => {
     const siblings = categories.filter(c => c.parentId === activeCat.parentId).sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
     const oldIndex = siblings.findIndex(s => s.id === activeId); const newIndex = siblings.findIndex(s => s.id === overId);
     const nextSiblings = [...siblings]; const [moved] = nextSiblings.splice(oldIndex, 1); nextSiblings.splice(newIndex, 0, moved);
-    const updates = nextSiblings.map((s, i) => ({ id: s.id, order: i })); await batchUpdateCategories(updates); refreshData();
+    const updates = nextSiblings.map((s, i) => ({ id: s.id, order: i })); 
+    
+    // 1. Optimistic update of the local state
+    const nextCategories = categories.map(c => {
+      const update = updates.find(u => u.id === c.id);
+      return update ? { ...c, order: update.order } : c;
+    });
+    setCategories(nextCategories);
+
+    // 2. Add category to updating list to show a loading spinner
+    setUpdatingCategoryIds(prev => {
+      const next = new Set(prev);
+      next.add(activeId);
+      return next;
+    });
+
+    // 3. Send update to Supabase in the background
+    try {
+      await batchUpdateCategories(updates);
+    } catch (err) {
+      console.error("Fehler beim Reordering:", err);
+      toast({ title: "Fehler beim Umsortieren", variant: "destructive" });
+    } finally {
+      // 4. Remove category from updating list and sync final data
+      setUpdatingCategoryIds(prev => {
+        const next = new Set(prev);
+        next.delete(activeId);
+        return next;
+      });
+      refreshData();
+    }
   };
 
   const handleSaveEditCategory = async () => { if (!inlineEditingCategoryId || !inlineEditedCategoryName.trim()) return; const success = await updateCategory(inlineEditingCategoryId, { name: inlineEditedCategoryName.trim() }); if (success) { setInlineEditingCategoryId(null); toast({ title: 'Erfolg' }); refreshData(); } };
@@ -226,6 +263,88 @@ const AdminPage = () => {
     }
   };
 
+  // Helper to find all subcategory IDs recursively
+  const getSubcategoryIds = (catId: string, allCats: Category[]): Set<string> => {
+    const ids = new Set<string>();
+    const addChildren = (id: string) => {
+      allCats.forEach(c => {
+        if (c.parentId === id) {
+          ids.add(c.id);
+          addChildren(c.id);
+        }
+      });
+    };
+    addChildren(catId);
+    return ids;
+  };
+
+  // Helper to construct full path of a category
+  const getCategoryPath = (cat: Category, allCats: Category[]): string => {
+    const path: string[] = [cat.name];
+    let current = cat;
+    while (current.parentId) {
+      const parent = allCats.find(c => c.id === current.parentId);
+      if (!parent) break;
+      path.unshift(parent.name);
+      current = parent;
+    }
+    return path.join(' > ');
+  };
+
+  const handleMoveCategory = async () => {
+    if (!categoryToMove) return;
+    const destParentId = destinationCategoryId === 'none' ? null : destinationCategoryId;
+    
+    // Calculate new order (put it at the end of the destination's children)
+    const siblings = categories.filter(c => c.parentId === destParentId);
+    const nextOrder = siblings.length;
+    
+    const success = await updateCategory(categoryToMove.id, { 
+      parentId: destParentId, 
+      order: nextOrder 
+    });
+    
+    if (success) {
+      toast({ title: 'Kategorie verschoben', description: `"${categoryToMove.name}" wurde erfolgreich verschoben.` });
+      setIsMoveDialogOpen(false);
+      setCategoryToMove(null);
+      refreshData();
+    } else {
+      toast({ title: 'Fehler beim Verschieben', variant: 'destructive' });
+    }
+  };
+
+  const handleBatchMoveCategories = async () => {
+    if (selectedCategoryIds.size === 0) return;
+    const destParentId = destinationCategoryId === 'none' ? null : destinationCategoryId;
+    
+    let successCount = 0;
+    for (const catId of selectedCategoryIds) {
+      // Calculate new order (put it at the end of the destination's children)
+      const siblings = categories.filter(c => c.parentId === destParentId);
+      const nextOrder = siblings.length;
+      
+      const success = await updateCategory(catId, { 
+        parentId: destParentId, 
+        order: nextOrder 
+      });
+      if (success) successCount++;
+    }
+    
+    if (successCount > 0) {
+      toast({ 
+        title: 'Kategorien verschoben', 
+        description: `${successCount} von ${selectedCategoryIds.size} Kategorien wurden erfolgreich verschoben.` 
+      });
+      setIsMoveDialogOpen(false);
+      setSelectedCategoryIds(new Set());
+      setIsSelectionMode(false);
+      refreshData();
+    } else {
+      toast({ title: 'Fehler beim Verschieben', variant: 'destructive' });
+    }
+  };
+
   const renderAdminActions = (category: Category) => (
     <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
       <DropdownMenuItem onClick={() => { setActiveCategoryIdForImage(category.id); categoryImageInputRef.current?.click(); }} className="gap-2"><ImagePlus size={14} /> Bild hochladen</DropdownMenuItem>
@@ -236,6 +355,7 @@ const AdminPage = () => {
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); }} className="gap-2"><PlusCircle size={14} /> Untergruppe</DropdownMenuItem>
       <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="gap-2"><Edit3 size={14} /> Umbenennen</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => { setCategoryToMove(category); setDestinationCategoryId(category.parentId || 'none'); setIsMoveDialogOpen(true); }} className="gap-2"><FolderInput size={14} /> Verschieben...</DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => handleInitiateDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Kategorie Löschen</DropdownMenuItem>
     </DropdownMenuContent></DropdownMenu>
@@ -303,8 +423,80 @@ const AdminPage = () => {
               <div className="p-4 border-b bg-muted/30"><div className="flex bg-background border rounded-xl p-1"><button onClick={() => setView('catalog')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all", view === 'catalog' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}>Eigener Katalog</button><button onClick={() => setView('wholesale')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all", view === 'wholesale' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground")}>Großhändler Suche</button></div></div>
               {view === 'catalog' ? (
                 <>
-                  <div className="p-4 border-b shrink-0"><p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 mb-2 flex items-center gap-2"><ListPlus size={14} /> Hauptgruppen</p><div className="flex gap-2"><Input value={newMainCategoryName} onChange={e => setNewMainCategoryName(e.target.value)} placeholder="Neue Gruppe..." className="h-9 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()} /><Button onClick={handleAddMainCategory} className="h-9 w-9 p-0"><PlusCircle size={16} /></Button></div></div>
-                  <div className="flex-1 overflow-y-auto py-2"><CategoryTree categories={categories} activeCategoryId={activeCategoryId} expandedCategories={expandedCategories} onSelectCategory={handleSelectCategory} onToggleExpansion={toggleCategoryExpansion} renderActions={renderAdminActions} onReorderCategory={handleReorderCategory} inlineEditingCategoryId={inlineEditingCategoryId} editedCategoryName={inlineEditedCategoryName} onEditedCategoryNameChange={setInlineEditedCategoryName} onSaveEdit={handleSaveEditCategory} deletingCategoryId={deletingCategoryId} onConfirmDeleteCategory={handleExecuteDeleteCategory} onCancelDeleteCategory={() => setDeletingCategoryId(null)} onCancelEdit={() => setInlineEditingCategoryId(null)} inlineCreateParentId={inlineCreateParentId} newSubCategoryName={inlineNewSubCategoryName} onNewSubCategoryNameChange={setInlineNewSubCategoryName} onSaveNewSubCategory={handleSaveNewSubCategory} onCancelNewSubCategory={() => setInlineCreateParentId(null)} /></div>
+                  <div className="p-4 border-b shrink-0">
+                    <div className="flex justify-between items-center mb-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                        <ListPlus size={14} /> Hauptgruppen
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setIsSelectionMode(!isSelectionMode);
+                          setSelectedCategoryIds(new Set());
+                        }}
+                        className={cn("h-6 text-[10px] font-bold rounded-lg px-2 hover:bg-primary/10", isSelectionMode ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground")}
+                      >
+                        {isSelectionMode ? "Abbrechen" : "Mehrfachauswahl"}
+                      </Button>
+                    </div>
+                    {!isSelectionMode ? (
+                      <div className="flex gap-2">
+                        <Input value={newMainCategoryName} onChange={e => setNewMainCategoryName(e.target.value)} placeholder="Neue Gruppe..." className="h-9 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()} />
+                        <Button onClick={handleAddMainCategory} className="h-9 w-9 p-0"><PlusCircle size={16} /></Button>
+                      </div>
+                    ) : (
+                      <div className="p-2 border rounded-lg bg-emerald-500/5 border-emerald-500/20 text-xs text-emerald-400 flex justify-between items-center animate-pulse">
+                        <span className="font-semibold">{selectedCategoryIds.size} ausgewählt</span>
+                        <Button
+                          disabled={selectedCategoryIds.size === 0}
+                          onClick={() => {
+                            setCategoryToMove(null);
+                            setDestinationCategoryId('none');
+                            setIsMoveDialogOpen(true);
+                          }}
+                          className="h-7 px-3 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors cursor-pointer"
+                        >
+                          Verschieben...
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-y-auto py-2">
+                    <CategoryTree 
+                      categories={categories} 
+                      activeCategoryId={activeCategoryId} 
+                      expandedCategories={expandedCategories} 
+                      onSelectCategory={handleSelectCategory} 
+                      onToggleExpansion={toggleCategoryExpansion} 
+                      renderActions={renderAdminActions} 
+                      onReorderCategory={handleReorderCategory} 
+                      inlineEditingCategoryId={inlineEditingCategoryId} 
+                      editedCategoryName={inlineEditedCategoryName} 
+                      onEditedCategoryNameChange={setInlineEditedCategoryName} 
+                      onSaveEdit={handleSaveEditCategory} 
+                      deletingCategoryId={deletingCategoryId} 
+                      onConfirmDeleteCategory={handleExecuteDeleteCategory} 
+                      onCancelDeleteCategory={() => setDeletingCategoryId(null)} 
+                      onCancelEdit={() => setInlineEditingCategoryId(null)} 
+                      inlineCreateParentId={inlineCreateParentId} 
+                      newSubCategoryName={inlineNewSubCategoryName} 
+                      onNewSubCategoryNameChange={setInlineNewSubCategoryName} 
+                      onSaveNewSubCategory={handleSaveNewSubCategory} 
+                      onCancelNewSubCategory={() => setInlineCreateParentId(null)}
+                      showCheckboxes={isSelectionMode}
+                      selectedIds={selectedCategoryIds}
+                      onToggleSelect={(catId) => {
+                        setSelectedCategoryIds(prev => {
+                          const next = new Set(prev);
+                          if (next.has(catId)) next.delete(catId);
+                          else next.add(catId);
+                          return next;
+                        });
+                      }}
+                      updatingIds={updatingCategoryIds}
+                    />
+                  </div>
                 </>
               ) : (
                 <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 opacity-60"><div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500"><Search size={32} /></div><p className="text-xs font-medium text-muted-foreground">Datanorm-Suche aktiv</p></div>
@@ -383,6 +575,74 @@ const AdminPage = () => {
       <SupplierManagementDialog isOpen={isSupplierManagementDialogOpen} onClose={() => setIsSupplierManagementDialogOpen(false)} suppliers={suppliers} onAddSupplier={refreshData} onUpdateSupplier={refreshData} onDeleteSupplier={refreshData} />
       <ImportDraftsDialog isOpen={isDraftsDialogOpen} onClose={() => setIsDraftsDialogOpen(false)} onOpenDraft={d => { setIsDraftsDialogOpen(false); setReviewingDraft(d); }} />
       <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)} onSaveDraft={(id, data, sid) => updateImportDraftData(id, data, sid)} onConfirmImport={handleConfirmReviewImport} categories={categories} suppliers={suppliers} articles={articlesAdmin} defaultTargetCategoryId={activeCategoryId || ''} />
+
+      {/* Dialog zum Verschieben einer Kategorie */}
+      <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-foreground">
+              {categoryToMove ? "Kategorie verschieben" : `${selectedCategoryIds.size} Kategorien verschieben`}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {categoryToMove ? (
+                <>Verschiebe die Kategorie <strong className="text-foreground">"{categoryToMove.name}"</strong> in eine andere bestehende Kategorie als Unterkategorie oder auf die oberste Ebene (Hauptgruppe).</>
+              ) : (
+                <>Verschiebe die <strong className="text-foreground">{selectedCategoryIds.size} ausgewählten Kategorien</strong> in eine andere bestehende Kategorie als Unterkategorien oder auf die oberste Ebene (Hauptgruppe).</>
+              )}
+            </p>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ziel-Kategorie auswählen</label>
+              <select
+                value={destinationCategoryId}
+                onChange={(e) => setDestinationCategoryId(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="none">Hauptgruppe (oberste Ebene)</option>
+                {categories
+                  .filter((c) => {
+                    if (categoryToMove) {
+                      // Exclude the category itself
+                      if (c.id === categoryToMove.id) return false;
+                      // Exclude all subcategories of the category to move
+                      const excludedIds = getSubcategoryIds(categoryToMove.id, categories);
+                      return !excludedIds.has(c.id);
+                    } else {
+                      // Exclude all selected categories
+                      if (selectedCategoryIds.has(c.id)) return false;
+                      // Exclude all subcategories of any selected category
+                      for (const selId of selectedCategoryIds) {
+                        const excludedIds = getSubcategoryIds(selId, categories);
+                        if (excludedIds.has(c.id)) return false;
+                      }
+                      return true;
+                    }
+                  })
+                  .map((c) => ({
+                    id: c.id,
+                    path: getCategoryPath(c, categories)
+                  }))
+                  // Sort alphabetically by path
+                  .sort((a, b) => a.path.localeCompare(b.path))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.path}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsMoveDialogOpen(false); setCategoryToMove(null); }} className="rounded-xl text-xs h-9">
+              Abbrechen
+            </Button>
+            <Button onClick={categoryToMove ? handleMoveCategory : handleBatchMoveCategories} className="rounded-xl text-xs h-9 bg-primary text-primary-foreground">
+              Verschieben
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <input type="file" ref={fileInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
       <input type="file" ref={categoryImageInputRef} onChange={handleCategoryUploadImage} accept="image/*" className="hidden" />
     </motion.div>
