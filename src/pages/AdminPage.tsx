@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, BookMarked, Search, ChevronLeft, Sun, Moon, ImagePlus, ClipboardPaste, FolderInput } from 'lucide-react';
+import { PlusCircle, Trash2, Edit3, ListPlus, Settings2, FolderPlus, Sparkles, Package, MoreVertical, FileUp, Loader2, Search, ImagePlus, ClipboardPaste, FolderInput } from 'lucide-react';
 import type { Category, Article, Supplier } from '@/lib/data';
-import { addCategory, updateCategory, batchUpdateCategories, batchUpdateArticles, addSupplier, updateSupplier, deleteSupplier, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
+import { addCategory, updateCategory, batchUpdateCategories, batchUpdateArticles, deleteArticles, addArticle, updateArticle, getCategoriesList, getArticlesList, getSuppliersList, batchAddCatalog } from '@/lib/catalog-storage';
 import { supabase } from '@/lib/supabase';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -21,9 +20,9 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useNavigate } from 'react-router-dom';
 import { CategoryTree } from '@/components/catalog/CategoryTree';
 import { motion } from 'framer-motion';
+import { ResizeHandle } from '@/components/ui/ResizeHandle';
 
 const AdminPage = () => {
   const [view, setView] = useState<'catalog' | 'wholesale'>('catalog');
@@ -37,9 +36,7 @@ const AdminPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{id: string, type: 'category' | 'article'} | null>(null);
   const { toast } = useToast();
-  const navigate = useNavigate();
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isSupplierManagementDialogOpen, setIsSupplierManagementDialogOpen] = useState(false);
   const [inlineEditingCategoryId, setInlineEditingCategoryId] = useState<string | null>(null);
   const [inlineEditedCategoryName, setInlineEditedCategoryName] = useState('');
@@ -58,31 +55,30 @@ const AdminPage = () => {
   const [activeCategoryIdForImage, setActiveCategoryIdForImage] = useState<string | null>(null);
   const { impactMedium } = useHapticFeedback();
   const [sidebarWidth, setSidebarWidth] = useState(() => { const stored = localStorage.getItem('admin-sidebar-width'); return stored ? Math.max(200, Math.min(parseInt(stored, 10), 800)) : 308; });
-  const isResizing = useRef(false);
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
 
-  const handleSidebarMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault(); isResizing.current = true; document.body.style.cursor = 'col-resize';
-    const startX = e.clientX; const startWidth = sidebarWidth;
-    const handleMouseMove = (moveEvent: MouseEvent) => { if (!isResizing.current) return; setSidebarWidth(Math.max(200, Math.min(startWidth + moveEvent.clientX - startX, 800))); };
-    const handleMouseUp = () => { isResizing.current = false; document.body.style.cursor = ''; document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp); };
-    document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp);
-  }, [sidebarWidth]);
+  // Header-Button (mobil) öffnet diesen Sheet
+  useEffect(() => {
+    const handleToggle = () => setIsMobileSheetOpen(prev => !prev);
+    window.addEventListener('toggle-catalog-sheet', handleToggle);
+    return () => window.removeEventListener('toggle-catalog-sheet', handleToggle);
+  }, []);
 
   useEffect(() => { localStorage.setItem('admin-sidebar-width', String(Math.round(sidebarWidth))); }, [sidebarWidth]);
 
   const refreshDrafts = async () => { const drafts = await getImportDrafts(); setImportDrafts(drafts); };
-  useEffect(() => { refreshDrafts(); const interval = setInterval(refreshDrafts, 10000); return () => clearInterval(interval); }, []);
+  useEffect(() => { refreshDrafts(); const interval = setInterval(() => { if (document.visibilityState === 'visible') refreshDrafts(); }, 10000); return () => clearInterval(interval); }, []);
 
   const refreshData = async () => { const [cats, supps, arts] = await Promise.all([ getCategoriesList('own'), getSuppliersList(), getArticlesList('own') ]); setCategories(cats); setSuppliers(supps); setArticlesAdmin(arts); };
   useEffect(() => { refreshData(); }, []);
 
   const handleAddMainCategory = async () => { if (!newMainCategoryName.trim()) return; const nextOrder = categories.filter(c => !c.parentId).length; const newCat = await addCategory({ name: newMainCategoryName.trim(), order: nextOrder, source: 'own' }); if (newCat) { setNewMainCategoryName(''); toast({ title: 'Hauptgruppe erstellt' }); refreshData(); } };
-  const handleSelectCategory = (id: string, hasChildren?: boolean) => { setActiveCategoryId(id); if (!hasChildren) setIsCategorySheetOpen(false); };
+  const handleSelectCategory = (id: string, hasChildren?: boolean) => { setActiveCategoryId(id); if (!hasChildren) setIsMobileSheetOpen(false); };
   const toggleCategoryExpansion = (id: string, e: React.MouseEvent) => { e.stopPropagation(); const next = new Set(expandedCategories); if (next.has(id)) next.delete(id); else next.add(id); setExpandedCategories(next); };
 
-  const handleAddNewArticleToCategory = async (catId: string, data: any) => { const newArt = await addArticle({ ...data, categoryId: catId, order: 0, source: 'own', supplierArticleNumbers: data.supplierId ? { [data.supplierId]: data.articleNumber } : {} }); if (newArt) { toast({ title: 'Artikel hinzugefügt' }); refreshData(); } };
+  const handleAddNewArticleToCategory = async (_catId: string, data: any) => { const newArt = await addArticle({ ...data, categoryId: _catId, order: 0, source: 'own', supplierArticleNumbers: data.supplierId ? { [data.supplierId]: data.articleNumber } : {} }); if (newArt) { toast({ title: 'Artikel hinzugefügt' }); refreshData(); } };
   const handleUpdateExistingArticle = async (id: string, data: any) => { const success = await updateArticle(id, data); if (success) { toast({ title: 'Artikel aktualisiert' }); refreshData(); } };
-  const handleReorderArticlesInCategory = async (catId: string, reordered: Article[]) => { const updates = reordered.map((a, i) => ({ id: a.id, order: i })); await batchUpdateArticles(updates); refreshData(); };
+  const handleReorderArticlesInCategory = async (_catId: string, reordered: Article[]) => { const updates = reordered.map((a, i) => ({ id: a.id, order: i })); await batchUpdateArticles(updates); refreshData(); };
   const handleDeleteArticles = async (ids: string[]) => { const success = await deleteArticles(ids); if (success) { toast({ title: 'Artikel gelöscht' }); refreshData(); } };
   const handleAssignSupplierToArticles = async (ids: string[], supplierId: string | undefined) => { const updates = ids.map(id => ({ id, supplierId: supplierId || null })); await batchUpdateArticles(updates); refreshData(); };
   const handleAssignImageToArticles = async (ids: string[], imageUrl: string | null) => { const updates = ids.map(id => ({ id, imageUrl })); await batchUpdateArticles(updates); refreshData(); };
@@ -346,7 +342,7 @@ const AdminPage = () => {
   };
 
   const renderAdminActions = (category: Category) => (
-    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+    <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Aktionen für ${category.name}`} className="h-8 w-8"><MoreVertical size={14} /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
       <DropdownMenuItem onClick={() => { setActiveCategoryIdForImage(category.id); categoryImageInputRef.current?.click(); }} className="gap-2"><ImagePlus size={14} /> Bild hochladen</DropdownMenuItem>
       <DropdownMenuItem onClick={() => handleCategoryPasteImage(category.id)} className="gap-2"><ClipboardPaste size={14} /> Bild einfügen</DropdownMenuItem>
       {category.imageUrl && (
@@ -355,7 +351,7 @@ const AdminPage = () => {
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => { setInlineCreateParentId(category.id); setInlineNewSubCategoryName(''); }} className="gap-2"><PlusCircle size={14} /> Untergruppe</DropdownMenuItem>
       <DropdownMenuItem onClick={() => { setInlineEditingCategoryId(category.id); setInlineEditedCategoryName(category.name); }} className="gap-2"><Edit3 size={14} /> Umbenennen</DropdownMenuItem>
-      <DropdownMenuItem onClick={() => { setCategoryToMove(category); setDestinationCategoryId(category.parentId || 'none'); setIsMoveDialogOpen(true); }} className="gap-2"><FolderInput size={14} /> Verschieben...</DropdownMenuItem>
+      <DropdownMenuItem onClick={() => { setCategoryToMove(category); setDestinationCategoryId(category.parentId || 'none'); setIsMoveDialogOpen(true); }} className="gap-2"><FolderInput size={14} /> Verschieben…</DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => handleInitiateDeleteCategory(category.id)} className="gap-2 text-red-400"><Trash2 size={14} /> Kategorie Löschen</DropdownMenuItem>
     </DropdownMenuContent></DropdownMenu>
@@ -411,7 +407,126 @@ const AdminPage = () => {
       await batchAddCatalog(catalogData, categories, targetId, supplierId, 'own');
     }
     await markImportDraftCompleted(id); setReviewingDraft(null); refreshData(); refreshDrafts();
+    return;
   };
+
+  const sidebarContent = (
+    <>
+      <div className="p-4 border-b bg-muted/30"><div className="flex bg-background border rounded-xl p-1"><button onClick={() => setView('catalog')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]", view === 'catalog' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}>Eigener Katalog</button><button onClick={() => setView('wholesale')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]", view === 'wholesale' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground")}>Großhändler Suche</button></div></div>
+      {view === 'catalog' ? (
+        <>
+          <div className="p-4 border-b shrink-0">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                <ListPlus size={14} /> Hauptgruppen
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  setSelectedCategoryIds(new Set());
+                }}
+                className={cn("h-6 text-[10px] font-bold rounded-lg px-2 hover:bg-primary/10", isSelectionMode ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground")}
+              >
+                {isSelectionMode ? "Abbrechen" : "Mehrfachauswahl"}
+              </Button>
+            </div>
+            {!isSelectionMode ? (
+              <div className="flex gap-2">
+                <Input value={newMainCategoryName} onChange={e => setNewMainCategoryName(e.target.value)} placeholder="Neue Gruppe…" aria-label="Name der neuen Hauptgruppe" className="h-9 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()} />
+                <Button onClick={handleAddMainCategory} aria-label="Hauptgruppe erstellen" className="h-9 w-9 p-0"><PlusCircle size={16} /></Button>
+              </div>
+            ) : (
+              <div className="p-2 border rounded-lg bg-emerald-500/5 border-emerald-500/20 text-xs text-emerald-400 flex justify-between items-center">
+                <span className="font-semibold">{selectedCategoryIds.size} ausgewählt</span>
+                <Button
+                  disabled={selectedCategoryIds.size === 0}
+                  onClick={() => {
+                    setCategoryToMove(null);
+                    setDestinationCategoryId('none');
+                    setIsMoveDialogOpen(true);
+                  }}
+                  className="h-7 px-3 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors cursor-pointer"
+                >
+                  Verschieben…
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto py-2">
+            <CategoryTree 
+              categories={categories} 
+              activeCategoryId={activeCategoryId} 
+              expandedCategories={expandedCategories} 
+              onSelectCategory={handleSelectCategory} 
+              onToggleExpansion={toggleCategoryExpansion} 
+              renderActions={renderAdminActions} 
+              onReorderCategory={handleReorderCategory} 
+              inlineEditingCategoryId={inlineEditingCategoryId} 
+              editedCategoryName={inlineEditedCategoryName} 
+              onEditedCategoryNameChange={setInlineEditedCategoryName} 
+              onSaveEdit={handleSaveEditCategory} 
+              deletingCategoryId={deletingCategoryId} 
+              onConfirmDeleteCategory={handleExecuteDeleteCategory} 
+              onCancelDeleteCategory={() => setDeletingCategoryId(null)} 
+              onCancelEdit={() => setInlineEditingCategoryId(null)} 
+              inlineCreateParentId={inlineCreateParentId} 
+              newSubCategoryName={inlineNewSubCategoryName} 
+              onNewSubCategoryNameChange={setInlineNewSubCategoryName} 
+              onSaveNewSubCategory={handleSaveNewSubCategory} 
+              onCancelNewSubCategory={() => setInlineCreateParentId(null)}
+              showCheckboxes={isSelectionMode}
+              selectedIds={selectedCategoryIds}
+              onToggleSelect={(catId) => {
+                setSelectedCategoryIds(prev => {
+                  const next = new Set(prev);
+                  if (next.has(catId)) next.delete(catId);
+                  else next.add(catId);
+                  return next;
+                });
+              }}
+              updatingIds={updatingCategoryIds}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 opacity-60"><div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500"><Search size={32} /></div><p className="text-xs font-medium text-muted-foreground">Datanorm-Suche aktiv</p></div>
+      )}
+      <div className="p-4 border-t bg-muted/20 space-y-2 shrink-0 pb-[calc(1rem+env(safe-area-inset-bottom))] xl:pb-4">
+        <p className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5"><Sparkles size={10} className="text-emerald-400" /> KI-Management</p>
+        <Button onClick={() => setIsDraftsDialogOpen(true)} variant="ghost" className="p-2 border rounded-lg bg-background hover:bg-muted text-xs font-semibold flex w-full justify-between items-center relative overflow-hidden h-auto">
+          <span className="flex items-center gap-2">KI-Scans prüfen</span>
+          
+          <span className="flex gap-1.5">
+            {/* Zeige laufende Scans an (blinkend) */}
+            {importDrafts.filter(d => d.status === 'processing').length > 0 && (
+              <Badge variant="secondary" className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin" /> 
+                {importDrafts.filter(d => d.status === 'processing').length} aktiv
+              </Badge>
+            )}
+            
+            {/* Zeige fertige Scans an, die zur Überprüfung bereitstehen */}
+            {importDrafts.filter(d => d.status === 'ready_for_review').length > 0 && (
+              <Badge variant="default" className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white">
+                {importDrafts.filter(d => d.status === 'ready_for_review').length} bereit
+              </Badge>
+            )}
+            
+            {/* Fallback: Keine Scans */}
+            {importDrafts.filter(d => d.status === 'processing' || d.status === 'ready_for_review').length === 0 && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">
+                0
+              </Badge>
+            )}
+          </span>
+        </Button>
+        <Button onClick={() => fileInputRef.current?.click()} variant="ghost" className="p-3 border rounded-lg bg-background hover:bg-muted flex items-center gap-2 text-[10px] font-bold w-full h-auto"><FileUp size={14} className="text-emerald-400" /> CSV Katalog-Import</Button>
+        <Button onClick={() => setIsSupplierManagementDialogOpen(true)} variant="ghost" className="w-full justify-start h-8 text-[10px] font-bold uppercase"><FolderPlus size={12} className="mr-2 text-teal-400" /> Stammdaten</Button>
+      </div>
+    </>
+  );
 
   return (
     <motion.div className="h-full flex flex-col relative overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -419,122 +534,32 @@ const AdminPage = () => {
         <div className="flex flex-1 min-h-0 overflow-hidden relative">
           <div className="hidden xl:block relative shrink-0 h-full border-r" style={{ width: `${sidebarWidth}px` }}>
             <aside className="absolute inset-0 flex flex-col bg-card">
-              <div className="absolute top-0 bottom-0 right-0 w-1.5 cursor-col-resize z-30" onMouseDown={handleSidebarMouseDown} />
-              <div className="p-4 border-b bg-muted/30"><div className="flex bg-background border rounded-xl p-1"><button onClick={() => setView('catalog')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all", view === 'catalog' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground")}>Eigener Katalog</button><button onClick={() => setView('wholesale')} className={cn("flex-1 px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all", view === 'wholesale' ? "bg-amber-500 text-white shadow-sm" : "text-muted-foreground")}>Großhändler Suche</button></div></div>
-              {view === 'catalog' ? (
-                <>
-                  <div className="p-4 border-b shrink-0">
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                        <ListPlus size={14} /> Hauptgruppen
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setIsSelectionMode(!isSelectionMode);
-                          setSelectedCategoryIds(new Set());
-                        }}
-                        className={cn("h-6 text-[10px] font-bold rounded-lg px-2 hover:bg-primary/10", isSelectionMode ? "bg-emerald-500/15 text-emerald-400" : "text-muted-foreground")}
-                      >
-                        {isSelectionMode ? "Abbrechen" : "Mehrfachauswahl"}
-                      </Button>
-                    </div>
-                    {!isSelectionMode ? (
-                      <div className="flex gap-2">
-                        <Input value={newMainCategoryName} onChange={e => setNewMainCategoryName(e.target.value)} placeholder="Neue Gruppe..." className="h-9 text-xs flex-1" onKeyDown={e => e.key === 'Enter' && handleAddMainCategory()} />
-                        <Button onClick={handleAddMainCategory} className="h-9 w-9 p-0"><PlusCircle size={16} /></Button>
-                      </div>
-                    ) : (
-                      <div className="p-2 border rounded-lg bg-emerald-500/5 border-emerald-500/20 text-xs text-emerald-400 flex justify-between items-center animate-pulse">
-                        <span className="font-semibold">{selectedCategoryIds.size} ausgewählt</span>
-                        <Button
-                          disabled={selectedCategoryIds.size === 0}
-                          onClick={() => {
-                            setCategoryToMove(null);
-                            setDestinationCategoryId('none');
-                            setIsMoveDialogOpen(true);
-                          }}
-                          className="h-7 px-3 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors cursor-pointer"
-                        >
-                          Verschieben...
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 overflow-y-auto py-2">
-                    <CategoryTree 
-                      categories={categories} 
-                      activeCategoryId={activeCategoryId} 
-                      expandedCategories={expandedCategories} 
-                      onSelectCategory={handleSelectCategory} 
-                      onToggleExpansion={toggleCategoryExpansion} 
-                      renderActions={renderAdminActions} 
-                      onReorderCategory={handleReorderCategory} 
-                      inlineEditingCategoryId={inlineEditingCategoryId} 
-                      editedCategoryName={inlineEditedCategoryName} 
-                      onEditedCategoryNameChange={setInlineEditedCategoryName} 
-                      onSaveEdit={handleSaveEditCategory} 
-                      deletingCategoryId={deletingCategoryId} 
-                      onConfirmDeleteCategory={handleExecuteDeleteCategory} 
-                      onCancelDeleteCategory={() => setDeletingCategoryId(null)} 
-                      onCancelEdit={() => setInlineEditingCategoryId(null)} 
-                      inlineCreateParentId={inlineCreateParentId} 
-                      newSubCategoryName={inlineNewSubCategoryName} 
-                      onNewSubCategoryNameChange={setInlineNewSubCategoryName} 
-                      onSaveNewSubCategory={handleSaveNewSubCategory} 
-                      onCancelNewSubCategory={() => setInlineCreateParentId(null)}
-                      showCheckboxes={isSelectionMode}
-                      selectedIds={selectedCategoryIds}
-                      onToggleSelect={(catId) => {
-                        setSelectedCategoryIds(prev => {
-                          const next = new Set(prev);
-                          if (next.has(catId)) next.delete(catId);
-                          else next.add(catId);
-                          return next;
-                        });
-                      }}
-                      updatingIds={updatingCategoryIds}
-                    />
-                  </div>
-                </>
-              ) : (
-                <div className="flex-1 p-6 flex flex-col items-center justify-center text-center space-y-4 opacity-60"><div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500"><Search size={32} /></div><p className="text-xs font-medium text-muted-foreground">Datanorm-Suche aktiv</p></div>
-              )}
-              <div className="p-4 border-t bg-muted/20 space-y-2 shrink-0">
-                <p className="text-[9px] font-bold uppercase text-muted-foreground flex items-center gap-1.5"><Sparkles size={10} className="text-emerald-400" /> KI-Management</p>
-                <div onClick={() => setIsDraftsDialogOpen(true)} className="p-2 border rounded-lg bg-background cursor-pointer hover:bg-muted text-xs font-semibold flex justify-between items-center relative overflow-hidden group">
-                  <span className="flex items-center gap-2">KI-Scans prüfen</span>
-                  
-                  <div className="flex gap-1.5">
-                    {/* Zeige laufende Scans an (blinkend) */}
-                    {importDrafts.filter(d => d.status === 'processing').length > 0 && (
-                      <Badge variant="secondary" className="text-[10px] bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse flex items-center gap-1">
-                        <Loader2 size={10} className="animate-spin" /> 
-                        {importDrafts.filter(d => d.status === 'processing').length} aktiv
-                      </Badge>
-                    )}
-                    
-                    {/* Zeige fertige Scans an, die zur Überprüfung bereitstehen */}
-                    {importDrafts.filter(d => d.status === 'ready_for_review').length > 0 && (
-                      <Badge variant="default" className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white">
-                        {importDrafts.filter(d => d.status === 'ready_for_review').length} bereit
-                      </Badge>
-                    )}
-                    
-                    {/* Fallback: Keine Scans */}
-                    {importDrafts.filter(d => d.status === 'processing' || d.status === 'ready_for_review').length === 0 && (
-                      <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">
-                        0
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div onClick={() => fileInputRef.current?.click()} className="p-3 border rounded-lg bg-background cursor-pointer hover:bg-muted flex items-center gap-2 text-[10px] font-bold w-full"><FileUp size={14} className="text-emerald-400" /> CSV Katalog-Import</div>
-                <Button onClick={() => setIsSupplierManagementDialogOpen(true)} variant="ghost" className="w-full justify-start h-8 text-[10px] font-bold uppercase"><FolderPlus size={12} className="mr-2 text-teal-400" /> Stammdaten</Button>
-              </div>
+              <ResizeHandle
+                ariaLabel="Seitenleiste in der Breite verändern"
+                onDrag={(delta) => setSidebarWidth(Math.max(200, Math.min(sidebarWidth + delta, 800)))}
+                onEnd={(delta) => {
+                  const finalWidth = Math.max(200, Math.min(sidebarWidth + delta, 800));
+                  localStorage.setItem('admin-sidebar-width', String(finalWidth));
+                }}
+                className="absolute top-0 bottom-0 right-0 w-1.5 cursor-col-resize z-30 hover:bg-emerald-500/20 active:bg-emerald-500/30 transition-colors"
+              />
+              {sidebarContent}
             </aside>
           </div>
+
+          {/* Mobile Sidebar Sheet */}
+          <Sheet open={isMobileSheetOpen} onOpenChange={setIsMobileSheetOpen}>
+            <SheetContent side="left" className="w-[300px] sm:w-[340px] p-0 flex flex-col bg-card border-r border-border">
+              <SheetHeader className="p-4 border-b shrink-0 text-left bg-muted/30">
+                <SheetTitle className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Settings2 size={16} /> Verwaltung
+                </SheetTitle>
+              </SheetHeader>
+              <div className="flex-1 flex flex-col min-h-0">
+                {sidebarContent}
+              </div>
+            </SheetContent>
+          </Sheet>
           <div className="flex-1 min-w-0 overflow-y-auto bg-background p-4 lg:p-6">
             {view === 'wholesale' ? (
               <WholesaleCatalogPanel ownCategories={categories} onArticlesCopied={refreshData} />
@@ -574,7 +599,7 @@ const AdminPage = () => {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Löschen?</AlertDialogTitle></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Nein</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} className="bg-red-500">Ja, Löschen</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       <SupplierManagementDialog isOpen={isSupplierManagementDialogOpen} onClose={() => setIsSupplierManagementDialogOpen(false)} suppliers={suppliers} onAddSupplier={refreshData} onUpdateSupplier={refreshData} onDeleteSupplier={refreshData} />
       <ImportDraftsDialog isOpen={isDraftsDialogOpen} onClose={() => setIsDraftsDialogOpen(false)} onOpenDraft={d => { setIsDraftsDialogOpen(false); setReviewingDraft(d); }} />
-      <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)} onSaveDraft={(id, data, sid) => updateImportDraftData(id, data, sid)} onConfirmImport={handleConfirmReviewImport} categories={categories} suppliers={suppliers} articles={articlesAdmin} defaultTargetCategoryId={activeCategoryId || ''} />
+      <ImportReviewDialog draft={reviewingDraft} isOpen={!!reviewingDraft} onClose={() => setReviewingDraft(null)} onSaveDraft={async (id, data, sid) => { await updateImportDraftData(id, data, sid); }} onConfirmImport={handleConfirmReviewImport} categories={categories} suppliers={suppliers} articles={articlesAdmin} defaultTargetCategoryId={activeCategoryId || ''} />
 
       {/* Dialog zum Verschieben einer Kategorie */}
       <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
@@ -593,8 +618,9 @@ const AdminPage = () => {
               )}
             </p>
             <div className="space-y-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ziel-Kategorie auswählen</label>
+              <label htmlFor="move-category-target" className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ziel-Kategorie auswählen</label>
               <select
+                id="move-category-target"
                 value={destinationCategoryId}
                 onChange={(e) => setDestinationCategoryId(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"

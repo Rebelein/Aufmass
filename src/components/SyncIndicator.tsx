@@ -1,10 +1,7 @@
-import React from 'react';
 import { useSyncStatus } from '@/hooks/use-sync-status';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, Database, CheckCircle2, Download, Package } from 'lucide-react';
+import { RefreshCw, Database } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export function SyncIndicator() {
   const { status } = useSyncStatus();
@@ -38,9 +35,9 @@ export function SyncIndicator() {
               <Progress value={status.progress} className="h-2 bg-muted border border-border" />
             </div>
 
-            <div className="mt-10 flex items-center gap-2 text-muted-foreground text-xs italic">
+            <div className="mt-10 flex items-center gap-2 text-muted-foreground text-xs italic" role="status" aria-live="polite">
               <RefreshCw size={12} className="animate-spin" />
-              Synchronisierung läuft...
+              Synchronisierung läuft…
             </div>
           </div>
         </motion.div>

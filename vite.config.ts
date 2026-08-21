@@ -17,8 +17,8 @@ export default defineConfig({
         name: 'Aufmaß App',
         short_name: 'Aufmaß',
         description: 'Professionelle Aufmaß- und Dokumentations-App',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
+        theme_color: '#07080a',
+        background_color: '#07080a',
         display: 'standalone',
         icons: [
           {

@@ -9,7 +9,7 @@ interface SwipeableItemProps {
   id: string;
 }
 
-export const SwipeableItem: React.FC<SwipeableItemProps> = ({ children, onDelete, id }) => {
+export const SwipeableItem: React.FC<SwipeableItemProps> = ({ children, onDelete }) => {
   const x = useMotionValue(0);
   const { impactHeavy } = useHapticFeedback();
   

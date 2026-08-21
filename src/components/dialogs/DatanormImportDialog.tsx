@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Upload, FileUp, Save, FileStack, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, FileUp, Save, FileStack, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Supplier } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
@@ -172,7 +172,7 @@ export function DatanormImportDialog({
             <div 
               onClick={() => !isImporting && fileInputRef.current?.click()}
               className={cn(
-                "border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer hover:bg-muted/30",
+                "border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-3 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] cursor-pointer hover:bg-muted/30",
                 files.length > 0 ? "border-amber-500/50 bg-amber-500/5" : "border-border bg-card",
                 isImporting && "opacity-50 cursor-not-allowed"
               )}

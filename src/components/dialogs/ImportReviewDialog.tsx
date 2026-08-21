@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -79,22 +79,6 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
     return buildTree(categories);
   }, [categories]);
 
-  const availableArticles = React.useMemo(() => {
-    const getRecursiveIds = (parentId: string): string[] => {
-      const children = categories.filter(c => c.parentId === parentId);
-      return [parentId, ...children.flatMap(c => getRecursiveIds(c.id))];
-    };
-    const validIds = getRecursiveIds(targetCategoryId || defaultTargetCategoryId || 'root');
-    const filtered = articles.filter(a => a.categoryId && validIds.includes(a.categoryId));
-    
-    // Duplikate nach ID entfernen, um React-Key-Warnungen im Select zu vermeiden
-    const seen = new Set();
-    return filtered.filter(a => {
-      if (seen.has(a.id)) return false;
-      seen.add(a.id);
-      return true;
-    });
-  }, [articles, categories, targetCategoryId, defaultTargetCategoryId]);
 
   useEffect(() => {
     if (draft && isOpen) {
@@ -491,7 +475,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                    ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
                                    value={article.name || ''}
                                    onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
-                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all"
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                  />
                                </TableCell>
                                <TableCell className="p-1.5">
@@ -499,7 +483,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                    ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
                                    value={article.articleNumber || ''}
                                    onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-all"
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                  />
                                </TableCell>
                                <TableCell className="p-1.5">
@@ -507,7 +491,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                    ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
                                    value={article.unit || ''}
                                    onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
-                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-all"
+                                   className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                  />
                                </TableCell>
                                <TableCell className="p-1 text-center">
@@ -515,7 +499,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                     variant="ghost" 
                                     size="icon" 
                                     onClick={() => handleDeleteArticle(catIdx, artIdx)}
-                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all rounded-lg"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] rounded-lg"
                                   >
                                     <Trash2 size={12} />
                                   </Button>
@@ -551,7 +535,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                  ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-name`] = el; }}
                                  value={article.name || ''}
                                  onChange={(e) => handleUpdateItem(catIdx, artIdx, 'name', e.target.value, e.target.selectionStart || 0)}
-                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-all"
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                />
                              </TableCell>
                              <TableCell className="p-1.5">
@@ -559,7 +543,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                  ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-articleNumber`] = el; }}
                                  value={article.articleNumber || ''}
                                  onChange={(e) => handleUpdateItem(catIdx, artIdx, 'articleNumber', e.target.value, e.target.selectionStart || 0)}
-                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-all"
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs font-mono text-primary focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                />
                              </TableCell>
                              <TableCell className="p-1.5">
@@ -567,7 +551,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                  ref={el => { if (el) inputRefs.current[`${catIdx}-${artIdx}-unit`] = el; }}
                                  value={article.unit || ''}
                                  onChange={(e) => handleUpdateItem(catIdx, artIdx, 'unit', e.target.value, e.target.selectionStart || 0)}
-                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-all"
+                                 className="w-full bg-background/50 border border-border h-8 px-2 rounded-md text-xs text-muted-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                />
                              </TableCell>
                              <TableCell className="p-1 text-center">
@@ -575,7 +559,7 @@ const ImportReviewDialog: React.FC<ImportReviewDialogProps> = ({
                                   variant="ghost" 
                                   size="icon" 
                                   onClick={() => handleDeleteArticle(catIdx, artIdx)}
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all rounded-lg"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] rounded-lg"
                                 >
                                   <Trash2 size={12} />
                                 </Button>

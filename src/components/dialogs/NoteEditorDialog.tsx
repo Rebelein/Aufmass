@@ -20,7 +20,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
   const [isDrawing, setIsDrawing] = useState(false);
   const [mode, setMode] = useState<'draw' | 'erase'>('draw');
   const [color, setColor] = useState('#10b981'); // default emerald
-  const [lineWidth, setLineWidth] = useState(3);
+  const [lineWidth] = useState(3);
   
   // History for Undo
   const [history, setHistory] = useState<ImageData[]>([]);
@@ -221,7 +221,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="icon"
               onClick={() => { setMode('draw'); impactLight(); }}
-              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'draw' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
+              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]", mode === 'draw' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
             >
               <Pen size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Stift</span>
@@ -230,7 +230,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="icon"
               onClick={() => { setMode('erase'); impactLight(); }}
-              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-all", mode === 'erase' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
+              className={cn("h-9 w-9 sm:w-auto sm:px-3 rounded-xl transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]", mode === 'erase' ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "text-muted-foreground hover:text-accent-foreground hover:bg-muted")}
             >
               <Eraser size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Radierer</span>
@@ -244,7 +244,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
                   key={c}
                   onClick={() => { setColor(c); setMode('draw'); impactLight(); }}
                   className={cn(
-                    "w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 transition-all",
+                    "w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]",
                     color === c && mode === 'draw' ? "border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.3)]" : "border-transparent opacity-70 hover:opacity-100 hover:scale-105"
                   )}
                   style={{ backgroundColor: c }}
@@ -259,7 +259,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               size="icon"
               onClick={handleUndo}
               disabled={history.length <= 1}
-              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-accent-foreground hover:bg-muted disabled:opacity-30 transition-all"
+              className="h-9 w-9 rounded-xl text-muted-foreground hover:text-accent-foreground hover:bg-muted disabled:opacity-30 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
               title="Rückgängig"
             >
               <Undo size={16} />
@@ -286,7 +286,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="sm"
               onClick={() => cameraInputRef.current?.click()}
-              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-all border border-border"
+              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] border border-border"
             >
               <Camera size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Foto machen</span>
@@ -295,7 +295,7 @@ export function NoteEditorDialog({ open, onOpenChange, onSave }: NoteEditorDialo
               variant="ghost"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
-              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-all border border-border"
+              className="h-9 px-2 sm:px-3 rounded-xl bg-muted text-foreground hover:text-accent-foreground hover:bg-accent transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] border border-border"
             >
               <ImagePlus size={16} className="sm:mr-2" />
               <span className="hidden sm:inline">Hochladen</span>

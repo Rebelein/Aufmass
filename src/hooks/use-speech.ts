@@ -1,10 +1,17 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useToast } from './use-toast';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini as fallback if native recognition fails
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+// Gemini wird erst bei Bedarf dynamisch geladen (Bundle-Größe)
+let genAI: any = null;
+async function getGemini(): Promise<any | null> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey) return null;
+  if (!genAI) {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    genAI = new GoogleGenerativeAI(apiKey);
+  }
+  return genAI;
+}
 
 export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) => void) {
   const [isRecording, setIsRecording] = useState(false);
@@ -28,7 +35,8 @@ export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) 
   }, []);
 
   const startNativeRecognition = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as any;
+    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       return false; // Native not supported
     }
@@ -99,14 +107,16 @@ export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) 
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         setIsProcessing(true);
         try {
-          if (!genAI) throw new Error('Kein Gemini API Key gefunden');
+          const client = await getGemini();
+          if (!client) throw new Error('Kein Gemini API Key gefunden');
           
           const reader = new FileReader();
           reader.readAsDataURL(audioBlob);
           reader.onloadend = async () => {
-            const base64Data = (reader.result as string).split(',')[1];
-            
-            const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+            try {
+              const base64Data = (reader.result as string).split(',')[1];
+              
+              const model = client.getGenerativeModel({ model: "gemini-3.5-flash" });
             const result = await model.generateContent([
               "Transkribiere dieses Audio auf Deutsch. Antworte NUR mit dem erkannten Text, ohne weitere Formatierung oder Erklärungen. Wenn Mengen und Artikel genannt werden, formatiere sie sauber (z.B. 'FlowFit Bogen 20 5 Stück').",
               {
@@ -120,6 +130,11 @@ export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) 
             const text = result.response.text().trim();
             if (text) {
               onResult(text, true);
+            }
+            } catch (error) {
+              console.error('Gemini transcription failed', error);
+              toast({ title: 'Erkennung fehlgeschlagen', description: 'Bitte tippe den Artikel manuell ein.', variant: 'destructive' });
+              setIsProcessing(false);
             }
           };
         } catch (error) {
@@ -143,7 +158,7 @@ export function useSpeechRecognition(onResult: (text: string, isFinal: boolean) 
 
   const startRecording = useCallback(async () => {
     const nativeStarted = startNativeRecognition();
-    if (!nativeStarted && genAI) {
+    if (!nativeStarted && (import.meta.env.VITE_GEMINI_API_KEY)) {
       await startGeminiFallback();
     } else if (!nativeStarted) {
       toast({ title: 'Spracherkennung nicht unterstützt', description: 'Dein Browser unterstützt dies nicht und es ist kein Fallback konfiguriert.', variant: 'destructive' });

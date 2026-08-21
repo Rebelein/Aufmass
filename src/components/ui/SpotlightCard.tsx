@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { forwardRef, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -6,40 +6,49 @@ interface SpotlightCardProps extends React.HTMLAttributes<HTMLDivElement> {
   spotlightColor?: string;
 }
 
-export const SpotlightCard: React.FC<SpotlightCardProps> = ({
+export const SpotlightCard = forwardRef<HTMLDivElement, SpotlightCardProps>(({
   children,
   className,
   spotlightColor = 'rgba(16, 185, 129, 0.15)',
   ...props
-}) => {
-  const divRef = useRef<HTMLDivElement>(null);
-  const [isFocused, setIsFocused] = useState(false);
+}, ref) => {
+  const divRef = useRef<HTMLDivElement | null>(null);
+  const rectRef = useRef<DOMRect | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [opacity, setOpacity] = useState(0);
 
+  const setRefs = (node: HTMLDivElement | null) => {
+    divRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) (ref as { current: HTMLDivElement | null }).current = node;
+  };
+
+  // Rect nur bei Enter/Scroll/Resize neu messen – nicht bei jedem mousemove
+  const measure = () => {
+    if (divRef.current) rectRef.current = divRef.current.getBoundingClientRect();
+  };
+
+  React.useEffect(() => {
+    window.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!divRef.current || isFocused) return;
-
-    const div = divRef.current;
-    const rect = div.getBoundingClientRect();
-
+    const rect = rectRef.current;
+    if (!rect) return;
     setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleMouseEnter = () => {
-    setOpacity(1);
-  };
-
-  const handleMouseLeave = () => {
-    setOpacity(0);
   };
 
   return (
     <div
-      ref={divRef}
+      ref={setRefs}
+      onMouseEnter={() => { measure(); setOpacity(1); }}
+      onMouseLeave={() => setOpacity(0)}
       onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       className={cn(
         "relative overflow-hidden",
         className
@@ -56,4 +65,6 @@ export const SpotlightCard: React.FC<SpotlightCardProps> = ({
       {children}
     </div>
   );
-};
+});
+
+SpotlightCard.displayName = 'SpotlightCard';

@@ -86,13 +86,11 @@ export async function preloadCatalog(force: boolean = false): Promise<void> {
     
     // Simulate steps for better UX progress
     syncEvents.emit({ type: 'progress', current: 10, total: 100 });
-    const categories = await getCategoriesList();
     
     syncEvents.emit({ type: 'progress', current: 40, total: 100 });
     const articles = await getArticlesList();
     
     syncEvents.emit({ type: 'progress', current: 80, total: 100 });
-    const suppliers = await getSuppliersList();
     
     syncEvents.emit({ type: 'progress', current: 100, total: 100 });
     

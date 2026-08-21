@@ -1,5 +1,4 @@
 import { supabase } from './supabase';
-import type { ProjectSelectedItem } from './project-storage';
 
 const QUEUE_KEY = 'aufmass_offline_queue';
 

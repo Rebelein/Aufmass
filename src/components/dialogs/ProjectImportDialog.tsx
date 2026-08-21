@@ -3,17 +3,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Loader2, Upload, FileText, FileSpreadsheet, Check, AlertCircle, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/lib/supabase';
 import { findWholesaleArticleByNumber } from '@/lib/catalog-storage';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from '@/components/ui/progress';
 import type { Article } from '@/lib/data';
-import * as pdfjs from 'pdfjs-dist';
-import Tesseract from 'tesseract.js';
 
-// Setup PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// pdf.js und Tesseract werden erst bei tatsächlicher Nutzung geladen
+async function loadPdfJs() {
+  const pdfjs = await import('pdfjs-dist');
+  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  return pdfjs;
+}
 
 interface ProjectImportDialogProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export function ProjectImportDialog({ isOpen, onClose, onImportItems }: ProjectI
     
     try {
       const arrayBuffer = await file.arrayBuffer();
+      const pdfjs = await loadPdfJs();
       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
       const numPages = pdf.numPages;
       let fullText = "";
@@ -54,10 +56,10 @@ export function ProjectImportDialog({ isOpen, onClose, onImportItems }: ProjectI
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
-        await page.render({ canvasContext: context!, viewport }).promise;
+        await page.render({ canvas: canvas, canvasContext: context!, viewport }).promise;
         const imageData = canvas.toDataURL('image/png');
         
-        const { data: { text } } = await Tesseract.recognize(imageData, 'deu', {
+        const { data: { text } } = await (await import('tesseract.js')).recognize(imageData, 'deu', {
           logger: m => {
             if (m.status === 'recognizing text') {
               setProgress(10 + (m.progress * (80 / numPages)) + ((i - 1) * (80 / numPages)));
@@ -188,7 +190,7 @@ export function ProjectImportDialog({ isOpen, onClose, onImportItems }: ProjectI
                 <span>Verarbeite Dokument...</span>
                 <span>{Math.round(progress)}%</span>
               </div>
-              <Progress value={progress} className="h-2" indicatorClassName="bg-amber-500" />
+              <Progress value={progress} className="h-2 [&>div]:bg-amber-500" />
             </div>
           )}
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Article, Category, Supplier } from '@/lib/data';
-import type { ProposedCategory, NewArticleFormData } from '@/lib/types';
+import type { NewArticleFormData } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,13 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { markImportDraftCompleted, updateImportDraftData } from '@/lib/import-storage';
-import { startAiCatalogImport, startAiCatalogImportFromBlob } from '@/lib/ai-import';
 import type { ImportDraft } from '@/lib/import-storage';
 import ImportDraftsDialog from '../dialogs/ImportDraftsDialog';
 import ImportReviewDialog from '../dialogs/ImportReviewDialog';
-import { PlusCircle, LayoutGrid, PackagePlus, X, ChevronUp, ChevronDown, FileUp, Loader2, Trash2, Edit3, Package, BookMarked, Camera, ImagePlus, FileText, ClipboardPaste, Copy } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { cn, generateUUID, getInheritedCategoryImageUrl, compareArticleNames } from '@/lib/utils';
+import { PlusCircle, LayoutGrid, PackagePlus, FileUp, Loader2, Trash2, Edit3, Camera, ImagePlus, FileText, ClipboardPaste, Copy } from 'lucide-react';
+import { cn, getInheritedCategoryImageUrl, compareArticleNames } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { batchAddCatalog, updateCategoryImage, batchUpdateArticles, findWholesaleArticleByNumber } from '@/lib/catalog-storage';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
@@ -479,7 +477,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
     setIsImportingPdf(true);
     toast({ title: "KI Analyse gestartet", description: "Inhalte werden im Hintergrund extrahiert..." });
 
-    const draftId = await startAiCatalogImport(file, selectedSupplierId, categoryId, {
+    const draftId = await (await import('@/lib/ai-import')).startAiCatalogImport(file, selectedSupplierId, categoryId, {
       onDraftCreated: () => {
         if (pdfInputRef.current) pdfInputRef.current.value = '';
         setIsImportingPdf(false);
@@ -527,7 +525,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
       impactLight();
       toast({ title: "KI Analyse gestartet", description: "Bild aus Zwischenablage wird analysiert..." });
 
-      const draftId = await startAiCatalogImportFromBlob(
+      const draftId = await (await import('@/lib/ai-import')).startAiCatalogImportFromBlob(
         blob,
         selectedSupplierId,
         categoryId,
@@ -660,7 +658,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
               <div className="flex items-center gap-4">
                   <div 
                     onClick={() => imageInputRef.current?.click()}
-                    className="relative w-12 h-12 lg:w-16 lg:h-16 rounded-2xl bg-muted/50 border border-border overflow-hidden cursor-pointer group hover:border-primary/50 transition-all shadow-inner shrink-0"
+                    className="relative w-12 h-12 lg:w-16 lg:h-16 rounded-2xl bg-muted/50 border border-border overflow-hidden cursor-pointer group hover:border-primary/50 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] shadow-inner shrink-0"
                   >
                     {categoryImage ? (
                       <img src={categoryImage} alt="Kategorie" className="w-full h-full object-contain p-1" />
@@ -680,7 +678,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                     size="icon"
                     onClick={handlePasteImage}
                     title="Aus Zwischenablage einfügen"
-                    className="h-8 w-8 rounded-lg bg-muted/50 border border-border text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0 self-center"
+                    className="h-8 w-8 rounded-lg bg-muted/50 border border-border text-muted-foreground hover:text-primary hover:bg-primary/10 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] shrink-0 self-center"
                   >
                     <ClipboardPaste size={16} />
                   </Button>
@@ -793,7 +791,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                   <div className="flex items-center gap-1.5 px-2">
                                     <span className="shrink-0">Nummer</span>
                                     <Select value={viewSupplierId} onValueChange={setViewSupplierId}>
-                                      <SelectTrigger className="h-7 border-none bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[9px] px-2 min-w-[100px] rounded-md focus:ring-0 shadow-none transition-all">
+                                      <SelectTrigger className="h-7 border-none bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[9px] px-2 min-w-[100px] rounded-md focus:ring-0 shadow-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]">
                                         <SelectValue placeholder="Anzeige..." />
                                       </SelectTrigger>
                                       <SelectContent className="bg-card border-border text-foreground">
@@ -893,7 +891,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                               e.target.style.height = e.target.scrollHeight + 'px';
                                               handleUpdateLocalArticle(article.id, 'name', e.target.value, e.target.selectionStart || 0);
                                             }}
-                                            className="w-full bg-background/50 border border-border min-h-[40px] py-2 px-3 rounded-lg text-sm text-foreground focus:border-primary/50 outline-none transition-all min-w-0 resize-none overflow-hidden"
+                                            className="w-full bg-background/50 border border-border min-h-[40px] py-2 px-3 rounded-lg text-sm text-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] min-w-0 resize-none overflow-hidden"
                                             style={{ fieldSizing: 'content' } as React.CSSProperties}
                                           />
                                         </div>
@@ -920,7 +918,7 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                             handleUpdateLocalArticle(article.id, 'supplierArticleNumber', e.target.value, e.target.selectionStart || 0);
                                           }}
                                           className={cn(
-                                            "w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono focus:border-primary/50 outline-none transition-all",
+                                            "w-full bg-background/50 border border-border h-10 pl-3 pr-8 rounded-lg text-sm font-mono focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]",
                                             viewSupplierId === 'none' ? "text-primary" : "text-amber-500"
                                           )}
                                           placeholder={viewSupplierId === 'none' ? `Standard Nr.` : `Händler Nr.`}
@@ -946,12 +944,12 @@ const ArticleManagementPanel: React.FC<ArticleManagementPanelProps> = ({
                                         ref={el => { if (el) inputRefs.current[`${article.id}-unit`] = el; }}
                                         value={article.unit || ''}
                                         onChange={(e) => handleUpdateLocalArticle(article.id, 'unit', e.target.value, e.target.selectionStart || 0)}
-                                        className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all"
+                                        className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                                       />
                                     </TableCell>
                                     <TableCell className="hidden lg:table-cell text-muted-foreground text-xs p-2">
                                       <Select value={article.supplierId || 'none'} onValueChange={(val) => handleUpdateLocalArticle(article.id, 'supplierId', val === 'none' ? '' : val)}>
-                                        <SelectTrigger className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-all">
+                                        <SelectTrigger className="w-full bg-background/50 border border-border h-10 px-3 rounded-lg text-sm text-muted-foreground focus:border-primary/50 outline-none transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]">
                                           <SelectValue placeholder="-" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-card border-border text-foreground">

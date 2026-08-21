@@ -4,9 +4,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Loader2, Copy, Check, PackageSearch } from 'lucide-react';
+import { Search, Loader2, Copy, PackageSearch } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import type { Article, Category } from '@/lib/data';
 import { searchWholesaleArticles, copyArticleToOwnCatalog } from '@/lib/catalog-storage';
 

@@ -28,7 +28,11 @@ function ReloadPrompt() {
   if (!offlineReady && !needRefresh) return null
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] max-w-sm w-full animate-in slide-in-from-bottom-5">
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] left-4 sm:left-auto z-[100] max-w-sm sm:w-full animate-in slide-in-from-bottom-5"
+    >
       <div className="bg-background text-foreground border-border shadow-2xl rounded-2xl p-5 flex flex-col gap-4 backdrop-blur-xl border">
         <div className="text-sm font-medium text-foreground leading-relaxed">
           {offlineReady ? (
@@ -49,14 +53,14 @@ function ReloadPrompt() {
         </div>
         <div className="flex justify-end gap-2">
           <button
-            className="px-4 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground rounded-xl text-sm font-semibold transition-all"
+            className="px-4 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-accent-foreground rounded-xl text-sm font-semibold transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
             onClick={() => close()}
           >
             Später
           </button>
           {needRefresh && (
             <button
-              className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] active:scale-95"
               onClick={async () => {
                 await updateServiceWorker(true);
               }}

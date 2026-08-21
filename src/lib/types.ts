@@ -4,7 +4,7 @@ export interface ProcessedSummaryItem {
   type: 'article' | 'section';
   id: string;
   order: number;
-  article_id?: string;
+  article_id?: string | null;
   images?: string[] | null;
   article?: {
     id?: string;

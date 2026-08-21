@@ -68,7 +68,7 @@ export default function Header() {
             </Button>
           )}
           <Link to="/" className="flex items-center space-x-2.5 group shrink-0">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm transition-all duration-300 group-hover:shadow-emerald-500/25 group-hover:scale-105">
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-300 group-hover:shadow-emerald-500/25 group-hover:scale-105">
               <BookMarked size={18} className="text-foreground" />
             </div>
             <div className="hidden flex-col sm:flex">
@@ -116,10 +116,11 @@ export default function Header() {
               size="icon"
               onClick={() => preloadCatalog(true)}
               className={cn(
-                "h-9 w-9 rounded-full transition-all",
+                "h-9 w-9 rounded-full transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]",
                 status.isVisible && !status.isInitialSync ? "text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10" : "text-muted-foreground"
               )}
               title="Datenbank manuell synchronisieren"
+              aria-label="Datenbank manuell synchronisieren"
             >
               <Database size={18} className={cn(status.isVisible && !status.isInitialSync && status.changesCount === 0 && "animate-spin")} />
               
@@ -182,6 +183,7 @@ export default function Header() {
                 <Link
                   key={item.to}
                   to={item.to}
+                  aria-label={item.label}
                   className={cn(
                     "relative p-2 rounded-full transition-colors",
                     active ? "text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent"

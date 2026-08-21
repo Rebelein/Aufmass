@@ -49,7 +49,7 @@ export function normalizeArticleNameForSort(name: string | null | undefined): st
   });
   
   // Then replace whole inches e.g. "1"" or "2""
-  normalized = normalized.replace(/(\d+)\s*("|zoll|inch)/gi, (match, whole, unit) => {
+  normalized = normalized.replace(/(\d+)\s*("|zoll|inch)/gi, (_match, whole, unit) => {
     const w = parseInt(whole, 10);
     const paddedDecimal = w.toFixed(3).padStart(8, "0");
     return ` __INCH_${paddedDecimal}_${unit}`;

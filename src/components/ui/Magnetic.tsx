@@ -8,14 +8,20 @@ interface MagneticProps {
 
 export const Magnetic: React.FC<MagneticProps> = ({ children, strength = 0.5 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const rectRef = useRef<DOMRect | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
+  const handleMouseEnter = () => {
+    if (ref.current) rectRef.current = ref.current.getBoundingClientRect();
+  };
+
+  // Nutzt das gecachte Rect – kein Layout-Read pro mousemove
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!ref.current) return;
-    const { clientX, clientY } = e;
-    const { width, height, left, top } = ref.current.getBoundingClientRect();
-    const x = (clientX - (left + width / 2)) * strength;
-    const y = (clientY - (top + height / 2)) * strength;
+    const rect = rectRef.current;
+    if (!rect) return;
+    const { width, height, left, top } = rect;
+    const x = (e.clientX - (left + width / 2)) * strength;
+    const y = (e.clientY - (top + height / 2)) * strength;
     setPosition({ x, y });
   };
 
@@ -26,6 +32,7 @@ export const Magnetic: React.FC<MagneticProps> = ({ children, strength = 0.5 }) 
   return (
     <motion.div
       ref={ref}
+      onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       animate={{ x: position.x, y: position.y }}

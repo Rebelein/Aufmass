@@ -66,7 +66,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); };
   }, [status.isInitialSync]);
 
   return (

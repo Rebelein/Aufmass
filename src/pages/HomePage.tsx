@@ -1,14 +1,14 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ResizableSidePanel } from '@/components/ui/ResizableSidePanel';
 import { Label } from '@/components/ui/label';
-import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, ListPlus, X as CloseIcon, Layers, Zap } from 'lucide-react';
+import { Activity, FolderOpen, CheckCircle2, Calendar, MapPin, User, ArrowRight, Trash2, ListChecks, ChevronRight, ChevronLeft, BarChart3, PackageOpen, ClipboardList, Briefcase, FileText, Plus, Sparkles, Database, X as CloseIcon, Zap } from 'lucide-react';
 import { subscribeToProjects, addProjectToSupabase, updateProject, deleteProjectFromSupabase, setCurrentProjectId, markProjectItemsAsAngebot, createProjectList } from '@/lib/project-storage';
 import { preloadCatalog } from '@/lib/catalog-storage';
-import type { Project, ProjectList } from '@/lib/project-storage';
+import type { Project } from '@/lib/project-storage';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { SpotlightCard as UiSpotlightCard } from '@/components/ui/SpotlightCard';
 
 const CountUp = ({ value }: { value: number }) => {
   const [displayValue, setDisplayValue] = useState(0);
@@ -33,36 +34,14 @@ const CountUp = ({ value }: { value: number }) => {
   return <span>{displayValue}</span>;
 };
 
-const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [opacity, setOpacity] = useState(0);
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  return (
-    <div
-      ref={containerRef}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setOpacity(1)}
-      onMouseLeave={() => setOpacity(0)}
-      className={cn("relative overflow-hidden group", className)}
-    >
-      <div
-        className="pointer-events-none absolute -inset-px transition-opacity duration-300 z-10"
-        style={{
-          opacity,
-          background: `radial-gradient(350px circle at ${position.x}px ${position.y}px, rgba(16, 185, 129, 0.15), transparent 80%)`,
-        }}
-      />
-      {children}
-    </div>
-  );
-};
+const SpotlightCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
+  <UiSpotlightCard
+    spotlightColor="rgba(16, 185, 129, 0.15)"
+    className={cn("relative overflow-hidden group", className)}
+  >
+    {children}
+  </UiSpotlightCard>
+);
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -253,9 +232,19 @@ export default function HomePage() {
         }}
         key={`${project.id}-${index}`}
         className="w-full cursor-pointer"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-label={`Projekt ${project.name} – Details ${isExpanded ? 'ausblenden' : 'einblenden'}`}
         onClick={() => setExpandedProject(isExpanded ? null : project)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setExpandedProject(isExpanded ? null : project);
+          }
+        }}
       >        <SpotlightCard className={cn(
-          "bg-card border rounded-xl shadow-sm overflow-hidden group flex flex-col transition-all duration-300",
+          "bg-card border rounded-xl shadow-sm overflow-hidden group flex flex-col transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-300",
           isExpanded ? "border-primary shadow-md ring-2 ring-primary/20" : "border-border hover:shadow-md hover:border-primary/30"
         )}>
           <div className="p-4 space-y-3 flex-1 relative z-10">
@@ -274,7 +263,7 @@ export default function HomePage() {
               <div className="shrink-0 flex items-center relative z-20" onClick={(e) => e.stopPropagation()}>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                    <Button variant="ghost" size="icon" aria-label={`Projekt ${project.name} löschen`} title="Löschen" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10">
                       <Trash2 size={14} />
                     </Button>
                   </AlertDialogTrigger>
@@ -369,6 +358,7 @@ export default function HomePage() {
                     className="h-6 w-6 p-0 rounded-full hover:bg-primary/10 hover:text-primary"
                   >
                     {creatingListForProject === project.id ? <CloseIcon size={14} /> : <Plus size={14} />}
+                    <span className="sr-only">{creatingListForProject === project.id ? 'Abbrechen' : 'Neues Blatt erstellen'}</span>
                   </Button>
                </div>
 
@@ -381,10 +371,11 @@ export default function HomePage() {
                      className="mb-2 overflow-hidden"
                    >
                      <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-lg border border-primary/20">
-                        <Input 
-                          autoFocus
-                          placeholder="Name des Blattes..." 
-                          className="h-7 text-xs bg-background border-border"
+                         <Input 
+                           autoFocus
+                           placeholder="Name des Blattes…" 
+                           aria-label="Name des neuen Blattes"
+                           className="h-7 text-xs bg-background border-border"
                           value={inlineListName}
                           onChange={e => setInlineListName(e.target.value)}
                           onKeyDown={e => {
@@ -423,7 +414,7 @@ export default function HomePage() {
                           key={list.id}
                           onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id, list.id); }}
                           className={cn(
-                            "flex items-center gap-2 p-2 rounded-lg transition-all text-left text-xs font-bold group/list",
+                            "flex items-center gap-2 p-2 rounded-lg transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] text-left text-xs font-bold group/list",
                             isExpanded ? "bg-muted/30 border border-border hover:border-primary/50 hover:bg-primary/5 py-3" : "bg-muted/50 hover:bg-primary/10 hover:text-primary"
                           )}
                         >
@@ -454,28 +445,28 @@ export default function HomePage() {
           <div className="border-t border-border p-2 bg-muted/30 flex items-center justify-between gap-2 relative z-20" onClick={e => e.stopPropagation()}>
             <div className="flex bg-background border border-border rounded-lg p-0.5 shrink-0 shadow-sm">
               {project.status === 'completed' && (
-                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Ausführung">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Zurück in Ausführung" title="Zurück in Ausführung">
                   <ChevronLeft size={16} />
                 </Button>
               )}
               {project.status === 'active' && (
-                 <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'planning'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Zurück in Planung">
+                 <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'planning'); }} className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Zurück in Planung" title="Zurück in Planung">
                    <ChevronLeft size={16} />
                  </Button>
               )}
               {project.status === 'planning' && (
-                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" title="In Ausführung geben">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'active'); }} className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" aria-label="In Ausführung geben" title="In Ausführung geben">
                   <ChevronRight size={16} />
                 </Button>
               )}
               {project.status === 'active' && (
-                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'completed'); }} className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" title="Projektabschluss">
+                <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); handleUpdateStatus(project, 'completed'); }} className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 dark:hover:bg-emerald-900/30" aria-label="Projekt abschließen" title="Projektabschluss">
                   <ChevronRight size={16} />
                 </Button>
               )}
             </div>
 
-            <Button onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id); }} variant="ghost" className="h-8 flex-1 text-xs text-foreground font-semibold hover:bg-primary/10 hover:text-primary transition-all">
+            <Button onClick={(e) => { e.stopPropagation(); handleSelectProject(project.id); }} variant="ghost" className="h-8 flex-1 text-xs text-foreground font-semibold hover:bg-primary/10 hover:text-primary transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]">
               <span>Alles öffnen</span>
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Button>
@@ -491,7 +482,7 @@ export default function HomePage() {
       opacity: 1, 
       transition: { 
         duration: 0.6, 
-        ease: 'easeOut',
+        ease: 'easeOut' as const,
         staggerChildren: 0.1,
         when: "beforeChildren"
       } 
@@ -559,14 +550,14 @@ export default function HomePage() {
               <Button 
                 onClick={() => setIsQuickMeasurementDialogOpen(true)}
                 variant="outline"
-                className="group border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10 text-foreground font-black rounded-2xl shadow-sm h-14 px-6 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                className="group border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10 text-foreground font-black rounded-2xl shadow-sm h-14 px-6 flex items-center gap-3 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-300 hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Zap className="h-5 w-5 text-purple-500" />
                 <span>Schnellaufmaß</span>
               </Button>
               <Button 
                 onClick={() => setIsNewProjectSheetOpen(true)} 
-                className="group relative bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-lg h-14 px-8 flex items-center gap-3 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
+                className="group relative bg-primary hover:bg-primary/90 text-primary-foreground font-black rounded-2xl shadow-lg h-14 px-8 flex items-center gap-3 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
                 title="Neue Baustelle anlegen"
               >
                 <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12" />
@@ -579,7 +570,7 @@ export default function HomePage() {
           <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4 h-auto md:h-[240px]">
             <motion.div 
               variants={pageVariants} 
-              className="md:col-span-2 md:row-span-2 bg-card border border-border rounded-3xl shadow-xl p-8 flex flex-col justify-between group hover:border-primary/50 transition-all duration-500 overflow-hidden relative"
+              className="md:col-span-2 md:row-span-2 bg-card border border-border rounded-3xl shadow-xl p-8 flex flex-col justify-between group hover:border-primary/50 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-500 overflow-hidden relative"
             >
               <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
                 <BarChart3 size={120} className="text-primary rotate-12 group-hover:rotate-0 transition-transform duration-700" />
@@ -597,7 +588,7 @@ export default function HomePage() {
 
             <motion.div 
               variants={pageVariants} 
-              className="md:col-span-1 bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col justify-between group hover:border-amber-500/50 transition-all duration-500"
+              className="md:col-span-1 bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col justify-between group hover:border-amber-500/50 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-500"
             >
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-500 group-hover:scale-110 transition-transform">
@@ -612,7 +603,7 @@ export default function HomePage() {
 
             <motion.div 
               variants={pageVariants} 
-              className="md:col-span-1 bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col justify-between group hover:border-primary/50 transition-all duration-500"
+              className="md:col-span-1 bg-card border border-border rounded-3xl shadow-lg p-6 flex flex-col justify-between group hover:border-primary/50 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-500"
             >
               <div className="flex items-center justify-between">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -627,7 +618,7 @@ export default function HomePage() {
 
             <motion.div 
               variants={pageVariants} 
-              className="md:col-span-2 bg-card border border-border rounded-3xl shadow-lg p-6 flex items-center gap-6 group hover:border-slate-400/50 transition-all duration-500 overflow-hidden relative"
+              className="md:col-span-2 bg-card border border-border rounded-3xl shadow-lg p-6 flex items-center gap-6 group hover:border-slate-400/50 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-500 overflow-hidden relative"
             >
               <div className="absolute right-[-20px] bottom-[-20px] opacity-5 group-hover:opacity-10 transition-opacity">
                 <PackageOpen size={100} />
@@ -833,6 +824,7 @@ export default function HomePage() {
                 value={quickMeasurementName} 
                 onChange={(e) => setQuickMeasurementName(e.target.value)} 
                 placeholder="z.B. Heizungskeller Meier, Bestellung MusterGmbH" 
+                aria-label="Bezeichnung des Schnellaufmaßes"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCreateQuickMeasurement();
                 }}

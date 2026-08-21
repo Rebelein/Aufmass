@@ -1,5 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+@custom-variant can-hover {
+  @media (hover: hover) and (pointer: fine) {
+    @slot;
+  }
+}
 
 @theme {
   --font-family-sans: 'Inter', sans-serif;
@@ -116,11 +121,17 @@
     min-height: 100vh;
   }
   
+  html {
+    color-scheme: dark;
+  }
+
+  html.light {
+    color-scheme: light;
+  }
+
   :focus-visible {
-    outline: none;
-    ring: 2px solid var(--color-ring);
-    ring-offset: 2px;
-    ring-offset-color: hsl(var(--background));
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
@@ -142,7 +153,7 @@
   
   .nav-link {
     color: rgba(255, 255, 255, 0.6);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease;
   }
   
   .nav-link:hover {
@@ -189,6 +200,24 @@
 
   .animation-delay-4000 {
     animation-delay: 4s;
+  }
+
+  /* Skip expensive paint work for offscreen content (large article lists) */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 72px;
+  }
+}
+
+/* Respect user motion preferences globally */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

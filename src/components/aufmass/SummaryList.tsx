@@ -8,6 +8,7 @@ import type { ProcessedSummaryItem } from '@/lib/types';
 import type { ProjectSelectedItem } from '@/lib/project-storage';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { useHapticFeedback } from '@/hooks/use-haptic-feedback';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface SummaryListProps {
   projectId: string;
@@ -44,6 +45,7 @@ export function SummaryList({
   const [animatingItem, setAnimatingItem] = useState<string | null>(null);
   const [sortBySupplier, setSortBySupplier] = useState<Set<string>>(new Set());
   const { impactLight } = useHapticFeedback();
+  const isDesktop = !useIsMobile();
 
   // Persist copiedItems to localStorage whenever they change
   useEffect(() => {
@@ -111,7 +113,7 @@ export function SummaryList({
       <div key={`${collapseKey}-${idx}`} className="mb-2">
         {/* Section Header */}
         <div className={cn(
-          'w-full flex items-center gap-2 px-2.5 py-2 rounded-lg mb-1 transition-all',
+          'w-full flex items-center gap-2 px-2.5 py-2 rounded-lg mb-1 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]',
           isActive ? 'bg-emerald-500/12 border border-emerald-500/20' : 'border border-transparent hover:bg-muted'
         )}>
           {/* Select section (click label area) */}
@@ -139,7 +141,7 @@ export function SummaryList({
           {copiedCount > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); handleResetSectionCopied(sId); }}
-              className="p-1 rounded-md text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-all shrink-0"
+              className="p-1 rounded-md text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] shrink-0"
               title={`Kopier-Markierungen in "${label}" zurücksetzen`}
             >
               <RotateCcw size={12} />
@@ -167,7 +169,7 @@ export function SummaryList({
                 return next;
               })}
               className={cn(
-                'p-1 rounded-md transition-all shrink-0',
+                'p-1 rounded-md transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] shrink-0',
                 isSortedBySupplier
                   ? 'text-cyan-400 bg-cyan-500/10'
                   : 'text-muted-foreground hover:text-muted-foreground hover:bg-muted'
@@ -211,7 +213,6 @@ export function SummaryList({
                 <div className="space-y-0.5 pb-1">
                   <AnimatePresence initial={false}>
                     {sortedItems.map((item, idx) => {
-                      const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
                       const flyX = isDesktop ? -300 : -50;
                       const articleNumber = item.article?.articleNumber ?? (item as any).article_number;
                       const supplierName = item.article?.supplierName ?? (item as any).supplier_name;
@@ -246,7 +247,7 @@ export function SummaryList({
                           >
                           <SwipeableItem id={item.id} onDelete={() => onDeleteItem(item.id)}>
                             <div className={cn(
-                              "relative flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted hover:bg-muted transition-all group",
+                              "relative flex items-center gap-2 px-2 py-1.5 rounded-lg bg-muted hover:bg-muted transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] group",
                               isCopied 
                                 ? "border border-emerald-500/30 bg-emerald-500/[0.03]"
                                 : "border border-transparent hover:border-border"
@@ -283,7 +284,7 @@ export function SummaryList({
                                   <button
                                     onClick={() => handleCopyArticleNumber(item.id, articleNumber)}
                                     className={cn(
-                                      'flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md transition-all active:scale-95 border cursor-pointer hover:shadow-sm w-fit',
+                                      'flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] active:scale-95 border cursor-pointer hover:shadow-sm w-fit',
                                       isCopied
                                         ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                                         : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border'
@@ -345,7 +346,8 @@ export function SummaryList({
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => onUpdateQuantity(item.id, (item.quantity ?? 1) - 1)}
                                     disabled={(item.quantity ?? 1) <= 1}
-                                    className="flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:text-accent-foreground hover:bg-muted disabled:opacity-20 transition-colors"
+                                    aria-label={`Menge von ${item.article?.name ?? (item as any).name ?? 'Position'} verringern`}
+                                    className="flex items-center justify-center h-6 w-6 rounded-sm text-muted-foreground hover:text-accent-foreground hover:bg-muted disabled:opacity-20 transition-colors"
                                   >
                                     <Minus size={10} />
                                   </motion.button>
@@ -360,7 +362,8 @@ export function SummaryList({
                                   <motion.button
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => onUpdateQuantity(item.id, (item.quantity ?? 1) + 1)}
-                                    className="flex items-center justify-center h-5 w-5 rounded-sm text-muted-foreground hover:text-accent-foreground hover:bg-muted transition-colors"
+                                    aria-label={`Menge von ${item.article?.name ?? (item as any).name ?? 'Position'} erhöhen`}
+                                    className="flex items-center justify-center h-6 w-6 rounded-sm text-muted-foreground hover:text-accent-foreground hover:bg-muted transition-colors"
                                   >
                                     <Plus size={10} />
                                   </motion.button>
@@ -369,7 +372,9 @@ export function SummaryList({
                                   onClick={() => onDeleteItem(item.id)}
                                   variant="ghost"
                                   size="icon"
-                                  className="h-6 w-6 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400 hover:bg-red-500/10"
+                                  aria-label={`${item.article?.name ?? (item as any).name ?? 'Position'} löschen`}
+                                  title="Löschen"
+                                  className="h-6 w-6 text-muted-foreground opacity-100 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-opacity hover:text-red-400 hover:bg-red-500/10"
                                 >
                                   <Trash2 size={11} />
                                 </Button>

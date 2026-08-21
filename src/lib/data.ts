@@ -9,12 +9,13 @@ export interface Category {
   name: string;
   parentId?: string | null;
   order?: number; // Reihenfolge innerhalb der Ebene
-  imageUrl?: string;
+  imageUrl?: string | null;
   source?: 'own' | 'wholesale';
 }
 
 export interface Article {
   id: string;
+  supplierId?: string | null;
   name: string;
   // price: number; // Removed price
   categoryId: string;
@@ -23,7 +24,7 @@ export interface Article {
   articleNumber: string; // Artikelnummer (fallback or primary)
   supplierArticleNumbers?: Record<string, string>; // Maps supplierId to articleNumber
   order?: number; // Order within the category
-  imageUrl?: string;
+  imageUrl?: string | null;
   supplierName?: string;
   aliases?: string[];
   source?: 'own' | 'wholesale';

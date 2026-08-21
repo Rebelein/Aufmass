@@ -1,14 +1,12 @@
-import React, { useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Camera, FileText, Plus, Image as ImageIcon, Trash2, X, BookMarked, PenLine, ImagePlus } from 'lucide-react';
+import { Image as ImageIcon, Trash2, BookMarked, PenLine, ImagePlus } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import type { Project, ProjectSelectedItem } from '@/lib/project-storage';
-import { upsertProjectItem, deleteProjectItem, addSection } from '@/lib/project-storage';
+import { upsertProjectItem, deleteProjectItem } from '@/lib/project-storage';
 import { useToast } from '@/hooks/use-toast';
 import { generateUUID } from '@/lib/utils';
-import { generateAngebotPdf } from '@/lib/pdf-export-angebot';
-import type { ProcessedSummaryItem } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { NoteEditorDialog } from '@/components/dialogs/NoteEditorDialog';
 
@@ -109,7 +107,8 @@ export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLo
     <div className="flex-1 flex flex-col h-full bg-background/50 overflow-y-auto p-4 md:p-6 lg:p-8 space-y-8">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-        <div className="flex-1 w-full relative">
+         <div className="flex-1 w-full relative">
+          <label htmlFor={`section-title-${activeSection.id}`} className="sr-only">Bauabschnitt-Name</label>
           <input
              id={`section-title-${activeSection.id}`}
              key={`input-${activeSection.id}`} /* Force re-render on active section change */
@@ -117,7 +116,7 @@ export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLo
              defaultValue={activeSection.text}
              onBlur={(e) => handleTitleChange(activeSection, e.target.value)}
              onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
-             placeholder="Bauabschnitt Name..."
+             placeholder="Bauabschnitt Name…"
              readOnly={activeSectionId === null}
           />
           <p className="text-emerald-400 font-medium text-sm mt-2 uppercase tracking-widest flex items-center gap-2">
@@ -128,20 +127,20 @@ export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLo
         <div className="flex items-center gap-2 shrink-0">
           {activeSectionId !== null && (
            <AlertDialog>
-             <AlertDialogTrigger asChild>
-               <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11 w-11 shrink-0 rounded-full">
-                 <Trash2 className="w-5 h-5" />
-               </Button>
-             </AlertDialogTrigger>
-             <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border border-border bg-background">
-               <AlertDialogHeader>
-                 <AlertDialogTitle className="text-xl font-bold text-foreground">Bauabschnitt löschen?</AlertDialogTitle>
-                 <AlertDialogDescription className="text-muted-foreground">
-                   Möchten Sie diesen kompletten Abschnitt inkl. aller Notizen und Fotos wirklich unwiderruflich löschen?
-                 </AlertDialogDescription>
-               </AlertDialogHeader>
-               <AlertDialogFooter className="gap-2">
-                 <AlertDialogCancel className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md-secondary border-none">Abbrechen</AlertDialogCancel>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Bauabschnitt löschen" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-11 w-11 shrink-0 rounded-full">
+                  <Trash2 className="w-5 h-5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-card text-card-foreground border-border shadow-sm rounded-xl border border-border bg-background">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-xl font-bold text-foreground">Bauabschnitt löschen?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-muted-foreground">
+                    Möchten Sie diesen kompletten Abschnitt inkl. aller Notizen und Fotos wirklich unwiderruflich löschen?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="gap-2">
+                  <AlertDialogCancel className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-md border-none">Abbrechen</AlertDialogCancel>
                  <AlertDialogAction onClick={handleDeleteSection} className="bg-red-500/90 hover:bg-red-500 text-destructive-foreground rounded-xl">Löschen</AlertDialogAction>
                </AlertDialogFooter>
              </AlertDialogContent>
@@ -182,7 +181,7 @@ export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLo
             })
             .flatMap(i => i.images!.map(img => ({ url: img, type: 'item', id: i.id, name: i.name })));
           
-          const allImages = [...sectionImages, ...itemImages];
+          const allImages: { url: string; type: string; index?: number; id?: string; name?: string }[] = [...sectionImages, ...itemImages];
 
           if (allImages.length === 0) {
             return (
@@ -198,21 +197,23 @@ export function AngebotTool({ project, activeSectionId, activeListId, onUpdateLo
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
               {allImages.map((imgObj, idx) => (
                 <div key={`${activeSection.id}-img-${idx}`} className="relative group aspect-[4/3] rounded-2xl overflow-hidden border border-border shadow-lg bg-muted">
-                  <img src={imgObj.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Capture" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-muted backdrop-blur-md border border-border opacity-0 group-hover:opacity-100 transition-opacity">
+                  <img src={imgObj.url} className="w-full h-full object-cover transition-transform duration-500 can-hover:group-hover:scale-110" alt={(imgObj as any).name || 'Dokumentationsfoto'} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 can-hover:group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute top-3 left-3 px-2 py-1 rounded-md bg-muted backdrop-blur-md border border-border opacity-0 can-hover:group-hover:opacity-100 transition-opacity">
                     <p className="text-[10px] text-foreground font-medium">{(imgObj as any).name || 'Foto'}</p>
                   </div>
                   <button 
                     onClick={() => {
                       if (imgObj.type === 'section') {
-                        deleteImage(activeSection, imgObj.index!);
+                        deleteImage(activeSection as any, imgObj.index!);
                       } else {
                         onRemoveLocalItem(imgObj.id!);
                         deleteProjectItem(imgObj.id!);
                       }
                     }}
-                    className="absolute bottom-3 right-3 bg-red-500/90 hover:bg-red-500 text-destructive-foreground rounded-full p-2.5 opacity-0 group-hover:opacity-100 transition-all scale-95 group-hover:scale-100 shadow-xl"
+                    aria-label="Foto löschen"
+                    title="Foto löschen"
+                    className="absolute bottom-3 right-3 bg-red-500/90 hover:bg-red-500 text-destructive-foreground rounded-full p-2.5 opacity-100 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] scale-95 can-hover:group-hover:scale-100 shadow-xl"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

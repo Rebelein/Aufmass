@@ -19,9 +19,10 @@ export interface ArticleCardProps {
   categoryImageUrl?: string;
   isFromAngebot?: boolean;
   copyMode?: boolean;
+  className?: string;
 }
 
-export function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl, isFromAngebot, copyMode }: ArticleCardProps) {
+export function ArticleCard({ article, quantity, onIncrement, onDecrement, onReset, categoryImageUrl, isFromAngebot, copyMode, className }: ArticleCardProps) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const { impactLight } = useHapticFeedback();
@@ -44,16 +45,23 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
   return (
     <SpotlightCard 
       className={cn(
-        "rounded-xl overflow-hidden transition-all duration-300",
-        copyMode ? "ring-1 ring-white/20" : ""
+        "rounded-xl overflow-hidden transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] duration-300",
+        copyMode ? "ring-1 ring-white/20" : "",
+        className
       )}
     >
       <motion.div 
         whileHover={copyMode ? { scale: 1.01 } : { scale: 1.005 }}
         whileTap={copyMode ? { scale: 0.99 } : {}}
         onClick={copyMode ? handleCopyArticleNumber : undefined}
+        role={copyMode ? 'button' : undefined}
+        tabIndex={copyMode ? 0 : undefined}
+        aria-label={copyMode && article.articleNumber ? `Artikelnummer ${article.articleNumber} kopieren` : undefined}
+        onKeyDown={copyMode ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCopyArticleNumber(e as unknown as React.MouseEvent); }
+        } : undefined}
         className={cn(
-          "bg-card text-card-foreground border border-border shadow-sm overflow-hidden group relative transition-colors",
+          "bg-card text-card-foreground border border-border shadow-sm overflow-hidden group relative transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           copyMode ? "cursor-pointer hover:bg-muted/50" : ""
         )}
       >
@@ -77,7 +85,7 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
           {/* Article Image */}
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border shadow-inner">
             {imageUrl
-              ? <img src={imageUrl} alt="" className="w-full h-full object-contain p-1" />
+              ? <img src={imageUrl} alt="" width={56} height={56} loading="lazy" className="w-full h-full object-contain p-1" />
               : <Package size={20} className="text-muted-foreground" />}
           </div>
 
@@ -85,7 +93,7 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
           <div className="flex-1 min-w-0 py-0.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0 flex items-center gap-2">
-                <h3 className="font-semibold text-foreground text-sm leading-tight truncate" title={article.name}>{article.name}</h3>
+                <h3 className="font-semibold text-foreground text-sm leading-tight break-words" title={article.name}>{article.name}</h3>
                 {isFromAngebot && (
                   <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded shadow-sm" title="Ursprünglich aus Angebot übernommen">Angebot</span>
                 )}
@@ -108,7 +116,7 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
                 <button
                   onClick={handleCopyArticleNumber}
                   className={cn(
-                    'flex items-center gap-1.5 px-2 py-0.5 rounded-md transition-all active:scale-95',
+                    'flex items-center gap-1.5 px-2 py-0.5 rounded-md transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] active:scale-95',
                     copied 
                       ? 'bg-emerald-500/20 text-emerald-400'
                       : 'bg-muted hover:bg-muted text-muted-foreground hover:text-primary-foreground'
@@ -126,7 +134,7 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
                   {article.supplierName}
                 </span>
               )}
-              {article.unit && <p className="text-[10px] sm:text-xs text-muted-foreground hidden xs:block">• {article.unit}</p>}
+              {article.unit && <p className="text-[10px] sm:text-xs text-muted-foreground hidden min-[400px]:block">• {article.unit}</p>}
             </div>
           </div>
 
@@ -137,7 +145,8 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
                 whileTap={{ scale: quantity <= 0 ? 1 : 0.9 }}
                 onClick={onDecrement}
                 disabled={quantity <= 0}
-                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 disabled:opacity-20 disabled:text-muted-foreground disabled:bg-transparent shrink-0 transition-all"
+                aria-label={`Menge von ${article.name} verringern`}
+                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-400 hover:text-red-300 disabled:opacity-20 disabled:text-muted-foreground disabled:bg-transparent shrink-0 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
               >
                 <Minus size={14} />
               </motion.button>
@@ -148,7 +157,8 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={onIncrement}
-                  className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-emerald-500/90 hover:bg-emerald-400 text-black font-bold shadow-[0_0_10px_rgba(16,185,129,0.25)] shrink-0 transition-all"
+                  aria-label={`Menge von ${article.name} erhöhen`}
+                  className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-md bg-emerald-500/90 hover:bg-emerald-400 text-black font-bold shadow-[0_0_10px_rgba(16,185,129,0.25)] shrink-0 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform]"
                 >
                   <Plus size={14} />
                 </motion.button>
@@ -160,7 +170,9 @@ export function ArticleCard({ article, quantity, onIncrement, onDecrement, onRes
               size="icon"
               onClick={onReset}
               disabled={quantity <= 0}
-              className="h-9 w-9 text-muted-foreground group-hover:text-muted-foreground hover:!text-red-400 hover:!bg-red-500/10 transition-all shrink-0 disabled:opacity-0"
+              aria-label={`${article.name} aus dem Aufmaß entfernen`}
+              title="Zurücksetzen"
+              className="h-9 w-9 text-muted-foreground group-hover:text-muted-foreground can-hover:hover:!text-red-400 can-hover:hover:!bg-red-500/10 transition-[color,background-color,border-color,fill,stroke,opacity,box-shadow,transform] shrink-0 disabled:opacity-0"
             >
               <Trash2 size={15} />
             </Button>
